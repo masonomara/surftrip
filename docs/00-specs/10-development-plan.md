@@ -12,7 +12,7 @@ Set up development accounts:
 
 - Cloudflare account (Workers, DOs, D1, Vectorize, R2)
 - Clio developer sandbox
-- Microsoft 365 developer tenant
+- M365 Agents Playground (local Teams bot testing, no tenant required)
 
 ## Phase 3: Storage Layer
 
@@ -90,12 +90,15 @@ Create website MCP. Required before Teams (OAuth redirects, signup, Org Context 
 
 ## Phase 10: Teams Adapter
 
-Create teams adapter:
+Create Teams adapter and acquire real tenant for E2E testing:
 
+- M365 Business Basic tenant ($6/mo) for real Teams environment
+- Azure Bot registration (F0 free tier)
+- Enable sideloading in Teams admin center
 - Scaffold: `teams new typescript docket-teams --atk embed`
 - Bot Framework integration
 - Manifest with scopes (personal, groupChat, team)
-- Sandbox testing
+- E2E testing in real Teams
 - **Start finding business partners**
 
 ## Phase 11: Production Hardening
