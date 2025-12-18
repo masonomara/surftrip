@@ -174,6 +174,10 @@ Full E2E testing with real Teams tenant deferred to Phase 10. Can purchase earli
 
 In `src/index.ts` and `test/index.spec.ts` I set up tests for interacting with DOs, the D1 database, the R2 database, and the Vecotrize + AI database. I was able to run all tests locally (except Vectorize + AI becuas ehtye odnt work locally), remotely, and then deployed and coudl runt he tests from my actual Cloudlfare Worker
 
-### 4.2 Set Up Clio auth tests
+### 4.2 Tested Clio OAuth
 
+Authorization code received. OAuth flow working:
 
+1. Opened: `https://app.clio.com/oauth/authorize?response_type=code&client_id=CLIO_CLIENT_ID&redirect_uri=http://127.0.0.1:8787/callback&state=test123`
+2. Approved permissions on Clio "Approve/Deny Permissions" screen
+3. Redirected to: `http://127.0.0.1:8787/callback?code=HEKQCpWAjKE5UtHfbZL8&state=test123`

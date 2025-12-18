@@ -10,6 +10,8 @@ Find 3-4 people to interview.
 
 **Overview:**
 
+Got three accounts setup, Cloudlfare, CLio, and Teams. Cloudlfare was straightforward, Worker, DO, D1, R2, Vectorize, and AI all were configured, bound to the worker, accessibile from local and remote servers, and tests were created for them. Clio was also quite easy and auth endpoint is working. Cost ~$50 a month to keep a Clio account up and running. Teams was a bit mroe confusing. We initially planned on using developer accounts but that wasnt finaicnally feasible. We pivoted to using Agent Playground for intiial setup and validation and deferreda teams membership for end-to-end testing alter down the road.
+
 **Checklist:**
 
 - [ ] Cloudflare account created
@@ -105,7 +107,11 @@ Create website MCP. Required before Teams (OAuth redirects, signup, Org Context 
 
 Create Teams adapter and acquire real tenant for E2E testing:
 
-- M365 Business Basic tenant ($6/mo) for real Teams environment
+- [ ] M365 Business Basic tenant ($6/mo)
+- [ ] Custom app upload enabled in Teams admin
+- [ ] Azure Bot resource created
+- [ ] Teams credentials stored in Wrangler secrets
+
 - Azure Bot registration (F0 free tier)
 - Enable sideloading in Teams admin center
 - Scaffold: `teams new typescript docket-teams --atk embed`

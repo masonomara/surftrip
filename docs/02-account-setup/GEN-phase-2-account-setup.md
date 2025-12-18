@@ -288,7 +288,7 @@ Clio is the practice management system your bot integrates with. The developer s
 | ------------------- | -------------------------------- | ----------------------------- |
 | **Name**            | Docket                           | Shown on OAuth consent screen |
 | **Website URL**     | https://docket.com (placeholder) | Required field                |
-| **Redirect URIs**   | http://localhost:8787/callback   | For local development         |
+| **Redirect URIs**   | http://127.0.0.1:8787/callback   | For local development         |
 | **App Permissions** | Select all you'll need           | Determines API access         |
 
 3. Accept Developer Terms of Service
@@ -614,17 +614,17 @@ Visit multiple times—count should increment, proving state persistence.
 Open in browser:
 
 ```
-https://app.clio.com/oauth/authorize?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:8787/callback&state=test123
+https://app.clio.com/oauth/authorize?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://127.0.0.1:8787/callback&state=test123
 ```
 
-https://app.clio.com/oauth/authorize?response_type=code&client_id=A0XrejjDYBBCMpdSCk7TOP78ziYkET0a4EYVGjKB&redirect_uri=http://localhost:8787/callback&state=test123
+https://app.clio.com/oauth/authorize?response_type=code&client_id=A0XrejjDYBBCMpdSCk7TOP78ziYkET0a4EYVGjKB&redirect_uri=http://127.0.0.1:8787/callback&state=test123
 
 CLIENT_ID: A0XrejjDYBBCMpdSCk7TOP78ziYkET0a4EYVGjKB
 
 After approving, you'll be redirected to:
 
 ```
-http://localhost:8787/callback?code=AUTH_CODE&state=test123
+http://127.0.0.1:8787/callback?code=AUTH_CODE&state=test123
 ```
 
 Note the `code` parameter—that's what you'd exchange for tokens.
