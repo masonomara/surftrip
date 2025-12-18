@@ -53,6 +53,8 @@ Setup Auth foundation:
 
 - Better Auth setup with D1, factory function pattern for Workers runtime
 - Channel identity linking (D1 `channel_user_links`)
+- Apple SSO
+- Google SOO
 - Invitation flow
 - Key rotation mechanism
 - GDPR deletion flow

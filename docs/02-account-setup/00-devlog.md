@@ -1,4 +1,4 @@
-# Account Setups
+# Account Setup Devlog
 
 Devlog of account setup actions. Granular details deferred to other docs.
 
