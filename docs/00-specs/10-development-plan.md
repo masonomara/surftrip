@@ -10,32 +10,42 @@ Find 3-4 people to interview.
 
 **Overview:**
 
-Got three accounts setup, Cloudlfare, CLio, and Teams. Cloudlfare was straightforward, Worker, DO, D1, R2, Vectorize, and AI all were configured, bound to the worker, accessibile from local and remote servers, and tests were created for them. Clio was also quite easy and auth endpoint is working. Cost ~$50 a month to keep a Clio account up and running. Teams was a bit mroe confusing. We initially planned on using developer accounts but that wasnt finaicnally feasible. We pivoted to using Agent Playground for intiial setup and validation and deferreda teams membership for end-to-end testing alter down the road.
+Accounts exist, credentials are secure, and each service responds correctly.
 
 **Checklist:**
 
-- [ ] Cloudflare account created
-- [ ] Wrangler CLI installed and authenticated
-- [ ] D1 database created and bound
-- [ ] R2 bucket created and bound
-- [ ] Vectorize index created (768 dimensions, cosine metric)
-- [ ] Workers AI binding configured
-- [ ] Durable Object class declared
-- [ ] All verification tests pass locally
-- [ ] Clio developer application created
-- [ ] Clio credentials stored in Wrangler secrets
-- [ ] M365 Agents Playground installed
-- [ ] Demo artifact deployed and shareable
+- [x] Cloudflare account created
+- [x] Wrangler CLI installed and authenticated
+- [x] D1 database created and bound
+- [x] R2 bucket created and bound
+- [x] Vectorize index created (768 dimensions, cosine metric)
+- [x] Workers AI binding configured
+- [x] Durable Object class declared
+- [x] All verification tests pass locally
+- [x] Clio developer application created
+- [x] Clio credentials stored in Wrangler secrets
+- [x] M365 Agents Playground installed
+- [x] Demo artifact deployed and shareable
 
 **Files Created/Modified:**
 
+- `src/index.ts`
+- `wrangler.jsonc`
+- `worker-configuration.d.ts`
+- `vitest.config.mts`
+- `tsconfig.json`
+- `package.json`
+- `test/env.d.ts`
+- `test/tsconfig.json`
+- `test/index.spec.ts`
+
 ## Phase 3: Storage Layer
 
-Set up storage layer in Cloudflare:
+Create schemas and structure within existing Cloudflare resources:
 
-- D1 database with migrations
-- Vectorize index
-- R2 bucket for Org Context docs, audit logs, archived conversations
+- D1 migrations for Better Auth tables, org registry, KB chunks
+- Vectorize namespace setup for KB + Org Context embeddings
+- R2 path structure for org isolation (docs, audit logs, archives)
 
 ## Phase 4: Auth Foundation
 

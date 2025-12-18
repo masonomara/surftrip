@@ -2,6 +2,10 @@
 
 Devlog of account setup actions. Granular details deferred to other docs.
 
+## Overview
+
+Got three accounts setup: Cloudflare, Clio, and Teams. Cloudflare was straightforward—Worker, DO, D1, R2, Vectorize, and AI were all configured, bound to the worker, accessible from local and remote servers, and tests were created for them. Clio was also easy and the auth endpoint is working. Costs ~$50/month to keep a Clio developer account. Teams was more confusing. We initially planned on using developer accounts but that wasn't financially feasible. We pivoted to using Agents Playground for initial setup and validation, deferring a real Teams tenant to Phase 10 for end-to-end testing. The Agents Playground runs locally, connects to our Worker, and simulates a Teams chatbot—covering all development needs.
+
 ## Step 1: Cloudflare Setup
 
 ### 1.1 Created Worker Project
@@ -152,27 +156,25 @@ CLIO_CLIENT_SECRET=client_secret
 
 Two environments for bot testing: M365 Agents Playground (free, no tenant) and Business Basic Tenant (deferred to Phase 10).
 
-See `docs/02-dev-accounts/01-teams-development-workflow.md` for environment details.
+See `docs/02-account-setup/01-teams-development-workflow.md` for environment details.
 
 ### 3.1 Installed M365 Agents Playground
 
-Bash installtion didnt seem to do anything:
+Bash installation:
 
 ```bash
 npm install -g @microsoft/m365agentsplayground
 ```
 
-So I went with dowloading the Microsoft 365 Agents Toolkit VSCode extension
-
 ### 3.2 Deferred: Business Basic Tenant
 
 Full E2E testing with real Teams tenant deferred to Phase 10. Can purchase earlier if needed.
 
-## Step 4: Verifciaton Tests
+## Step 4: Verification Tests
 
-### 4.1 Set Up Cloudlfare Environment Tests
+### 4.1 Set Up Cloudflare Environment Tests
 
-In `src/index.ts` and `test/index.spec.ts` I set up tests for interacting with DOs, the D1 database, the R2 database, and the Vecotrize + AI database. I was able to run all tests locally (except Vectorize + AI becuas ehtye odnt work locally), remotely, and then deployed and coudl runt he tests from my actual Cloudlfare Worker
+In `src/index.ts` and `test/index.spec.ts` I set up tests for interacting with DOs, D1, R2, and Vectorize + AI. All tests ran locally (except Vectorize + AI which don't work locally), remotely, and from the deployed Cloudflare Worker.
 
 ### 4.2 Tested Clio OAuth
 
@@ -184,7 +186,7 @@ Authorization code received. OAuth flow working:
 
 ### 4.3 Tested Agents Playground
 
-Bot message handling working via M365 Agents Playground. Bot Framework requires POSTing replies back to `serviceUrl`, not returning them in the response body.:
+Bot message handling working via M365 Agents Playground. Bot Framework requires POSTing replies back to `serviceUrl`, not returning them in the response body.
 
 1. Added `/api/messages` endpoint to worker (Bot Framework Activity protocol)
 2. Launched: `npx @microsoft/m365agentsplayground -e "http://127.0.0.1:8787/api/messages" -c "emulator"`

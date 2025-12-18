@@ -2,7 +2,7 @@
 
 An AI case management assistant for law firms and legal clinics using Clio. Users chat via Microsoft Teams, Slack, or MCP clients. The bot accesses a shared knowledge base, organization-specific context, and executes Clio operations.
 
-**Status:** Phase 2 — Accounts & Project Init
+**Status:** Phase 2 Complete — Starting Phase 3
 
 ## How It Works
 

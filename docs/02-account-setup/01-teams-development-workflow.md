@@ -17,7 +17,7 @@ npm install -g @microsoft/m365agentsplayground
 
 **Dev Loop:**
 
-Write bot code locally (Cloudflare worker handles `/api/messages`), run wrangler dev and Launch agents playground, then you can chat with bot, see adaptive cards, message handling, converation flow, bot responses, activiy handlers, etc.
+Write bot code locally (Cloudflare Worker handles `/api/messages`), run wrangler dev, launch Agents Playground, then chat with the bot. You can test adaptive cards, message handling, conversation flow, and activity handlers.
 
 Change code, restart, test again. No deploy needed.
 
@@ -31,7 +31,7 @@ agentsplayground -e "http://localhost:8787/api/messages" -c "emulator"
 
 ## Tier 2: Business Basic Tenant (E2E Testing)
 
-**When to use:** Phase 10, before production release, for real E2E tests like SSO/OAuth, comnad menus, and ream teams UI
+**When to use:** Phase 10, before production release, for real E2E tests like SSO/OAuth, command menus, and real Teams UI.
 
 **Setup (one-time):**
 
