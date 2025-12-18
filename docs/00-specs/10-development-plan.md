@@ -8,11 +8,24 @@ Find 3-4 people to interview.
 
 ## Phase 2: Accounts & Project Init
 
-Set up development accounts:
+**Overview:**
 
-- Cloudflare account (Workers, DOs, D1, Vectorize, R2)
-- Clio developer sandbox
-- M365 Agents Playground (local Teams bot testing, no tenant required)
+**Checklist:**
+
+- [ ] Cloudflare account created
+- [ ] Wrangler CLI installed and authenticated
+- [ ] D1 database created and bound
+- [ ] R2 bucket created and bound
+- [ ] Vectorize index created (768 dimensions, cosine metric)
+- [ ] Workers AI binding configured
+- [ ] Durable Object class declared
+- [ ] All verification tests pass locally
+- [ ] Clio developer application created
+- [ ] Clio credentials stored in Wrangler secrets
+- [ ] M365 Agents Playground installed
+- [ ] Demo artifact deployed and shareable
+
+**Files Created/Modified:**
 
 ## Phase 3: Storage Layer
 

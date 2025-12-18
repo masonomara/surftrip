@@ -1,79 +1,22 @@
-/**
- * For more details on how to configure Wrangler, refer to:
- * https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "docket",
-	"main": "src/index.ts",
-	"compatibility_date": "2025-12-17",
-	"compatibility_flags": ["nodejs_compat"],
-	"observability": {
-		"enabled": true
-	},
-	"d1_databases": [
-		{
-			"binding": "docket_db",
-			"database_name": "docket-db",
-			"database_id": "afb86a9d-5697-401d-b55a-6079a7aa8779"
-		}
-	],
-	"r2_buckets": [
-		{
-			"bucket_name": "docket-storage",
-			"binding": "docket_storage"
-		}
-	],
-	"vectorize": [
-		{
-			"binding": "VECTORIZE",
-			"index_name": "docket-vectors"
-		}
-	],
-	"ai": {
-		"binding": "AI"
-	},
-	"durable_objects": {
-		"bindings": [
-			{
-				"name": "TENANT",
-				"class_name": "TenantDO"
-			}
-		]
-	},
-
-	"migrations": [
-		{
-			"tag": "v1",
-			"new_classes": ["TenantDO"]
-		}
-	]
-	/**
-	 * Smart Placement
-	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
-	 */
-	// "placement": {  "mode": "smart" }
-	/**
-	 * Bindings
-	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-	 * databases, object storage, AI inference, real-time communication and more.
-	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
-	 */
-	/**
-	 * Environment Variables
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-	 * Note: Use secrets to store sensitive data.
-	 * https://developers.cloudflare.com/workers/configuration/secrets/
-	 */
-	// "vars": {  "MY_VARIABLE": "production_value" }
-	/**
-	 * Static Assets
-	 * https://developers.cloudflare.com/workers/static-assets/binding/
-	 */
-	// "assets": {  "directory": "./public/",  "binding": "ASSETS" }
-	/**
-	 * Service Bindings (communicate between multiple Workers)
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-	 */
-	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "docket",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-12-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "docket-db",
+      "database_id": "afb86a9d-5697-401d-b55a-6079a7aa8779"
+    }
+  ],
+  "r2_buckets": [{ "bucket_name": "docket-storage", "binding": "R2" }],
+  "vectorize": [{ "binding": "VECTORIZE", "index_name": "docket-vectors" }],
+  "ai": { "binding": "AI" },
+  "durable_objects": {
+    "bindings": [{ "name": "TENANT", "class_name": "TenantDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TenantDO"] }]
 }

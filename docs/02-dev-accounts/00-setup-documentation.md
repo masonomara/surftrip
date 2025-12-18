@@ -90,7 +90,7 @@ npx wrangler vectorize create docket-vectors --dimensions=768 --metric=cosine
 "migrations": [
   {
     "tag": "v1",
-    "new_classes": ["TenantDO"]
+    "new_sqlite_classes": ["TenantDO"]
   }
 ]
 ```
@@ -156,10 +156,24 @@ See `docs/02-dev-accounts/01-teams-development-workflow.md` for environment deta
 
 ### 3.1 Installed M365 Agents Playground
 
+Bash installtion didnt seem to do anything:
+
 ```bash
 npm install -g @microsoft/m365agentsplayground
 ```
 
+So I went with dowloading the Microsoft 365 Agents Toolkit VSCode extension
+
 ### 3.2 Deferred: Business Basic Tenant
 
 Full E2E testing with real Teams tenant deferred to Phase 10. Can purchase earlier if needed.
+
+## Step 4: Verifciaton Tests
+
+### 4.1 Set Up Cloudlfare Environment Tests
+
+In `src/index.ts` and `test/index.spec.ts` I set up tests for interacting with DOs, the D1 database, the R2 database, and the Vecotrize + AI database. I was able to run all tests locally (except Vectorize + AI becuas ehtye odnt work locally), remotely, and then deployed and coudl runt he tests from my actual Cloudlfare Worker
+
+### 4.2 Set Up Clio auth tests
+
+

@@ -196,7 +196,7 @@ Durable Objects are defined in code and declared in config:
   "migrations": [
     {
       "tag": "v1",
-      "new_classes": ["TenantDO"]
+      "new_sqlite_classes": ["TenantDO"]
     }
   ]
 }
@@ -252,7 +252,7 @@ Your final configuration:
   "migrations": [
     {
       "tag": "v1",
-      "new_classes": ["TenantDO"]
+      "new_sqlite_classes": ["TenantDO"]
     }
   ]
 }
@@ -614,12 +614,12 @@ Visit multiple times—count should increment, proving state persistence.
 Open in browser:
 
 ```
-https://app.clio.com/oauth/authorize?
-  response_type=code&
-  client_id=YOUR_CLIENT_ID&
-  redirect_uri=http://localhost:8787/callback&
-  state=test123
+https://app.clio.com/oauth/authorize?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:8787/callback&state=test123
 ```
+
+https://app.clio.com/oauth/authorize?response_type=code&client_id=A0XrejjDYBBCMpdSCk7TOP78ziYkET0a4EYVGjKB&redirect_uri=http://localhost:8787/callback&state=test123
+
+CLIENT_ID: A0XrejjDYBBCMpdSCk7TOP78ziYkET0a4EYVGjKB
 
 After approving, you'll be redirected to:
 
