@@ -61,7 +61,7 @@ Two storage mechanisms in each DO:
 
 Audit logs are for troubleshooting, compliance, and support. They track Clio CUD operations (user_id, timestamp, params, result), Org Context changes (uploads, deletions), role/permission changes, and Clio OAuth connect/disconnect events.
 
-**Storage:** Append-only to R2 (`/orgs/{org_id}/audit/{year}/{month}.jsonl`). Each entry includes `prev_hash` (SHA-256 of previous entry) for tamper detection. Multi-year retention for legal compliance.
+**Storage:** One R2 object per entry (`/orgs/{org_id}/audit/{year}/{month}/{day}/{timestamp}-{uuid}.json`). Simple PUT, no read-modify-write. Query via R2 list with date prefix. Multi-year retention for legal compliance.
 
 ## Constructor Pattern
 

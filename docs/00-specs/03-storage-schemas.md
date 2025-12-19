@@ -50,11 +50,11 @@ These are guidelines, not final schemas. Implementation will reveal what's actua
 ```
 /orgs/{org_id}/
 ├── docs/          → uploaded documents
-├── audit/         → append-only logs (JSONL, hash-chained)
+├── audit/         → one JSON file per entry (YYYY/MM/DD/{timestamp}-{uuid}.json)
 └── conversations/ → archived chats
 ```
 
-Audit logs use hash chaining (`prev_hash` field) for tamper detection.
+Audit logs stored as individual objects for simple writes. Query via R2 list with date prefix.
 
 ## Session Disambiguation
 

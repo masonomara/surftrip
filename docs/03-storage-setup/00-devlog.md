@@ -93,9 +93,12 @@ npx wrangler vectorize create-metadata-index docket-vectors --property-name=org_
 
 Created `src/storage/r2-paths.ts` with:
 
-- `R2Paths` object for consistent path generation (docs, audit logs, archived conversations)
-- `AuditEntry` interface with hash chaining for tamper detection
-- `appendAuditLog()` function for append-only audit logging with SHA-256 hash chain
+- `R2Paths` object for consistent path generation (docs, audit log prefixes, archived conversations)
+
+Audit logging moved to `TenantDO.appendAuditLog()` with one-object-per-entry pattern:
+- Each audit entry stored as separate R2 object: `orgs/{org}/audit/YYYY/MM/DD/{timestamp}-{uuid}.json`
+- No read-modify-write — eliminates race conditions
+- List by date prefix for retrieval
 
 ## Step 6: Unit Tests
 

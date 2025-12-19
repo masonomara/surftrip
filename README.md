@@ -2,7 +2,7 @@
 
 An AI case management assistant for law firms and legal clinics using Clio. Users chat via Microsoft Teams, Slack, or MCP clients. The bot accesses a shared knowledge base, organization-specific context, and executes Clio operations.
 
-**Status:** Phase 2 Complete — Starting Phase 3
+**Status:** Phase 3 Complete — Starting Phase 4
 
 ## How It Works
 
@@ -119,6 +119,26 @@ Specs live in `/docs/00-specs`. Phase work artifacts in `/docs/01-10`.
 ## Tech Stack
 
 Cloudflare Workers, Durable Objects (SQLite + KV), D1, Vectorize, R2, Workers AI (Llama 3.1 8B). Channels: Microsoft Teams, Slack, MCP.
+
+## Local Development
+
+```bash
+# Install dependencies
+npm install --legacy-peer-deps
+
+# Reset local D1 database (wipes all data, re-runs migrations)
+rm -rf .wrangler/state/v3/d1
+npx wrangler d1 migrations apply docket-db --local
+
+# Run tests
+npm test
+
+# Start local dev server
+npx wrangler dev
+
+# Apply migrations to production
+npx wrangler d1 migrations apply docket-db --remote
+```
 
 ## Contributing
 

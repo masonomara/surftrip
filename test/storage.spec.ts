@@ -1,61 +1,79 @@
+/**
+ * Storage Layer Tests
+ *
+ * Tests for D1 schema, R2 path helpers, and Vectorize operations.
+ */
+
 import { env } from "cloudflare:test";
 import { describe, it, expect, beforeAll } from "vitest";
 import { R2Paths } from "../src/storage/r2-paths";
 import { applyMigrations } from "./migrations";
 
+// ============================================================================
+// D1 Database Schema Tests
+// ============================================================================
+
 describe("D1 Storage Schema", () => {
   beforeAll(async () => {
     await applyMigrations(env.DB);
   });
-  it("has all required tables", async () => {
-    const result = await env.DB.prepare(
+
+  it("creates all required tables", async () => {
+    const { results } = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
     ).all();
 
-    const tables = result.results.map((r: { name: string }) => r.name);
+    const tables = (results as { name: string }[]).map((r) => r.name);
 
-    // Auth tables
-    expect(tables).toContain("user");
-    expect(tables).toContain("session");
-    expect(tables).toContain("account");
-    expect(tables).toContain("verification");
+    const expectedTables = [
+      // Auth tables
+      "user",
+      "session",
+      "account",
+      "verification",
+      // Org tables
+      "org",
+      "workspace_bindings",
+      "channel_user_links",
+      "invitations",
+      "api_keys",
+      // Subscription tables
+      "org_members",
+      "subscriptions",
+      "tier_limits",
+      "role_permissions",
+      // Knowledge base tables
+      "kb_chunks",
+      "kb_formulas",
+      "kb_benchmarks",
+      "org_context_chunks",
+    ];
 
-    // Org tables
-    expect(tables).toContain("org");
-    expect(tables).toContain("workspace_bindings");
-    expect(tables).toContain("channel_user_links");
-    expect(tables).toContain("invitations");
-    expect(tables).toContain("api_keys");
-
-    // Subscription tables
-    expect(tables).toContain("org_members");
-    expect(tables).toContain("subscriptions");
-    expect(tables).toContain("tier_limits");
-    expect(tables).toContain("role_permissions");
-
-    // KB tables
-    expect(tables).toContain("kb_chunks");
-    expect(tables).toContain("kb_formulas");
-    expect(tables).toContain("kb_benchmarks");
-    expect(tables).toContain("org_context_chunks");
+    for (const table of expectedTables) {
+      expect(tables).toContain(table);
+    }
   });
 
   it("enforces role constraints on org_members", async () => {
-    // Insert test org
-    await env.DB.prepare(
-      "INSERT OR IGNORE INTO org (id, name) VALUES (?, ?)"
-    )
+    // Create test org and user
+    await env.DB.prepare("INSERT OR IGNORE INTO org (id, name) VALUES (?, ?)")
       .bind("test-org-role", "Test Org")
       .run();
 
-    // Insert test user
     await env.DB.prepare(
       "INSERT OR IGNORE INTO user (id, email, name, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
     )
-      .bind("test-user-role", "role-test@example.com", "Test User", 0, Date.now(), Date.now())
+      .bind(
+        "test-user-role",
+        "role-test@example.com",
+        "Test User",
+        0,
+        Date.now(),
+        Date.now()
+      )
       .run();
 
-    // Valid role should work
+    // Valid role should succeed
     await env.DB.prepare(
       "INSERT OR IGNORE INTO org_members (id, user_id, org_id, role) VALUES (?, ?, ?, ?)"
     )
@@ -70,7 +88,7 @@ describe("D1 Storage Schema", () => {
 
     expect(member?.role).toBe("admin");
 
-    // Invalid role should fail (CHECK constraint)
+    // Invalid role should fail
     await expect(
       env.DB.prepare(
         "INSERT INTO org_members (id, user_id, org_id, role) VALUES (?, ?, ?, ?)"
@@ -80,102 +98,97 @@ describe("D1 Storage Schema", () => {
     ).rejects.toThrow();
   });
 
-  it("has seeded tier limits", async () => {
-    const tiers = await env.DB.prepare(
+  it("seeds tier limits with correct values", async () => {
+    // Check all tiers exist
+    const { results } = await env.DB.prepare(
       "SELECT tier FROM tier_limits ORDER BY tier"
     ).all();
 
-    expect(tiers.results).toHaveLength(4);
-    expect(tiers.results.map((t: { tier: string }) => t.tier)).toEqual([
-      "enterprise",
-      "free",
-      "professional",
-      "starter",
-    ]);
-  });
+    const tiers = (results as { tier: string }[]).map((t) => t.tier);
+    expect(tiers).toEqual(["enterprise", "free", "professional", "starter"]);
 
-  it("has correct tier limit values", async () => {
-    const free = await env.DB.prepare(
+    // Check free tier limits
+    const freeTier = await env.DB.prepare(
       "SELECT * FROM tier_limits WHERE tier = ?"
     )
       .bind("free")
       .first<{
-        tier: string;
         max_users: number;
         max_queries_per_day: number;
         clio_write: number;
       }>();
 
-    expect(free?.max_users).toBe(1);
-    expect(free?.max_queries_per_day).toBe(25);
-    expect(free?.clio_write).toBe(0);
+    expect(freeTier).toMatchObject({
+      max_users: 1,
+      max_queries_per_day: 25,
+      clio_write: 0,
+    });
 
-    const enterprise = await env.DB.prepare(
+    // Check enterprise tier (unlimited)
+    const enterpriseTier = await env.DB.prepare(
       "SELECT * FROM tier_limits WHERE tier = ?"
     )
       .bind("enterprise")
       .first<{ max_users: number; clio_write: number }>();
 
-    expect(enterprise?.max_users).toBe(-1); // unlimited
-    expect(enterprise?.clio_write).toBe(1);
+    expect(enterpriseTier).toMatchObject({
+      max_users: -1,
+      clio_write: 1,
+    });
   });
 
-  it("has seeded role permissions", async () => {
-    const perms = await env.DB.prepare(
+  it("seeds role permissions with correct values", async () => {
+    // Should have 24 permission entries (3 roles × 8 permissions)
+    const count = await env.DB.prepare(
       "SELECT COUNT(*) as count FROM role_permissions"
     ).first<{ count: number }>();
 
-    // 3 roles × 8 permissions = 24
-    expect(perms?.count).toBe(24);
-  });
+    expect(count?.count).toBe(24);
 
-  it("has correct permission values by role", async () => {
-    // Owner can delete
-    const ownerDelete = await env.DB.prepare(
-      "SELECT allowed FROM role_permissions WHERE role = ? AND permission = ?"
-    )
-      .bind("owner", "clio_delete")
-      .first<{ allowed: number }>();
-    expect(ownerDelete?.allowed).toBe(1);
+    // Helper to check permission
+    async function checkPermission(
+      role: string,
+      permission: string
+    ): Promise<number | undefined> {
+      const result = await env.DB.prepare(
+        "SELECT allowed FROM role_permissions WHERE role = ? AND permission = ?"
+      )
+        .bind(role, permission)
+        .first<{ allowed: number }>();
 
-    // Admin can delete
-    const adminDelete = await env.DB.prepare(
-      "SELECT allowed FROM role_permissions WHERE role = ? AND permission = ?"
-    )
-      .bind("admin", "clio_delete")
-      .first<{ allowed: number }>();
-    expect(adminDelete?.allowed).toBe(1);
+      return result?.allowed;
+    }
 
-    // Member cannot delete
-    const memberDelete = await env.DB.prepare(
-      "SELECT allowed FROM role_permissions WHERE role = ? AND permission = ?"
-    )
-      .bind("member", "clio_delete")
-      .first<{ allowed: number }>();
-    expect(memberDelete?.allowed).toBe(0);
+    // Owner and admin can delete from Clio
+    expect(await checkPermission("owner", "clio_delete")).toBe(1);
+    expect(await checkPermission("admin", "clio_delete")).toBe(1);
 
-    // Member can read
-    const memberRead = await env.DB.prepare(
-      "SELECT allowed FROM role_permissions WHERE role = ? AND permission = ?"
-    )
-      .bind("member", "clio_read")
-      .first<{ allowed: number }>();
-    expect(memberRead?.allowed).toBe(1);
+    // Member cannot delete but can read
+    expect(await checkPermission("member", "clio_delete")).toBe(0);
+    expect(await checkPermission("member", "clio_read")).toBe(1);
   });
 });
 
+// ============================================================================
+// R2 Path Helper Tests
+// ============================================================================
+
 describe("R2 Path Helpers", () => {
-  it("generates correct document paths", () => {
+  it("generates correct org document paths", () => {
     const path = R2Paths.orgDoc("acme-law", "doc-123");
     expect(path).toBe("orgs/acme-law/docs/doc-123");
   });
 
-  it("generates correct audit log paths with zero-padded months", () => {
-    const jan = R2Paths.auditLog("acme-law", 2025, 1);
-    expect(jan).toBe("orgs/acme-law/audit/2025/01.jsonl");
+  it("generates correct audit log prefixes with zero-padding", () => {
+    // Month only
+    expect(R2Paths.auditLogPrefix("acme-law", 2025, 1)).toBe(
+      "orgs/acme-law/audit/2025/01/"
+    );
 
-    const dec = R2Paths.auditLog("acme-law", 2025, 12);
-    expect(dec).toBe("orgs/acme-law/audit/2025/12.jsonl");
+    // With day
+    expect(R2Paths.auditLogPrefix("acme-law", 2025, 12, 5)).toBe(
+      "orgs/acme-law/audit/2025/12/05/"
+    );
   });
 
   it("generates correct archived conversation paths", () => {
@@ -184,56 +197,126 @@ describe("R2 Path Helpers", () => {
   });
 });
 
-describe("R2 Storage Operations", () => {
-  it("stores documents in correct paths", async () => {
-    const orgId = "test-org-r2";
-    const fileId = crypto.randomUUID();
-    const path = R2Paths.orgDoc(orgId, fileId);
+// ============================================================================
+// R2 Storage Operations Tests
+// ============================================================================
 
-    await env.R2.put(path, "test document content", {
+describe("R2 Storage Operations", () => {
+  it("stores and retrieves documents", async () => {
+    const path = R2Paths.orgDoc("test-org-r2", crypto.randomUUID());
+    const content = "test document content";
+
+    await env.R2.put(path, content, {
       httpMetadata: { contentType: "text/plain" },
     });
 
-    const obj = await env.R2.get(path);
-    expect(obj).not.toBeNull();
-    expect(await obj!.text()).toBe("test document content");
+    const retrieved = await env.R2.get(path);
+    expect(await retrieved!.text()).toBe(content);
   });
 
-  it("isolates orgs in separate paths", async () => {
-    // Store doc for org A
+  it("isolates documents between organizations", async () => {
+    // Store documents for two different orgs
     await env.R2.put("orgs/org-a-iso/docs/file1", "org a content");
-
-    // Store doc for org B
     await env.R2.put("orgs/org-b-iso/docs/file1", "org b content");
 
-    // List org A's docs - should not see org B
-    const list = await env.R2.list({ prefix: "orgs/org-a-iso/" });
-    const keys = list.objects.map((o) => o.key);
+    // List files for org A only
+    const orgAFiles = await env.R2.list({ prefix: "orgs/org-a-iso/" });
+    const keys = orgAFiles.objects.map((o) => o.key);
 
     expect(keys).toContain("orgs/org-a-iso/docs/file1");
     expect(keys).not.toContain("orgs/org-b-iso/docs/file1");
   });
 });
 
-// Integration tests - require remote access to Workers AI and Vectorize
-// Run with: npm test -- --remote test/storage.spec.ts
-// These tests will fail locally due to authentication requirements
+// ============================================================================
+// TenantDO Audit Log Tests
+// Skipped: vitest-pool-workers has isolated storage issues with DOs that
+// access both ctx.storage and R2. See:
+// https://developers.cloudflare.com/workers/testing/vitest-integration/known-issues/#isolated-storage
+// ============================================================================
+
+describe.skip("TenantDO Audit Log", () => {
+  it("appends audit entries via DO endpoint", async () => {
+    const orgId = `audit-test-${Date.now()}`;
+    const id = env.TENANT.idFromName(orgId);
+    const stub = env.TENANT.get(id);
+
+    const entry = {
+      user_id: "user-123",
+      action: "clio_create",
+      object_type: "matter",
+      params: { name: "Test Matter" },
+      result: "success" as const,
+    };
+
+    const response = await stub.fetch("http://do/audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(entry),
+    });
+
+    const result = (await response.json()) as { id: string };
+    expect(result.id).toBeDefined();
+    expect(typeof result.id).toBe("string");
+  });
+
+  it("stores each entry as separate R2 object", async () => {
+    const orgId = `separate-test-${Date.now()}`;
+    const id = env.TENANT.idFromName(orgId);
+    const stub = env.TENANT.get(id);
+
+    // Append two entries
+    await stub.fetch("http://do/audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: "user-1",
+        action: "test",
+        object_type: "test",
+        params: {},
+        result: "success",
+      }),
+    });
+
+    await stub.fetch("http://do/audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: "user-2",
+        action: "test",
+        object_type: "test",
+        params: {},
+        result: "success",
+      }),
+    });
+
+    // List audit entries from R2
+    const now = new Date();
+    const prefix = R2Paths.auditLogPrefix(
+      id.toString(),
+      now.getFullYear(),
+      now.getMonth() + 1,
+      now.getDate()
+    );
+
+    const list = await env.R2.list({ prefix });
+    expect(list.objects.length).toBe(2);
+  });
+});
+
+// ============================================================================
+// Vectorize Tests (Skipped - requires live Workers AI)
+// ============================================================================
+
 describe.skip("Vectorize Metadata Filtering", () => {
-  it("generates embeddings with correct dimensions", async () => {
+  it("generates embeddings and stores with metadata", async () => {
     const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
-      text: "test document content",
+      text: "test document",
     })) as { data: number[][] };
 
     expect(data[0].length).toBe(768);
-  });
-
-  it("stores and retrieves vectors with metadata", async () => {
-    const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
-      text: "legal document about contracts",
-    })) as { data: number[][] };
 
     const testId = `vec-test-${Date.now()}`;
-
     await env.VECTORIZE.upsert([
       {
         id: testId,
@@ -252,28 +335,27 @@ describe.skip("Vectorize Metadata Filtering", () => {
 
   it("filters org context by org_id", async () => {
     const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
-      text: "firm specific billing procedures",
+      text: "firm billing",
     })) as { data: number[][] };
 
-    const embedding = data[0];
     const timestamp = Date.now();
 
-    // Insert org context for two different orgs
+    // Store vectors for two orgs
     await env.VECTORIZE.upsert([
       {
         id: `org_acme_${timestamp}`,
-        values: embedding,
+        values: data[0],
         metadata: { type: "org_context", org_id: "acme" },
       },
       {
         id: `org_beta_${timestamp}`,
-        values: embedding,
+        values: data[0],
         metadata: { type: "org_context", org_id: "beta" },
       },
     ]);
 
-    // Query with org filter - should only get acme's context
-    const results = await env.VECTORIZE.query(embedding, {
+    // Query with org filter
+    const results = await env.VECTORIZE.query(data[0], {
       topK: 10,
       filter: { org_id: "acme" },
       returnMetadata: "all",
@@ -286,29 +368,24 @@ describe.skip("Vectorize Metadata Filtering", () => {
 
   it("retrieves KB content without org filter", async () => {
     const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
-      text: "clio workflow procedures",
+      text: "clio workflow",
     })) as { data: number[][] };
 
-    const embedding = data[0];
-    const timestamp = Date.now();
-
-    // Insert shared KB chunk (no org_id)
     await env.VECTORIZE.upsert([
       {
-        id: `kb_shared_${timestamp}`,
-        values: embedding,
+        id: `kb_shared_${Date.now()}`,
+        values: data[0],
         metadata: { type: "kb", source: "clio-workflows.md" },
       },
     ]);
 
-    // Query for KB content
-    const results = await env.VECTORIZE.query(embedding, {
+    // Query KB content (shared across all orgs)
+    const results = await env.VECTORIZE.query(data[0], {
       topK: 5,
       filter: { type: "kb" },
       returnMetadata: "all",
     });
 
-    expect(results.matches.length).toBeGreaterThan(0);
     const types = results.matches.map((m) => m.metadata?.type);
     expect(types).toContain("kb");
   });

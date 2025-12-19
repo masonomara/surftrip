@@ -1,7 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 import { getAuth } from "./lib/auth";
 
+// =============================================================================
 // Types
+// =============================================================================
 
 export interface Env {
   DB: D1Database;
@@ -20,6 +22,13 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
 }
 
+interface CheckItem {
+  name: string;
+  description: string;
+  status: "pass" | "fail" | "manual";
+  detail?: string;
+}
+
 interface BotActivity {
   type: string;
   id?: string;
@@ -30,22 +39,71 @@ interface BotActivity {
   serviceUrl?: string;
 }
 
-interface ClioTokenResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  token_type: string;
+// =============================================================================
+// Audit Log Types
+// =============================================================================
+
+export interface AuditEntry {
+  id: string;
+  user_id: string;
+  action: string;
+  object_type: string;
+  params: Record<string, unknown>;
+  result: "success" | "error";
+  error_message?: string;
+  created_at: string;
 }
 
-type RouteHandler = (req: Request, env: Env) => Promise<Response>;
+type AuditEntryInput = Omit<AuditEntry, "id" | "created_at">;
 
+// =============================================================================
 // Durable Object
+// =============================================================================
 
-export class TenantDO extends DurableObject {
-  async fetch(): Promise<Response> {
+export class TenantDO extends DurableObject<Env> {
+  /**
+   * Appends an entry to the org's audit log.
+   * One object per entry — no read-modify-write.
+   * Path: orgs/{org}/audit/YYYY/MM/DD/{timestamp}-{uuid}.json
+   */
+  async appendAuditLog(entry: AuditEntryInput): Promise<{ id: string }> {
+    const orgId = this.ctx.id.toString();
+    const now = new Date();
+    const id = crypto.randomUUID();
+
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+    const day = now.getDate().toString().padStart(2, "0");
+    const timestamp = now.getTime();
+
+    const path = `orgs/${orgId}/audit/${year}/${month}/${day}/${timestamp}-${id}.json`;
+
+    const fullEntry: AuditEntry = {
+      id,
+      created_at: now.toISOString(),
+      ...entry,
+    };
+
+    await this.env.R2.put(path, JSON.stringify(fullEntry), {
+      httpMetadata: { contentType: "application/json" },
+    });
+
+    return { id };
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    // POST /audit - append audit log entry
+    if (request.method === "POST" && url.pathname === "/audit") {
+      const entry = (await request.json()) as AuditEntryInput;
+      const result = await this.appendAuditLog(entry);
+      return Response.json(result);
+    }
+
+    // Default: increment counter (legacy test endpoint)
     const currentCount = (await this.ctx.storage.get<number>("count")) || 0;
     const newCount = currentCount + 1;
-
     await this.ctx.storage.put("count", newCount);
 
     return Response.json({
@@ -55,10 +113,11 @@ export class TenantDO extends DurableObject {
   }
 }
 
-// Route Handlers
+// =============================================================================
+// Test Endpoints
+// =============================================================================
 
 async function handleTestD1(_req: Request, env: Env): Promise<Response> {
-  // Ensure table exists
   await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS test_accounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,7 +125,6 @@ async function handleTestD1(_req: Request, env: Env): Promise<Response> {
     )`
   ).run();
 
-  // Insert a test record
   const result = await env.DB.prepare(
     "INSERT INTO test_accounts (name) VALUES (?) RETURNING *"
   )
@@ -88,12 +146,10 @@ async function handleTestDO(req: Request, env: Env): Promise<Response> {
 async function handleTestR2(_req: Request, env: Env): Promise<Response> {
   const key = "test/verify.json";
 
-  // Write a test file
   await env.R2.put(key, "{}", {
     httpMetadata: { contentType: "application/json" },
   });
 
-  // Read it back
   const object = await env.R2.get(key);
   const content = await object?.text();
 
@@ -104,19 +160,16 @@ async function handleTestR2(_req: Request, env: Env): Promise<Response> {
 }
 
 async function handleTestAI(_req: Request, env: Env): Promise<Response> {
-  // Generate an embedding
-  const embeddingResult = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
+  const result = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
     text: "test",
   })) as { data: number[][] };
 
-  const embedding = embeddingResult.data[0];
+  const embedding = result.data[0];
 
-  // Store in Vectorize
   await env.VECTORIZE.upsert([
     { id: "test-1", values: embedding, metadata: {} },
   ]);
 
-  // Query it back
   const queryResult = await env.VECTORIZE.query(embedding, { topK: 1 });
 
   return Response.json({
@@ -126,17 +179,14 @@ async function handleTestAI(_req: Request, env: Env): Promise<Response> {
   });
 }
 
-interface ChecklistItem {
-  name: string;
-  description: string;
-  status: "pass" | "fail" | "manual";
-  detail?: string;
-}
+// =============================================================================
+// Demo Page
+// =============================================================================
 
 async function handleDemo(req: Request, env: Env): Promise<Response> {
-  const checks: ChecklistItem[] = [];
+  const checks: CheckItem[] = [];
 
-  // 1. Cloudflare account
+  // Static checks
   checks.push({
     name: "Cloudflare Account",
     description: "Cloud infrastructure provider",
@@ -144,7 +194,6 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     detail: "Active",
   });
 
-  // 2. Wrangler CLI
   checks.push({
     name: "Wrangler CLI",
     description: "Deployment toolchain",
@@ -152,7 +201,7 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     detail: "Authenticated",
   });
 
-  // 3. D1 Database
+  // D1 Database check
   let d1Status: "pass" | "fail" = "fail";
   let d1Detail = "";
   try {
@@ -174,7 +223,7 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     detail: d1Detail,
   });
 
-  // 4. R2 Storage
+  // R2 Storage check
   let r2Status: "pass" | "fail" = "fail";
   let r2Detail = "";
   try {
@@ -192,7 +241,7 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     detail: r2Detail,
   });
 
-  // 5. Vectorize + AI
+  // Vectorize + AI check
   let vecStatus: "pass" | "fail" = "fail";
   let vecDetail = "";
   try {
@@ -213,8 +262,6 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     status: vecStatus,
     detail: vecDetail,
   });
-
-  // 6. Workers AI
   checks.push({
     name: "Workers AI",
     description: "LLM and embedding models",
@@ -222,7 +269,7 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     detail: vecStatus === "pass" ? "Model responding" : "Not available",
   });
 
-  // 7. Durable Object
+  // Durable Object check
   let doStatus: "pass" | "fail" = "fail";
   let doDetail = "";
   try {
@@ -242,17 +289,16 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     detail: doDetail,
   });
 
-  // 8. All tests pass
-  const corePassing = checks
-    .filter((c) =>
-      [
-        "D1 Database",
-        "R2 Storage",
-        "Vector Search",
-        "Durable Objects",
-      ].includes(c.name)
-    )
-    .every((c) => c.status === "pass");
+  // Integration test summary
+  const coreServices = [
+    "D1 Database",
+    "R2 Storage",
+    "Vector Search",
+    "Durable Objects",
+  ];
+  const corePassing = coreServices.every(
+    (name) => checks.find((c) => c.name === name)?.status === "pass"
+  );
   checks.push({
     name: "Integration Tests",
     description: "All services communicating",
@@ -260,7 +306,7 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     detail: corePassing ? "All passing" : "Issues detected",
   });
 
-  // 9. Clio App
+  // Clio checks
   const clioOk =
     typeof env.CLIO_CLIENT_ID === "string" && env.CLIO_CLIENT_ID.length > 0;
   checks.push({
@@ -270,7 +316,6 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     detail: clioOk ? "Registered" : "Not configured",
   });
 
-  // 10. Clio Secrets
   const secretsOk =
     clioOk &&
     typeof env.CLIO_CLIENT_SECRET === "string" &&
@@ -282,7 +327,6 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     detail: secretsOk ? "Encrypted & stored" : "Not configured",
   });
 
-  // 11. Teams Playground
   checks.push({
     name: "Teams Bot Testing",
     description: "Microsoft Teams chat interface",
@@ -290,7 +334,6 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     detail: "Local tool installed",
   });
 
-  // 12. Demo deployed
   checks.push({
     name: "Demo Deployed",
     description: "This status page",
@@ -298,13 +341,39 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     detail: "Live & shareable",
   });
 
-  // Counts
+  // Calculate stats
   const passed = checks.filter((c) => c.status === "pass").length;
   const failed = checks.filter((c) => c.status === "fail").length;
   const manual = checks.filter((c) => c.status === "manual").length;
   const allGood = failed === 0;
 
-  const html = `<!DOCTYPE html>
+  // Render HTML
+  const html = renderDemoPage(checks, { passed, failed, manual, allGood });
+  return new Response(html, { headers: { "Content-Type": "text/html" } });
+}
+
+function renderDemoPage(
+  checks: CheckItem[],
+  stats: { passed: number; failed: number; manual: number; allGood: boolean }
+): string {
+  const { passed, failed, manual, allGood } = stats;
+
+  const checklistHtml = checks
+    .map((c) => {
+      const icon = c.status === "pass" ? "✓" : c.status === "fail" ? "✗" : "○";
+      return `
+        <div class="check-item check-${c.status}">
+          <div class="check-icon">${icon}</div>
+          <div class="check-content">
+            <div class="check-name">${c.name}</div>
+            <div class="check-desc">${c.description}</div>
+          </div>
+          <div class="check-detail">${c.detail || ""}</div>
+        </div>`;
+    })
+    .join("");
+
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -336,26 +405,10 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
       box-shadow: 0 4px 24px rgba(0,0,0,0.3);
     }
     .status-banner h2 { font-size: 1.5rem; margin-bottom: 8px; }
-    .status-banner p { opacity: 0.9; }
-    .stats {
-      display: flex;
-      justify-content: center;
-      gap: 32px;
-      margin-bottom: 32px;
-    }
-    .stat {
-      text-align: center;
-    }
-    .stat-value {
-      font-size: 2rem;
-      font-weight: 700;
-    }
-    .stat-label {
-      color: #94a3b8;
-      font-size: 0.875rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
+    .stats { display: flex; justify-content: center; gap: 32px; margin-bottom: 32px; }
+    .stat { text-align: center; }
+    .stat-value { font-size: 2rem; font-weight: 700; }
+    .stat-label { color: #94a3b8; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; }
     .stat-pass .stat-value { color: #10b981; }
     .stat-fail .stat-value { color: #ef4444; }
     .stat-manual .stat-value { color: #f59e0b; }
@@ -389,46 +442,19 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
     .check-content { flex: 1; }
     .check-name { font-weight: 600; margin-bottom: 2px; }
     .check-desc { color: #94a3b8; font-size: 0.875rem; }
-    .check-detail {
-      color: #94a3b8;
-      font-size: 0.875rem;
-      text-align: right;
-    }
+    .check-detail { color: #94a3b8; font-size: 0.875rem; text-align: right; }
     .next-phase {
       margin-top: 32px;
       background: rgba(255,255,255,0.05);
       border-radius: 16px;
       padding: 24px;
     }
-    .next-phase h3 {
-      font-size: 1rem;
-      color: #94a3b8;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 12px;
-    }
+    .next-phase h3 { font-size: 1rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
     .next-phase h4 { margin-bottom: 12px; }
-    .next-phase ul {
-      list-style: none;
-      color: #cbd5e1;
-    }
-    .next-phase li {
-      padding: 6px 0;
-      padding-left: 20px;
-      position: relative;
-    }
-    .next-phase li::before {
-      content: "→";
-      position: absolute;
-      left: 0;
-      color: #64748b;
-    }
-    footer {
-      text-align: center;
-      margin-top: 40px;
-      color: #64748b;
-      font-size: 0.875rem;
-    }
+    .next-phase ul { list-style: none; color: #cbd5e1; }
+    .next-phase li { padding: 6px 0; padding-left: 20px; position: relative; }
+    .next-phase li::before { content: "→"; position: absolute; left: 0; color: #64748b; }
+    footer { text-align: center; margin-top: 40px; color: #64748b; font-size: 0.875rem; }
   </style>
 </head>
 <body>
@@ -462,24 +488,7 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
       </div>
     </div>
 
-    <div class="checklist">
-      ${checks
-        .map(
-          (c) => `
-        <div class="check-item check-${c.status}">
-          <div class="check-icon">${
-            c.status === "pass" ? "✓" : c.status === "fail" ? "✗" : "○"
-          }</div>
-          <div class="check-content">
-            <div class="check-name">${c.name}</div>
-            <div class="check-desc">${c.description}</div>
-          </div>
-          <div class="check-detail">${c.detail || ""}</div>
-        </div>
-      `
-        )
-        .join("")}
-    </div>
+    <div class="checklist">${checklistHtml}</div>
 
     <div class="next-phase">
       <h3>Coming Next</h3>
@@ -500,18 +509,17 @@ async function handleDemo(req: Request, env: Env): Promise<Response> {
   </div>
 </body>
 </html>`;
-
-  return new Response(html, {
-    headers: { "Content-Type": "text/html" },
-  });
 }
+
+// =============================================================================
+// Clio OAuth Callback
+// =============================================================================
 
 async function handleClioCallback(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
 
-  // Validate required parameters
   if (!code) {
     return Response.json(
       { error: "Missing authorization code" },
@@ -523,19 +531,14 @@ async function handleClioCallback(req: Request, env: Env): Promise<Response> {
     return Response.json({ error: "Missing state parameter" }, { status: 400 });
   }
 
-  // TODO: Validate state against stored value to prevent CSRF
-
   // Exchange authorization code for tokens
-  const tokenUrl = "https://app.clio.com/oauth/token";
-  const redirectUri = `${url.origin}/callback`;
-
-  const tokenResponse = await fetch(tokenUrl, {
+  const tokenResponse = await fetch("https://app.clio.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: redirectUri,
+      redirect_uri: `${url.origin}/callback`,
       client_id: env.CLIO_CLIENT_ID,
       client_secret: env.CLIO_CLIENT_SECRET,
     }),
@@ -550,17 +553,21 @@ async function handleClioCallback(req: Request, env: Env): Promise<Response> {
     );
   }
 
-  const tokens = (await tokenResponse.json()) as ClioTokenResponse;
-
-  // TODO: Store tokens securely (in DO or D1) associated with the org/state
+  const tokens = (await tokenResponse.json()) as {
+    token_type: string;
+    expires_in: number;
+  };
 
   return Response.json({
     success: true,
     token_type: tokens.token_type,
     expires_in: tokens.expires_in,
-    // Don't expose actual tokens in response - just confirm success
   });
 }
+
+// =============================================================================
+// Bot Framework Endpoint
+// =============================================================================
 
 async function handleBotMessage(req: Request): Promise<Response> {
   if (req.method !== "POST") {
@@ -568,7 +575,6 @@ async function handleBotMessage(req: Request): Promise<Response> {
   }
 
   const activity = (await req.json()) as BotActivity;
-
   console.log("Activity:", activity.type, activity.text || "");
 
   // Bail early if missing required fields
@@ -606,14 +612,9 @@ async function handleBotMessage(req: Request): Promise<Response> {
   return new Response(null, { status: 200 });
 }
 
-// Storage Demo - Interactive Phase 3 verification
-
-interface StorageCheck {
-  name: string;
-  status: "pass" | "fail" | "pending";
-  detail: string;
-  data?: unknown;
-}
+// =============================================================================
+// Storage Demo Page
+// =============================================================================
 
 async function handleStorageDemo(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
@@ -625,7 +626,12 @@ async function handleStorageDemo(req: Request, env: Env): Promise<Response> {
   }
 
   // Render interactive page
-  const html = `<!DOCTYPE html>
+  const html = renderStorageDemoPage();
+  return new Response(html, { headers: { "Content-Type": "text/html" } });
+}
+
+function renderStorageDemoPage(): string {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -644,92 +650,31 @@ async function handleStorageDemo(req: Request, env: Env): Promise<Response> {
     header { text-align: center; margin-bottom: 32px; }
     h1 { font-size: 2rem; font-weight: 700; margin-bottom: 4px; }
     .subtitle { color: #64748b; }
-    .tabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 24px;
-      border-bottom: 1px solid #334155;
-      padding-bottom: 8px;
-    }
-    .tab {
-      padding: 8px 16px;
-      background: transparent;
-      border: none;
-      color: #94a3b8;
-      cursor: pointer;
-      border-radius: 6px;
-      font-size: 14px;
-      transition: all 0.2s;
-    }
+    .tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid #334155; padding-bottom: 8px; }
+    .tab { padding: 8px 16px; background: transparent; border: none; color: #94a3b8; cursor: pointer; border-radius: 6px; font-size: 14px; transition: all 0.2s; }
     .tab:hover { background: #1e293b; color: #e2e8f0; }
     .tab.active { background: #3b82f6; color: white; }
     .panel { display: none; }
     .panel.active { display: block; }
-    .card {
-      background: rgba(30, 41, 59, 0.8);
-      border: 1px solid #334155;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-    }
+    .card { background: rgba(30, 41, 59, 0.8); border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
     .card h3 { font-size: 14px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-    .stat {
-      background: #0f172a;
-      padding: 16px;
-      border-radius: 8px;
-      text-align: center;
-    }
+    .stat { background: #0f172a; padding: 16px; border-radius: 8px; text-align: center; }
     .stat-value { font-size: 2rem; font-weight: 700; color: #3b82f6; }
     .stat-label { font-size: 12px; color: #64748b; margin-top: 4px; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #334155; }
     th { color: #64748b; font-weight: 500; }
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-    }
-    .badge-pass { background: #065f46; color: #6ee7b7; }
-    .badge-fail { background: #7f1d1d; color: #fca5a5; }
-    .badge-pending { background: #78350f; color: #fcd34d; }
-    .btn {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.2s;
-    }
+    .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
     .btn-primary { background: #3b82f6; color: white; }
     .btn-primary:hover { background: #2563eb; }
     .btn-secondary { background: #334155; color: #e2e8f0; }
     .btn-secondary:hover { background: #475569; }
-    .input {
-      padding: 10px 12px;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      background: #0f172a;
-      color: #e2e8f0;
-      font-size: 14px;
-      width: 100%;
-    }
+    .input { padding: 10px 12px; border: 1px solid #334155; border-radius: 8px; background: #0f172a; color: #e2e8f0; font-size: 14px; width: 100%; }
     .input:focus { outline: none; border-color: #3b82f6; }
     .flex { display: flex; gap: 12px; align-items: center; }
     .mt-4 { margin-top: 16px; }
-    .output {
-      background: #0f172a;
-      border-radius: 8px;
-      padding: 16px;
-      font-family: monospace;
-      font-size: 13px;
-      white-space: pre-wrap;
-      max-height: 300px;
-      overflow-y: auto;
-    }
+    .output { background: #0f172a; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 13px; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
     .check-row { display: flex; align-items: center; padding: 12px; background: #0f172a; border-radius: 8px; margin-bottom: 8px; }
     .check-icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 14px; }
     .check-pass .check-icon { background: #065f46; }
@@ -844,20 +789,19 @@ async function handleStorageDemo(req: Request, env: Env): Promise<Response> {
       out.innerHTML = '<div class="check-row check-pending"><div class="check-icon spinner">⏳</div><div class="check-content"><div class="check-name">Running checks...</div></div></div>';
 
       const data = await api('runChecks');
-      let html = '';
-      data.checks.forEach(c => {
-        const cls = 'check-' + c.status;
-        const icon = c.status === 'pass' ? '✓' : c.status === 'fail' ? '✗' : '○';
-        html += '<div class="check-row ' + cls + '"><div class="check-icon">' + icon + '</div><div class="check-content"><div class="check-name">' + c.name + '</div><div class="check-detail">' + c.detail + '</div></div></div>';
-      });
-      out.innerHTML = html;
 
-      // Update stats
+      out.innerHTML = data.checks.map(c => {
+        const icon = c.status === 'pass' ? '✓' : c.status === 'fail' ? '✗' : '○';
+        return '<div class="check-row check-' + c.status + '"><div class="check-icon">' + icon + '</div><div class="check-content"><div class="check-name">' + c.name + '</div><div class="check-detail">' + c.detail + '</div></div></div>';
+      }).join('');
+
       const stats = document.getElementById('stats-grid');
-      stats.innerHTML = '<div class="stat"><div class="stat-value">' + data.stats.tables + '</div><div class="stat-label">Tables</div></div>' +
-        '<div class="stat"><div class="stat-value">' + data.stats.tiers + '</div><div class="stat-label">Tiers</div></div>' +
-        '<div class="stat"><div class="stat-value">' + data.stats.permissions + '</div><div class="stat-label">Permissions</div></div>' +
-        '<div class="stat"><div class="stat-value">' + (data.stats.r2 || '-') + '</div><div class="stat-label">R2 Test</div></div>';
+      stats.innerHTML = \`
+        <div class="stat"><div class="stat-value">\${data.stats.tables}</div><div class="stat-label">Tables</div></div>
+        <div class="stat"><div class="stat-value">\${data.stats.tiers}</div><div class="stat-label">Tiers</div></div>
+        <div class="stat"><div class="stat-value">\${data.stats.permissions}</div><div class="stat-label">Permissions</div></div>
+        <div class="stat"><div class="stat-value">\${data.stats.r2 || '-'}</div><div class="stat-label">R2 Test</div></div>
+      \`;
     }
 
     async function loadTables() {
@@ -871,12 +815,9 @@ async function handleStorageDemo(req: Request, env: Env): Promise<Response> {
       const out = document.getElementById('tiers-output');
       out.innerHTML = 'Loading...';
       const data = await api('getTiers');
-      let html = '<table><tr><th>Tier</th><th>Users</th><th>Queries/Day</th><th>Docs</th><th>Clio Write</th></tr>';
-      data.tiers.forEach(t => {
-        html += '<tr><td>' + t.tier + '</td><td>' + (t.max_users === -1 ? '∞' : t.max_users) + '</td><td>' + (t.max_queries_per_day === -1 ? '∞' : t.max_queries_per_day) + '</td><td>' + (t.max_context_docs === -1 ? '∞' : t.max_context_docs) + '</td><td>' + (t.clio_write ? '✓' : '✗') + '</td></tr>';
-      });
-      html += '</table>';
-      out.innerHTML = html;
+      out.innerHTML = '<table><tr><th>Tier</th><th>Users</th><th>Queries/Day</th><th>Docs</th><th>Clio Write</th></tr>' +
+        data.tiers.map(t => '<tr><td>' + t.tier + '</td><td>' + (t.max_users === -1 ? '∞' : t.max_users) + '</td><td>' + (t.max_queries_per_day === -1 ? '∞' : t.max_queries_per_day) + '</td><td>' + (t.max_context_docs === -1 ? '∞' : t.max_context_docs) + '</td><td>' + (t.clio_write ? '✓' : '✗') + '</td></tr>').join('') +
+        '</table>';
     }
 
     async function loadPermissions() {
@@ -888,55 +829,55 @@ async function handleStorageDemo(req: Request, env: Env): Promise<Response> {
         if (!perms[p.permission]) perms[p.permission] = {};
         perms[p.permission][p.role] = p.allowed;
       });
-      let html = '<table><tr><th>Permission</th><th>Owner</th><th>Admin</th><th>Member</th></tr>';
-      Object.entries(perms).forEach(([perm, roles]) => {
-        html += '<tr><td>' + perm + '</td><td>' + (roles.owner ? '✓' : '✗') + '</td><td>' + (roles.admin ? '✓' : '✗') + '</td><td>' + (roles.member ? '✓' : '✗') + '</td></tr>';
-      });
-      html += '</table>';
-      out.innerHTML = html;
+      out.innerHTML = '<table><tr><th>Permission</th><th>Owner</th><th>Admin</th><th>Member</th></tr>' +
+        Object.entries(perms).map(([perm, roles]) => '<tr><td>' + perm + '</td><td>' + (roles.owner ? '✓' : '✗') + '</td><td>' + (roles.admin ? '✓' : '✗') + '</td><td>' + (roles.member ? '✓' : '✗') + '</td></tr>').join('') +
+        '</table>';
     }
 
     async function testR2Write() {
-      const org = document.getElementById('r2-org').value;
-      const file = document.getElementById('r2-file').value;
       const out = document.getElementById('r2-output');
       out.textContent = 'Writing...';
-      const data = await api('r2Write', { org, file });
+      const data = await api('r2Write', {
+        org: document.getElementById('r2-org').value,
+        file: document.getElementById('r2-file').value
+      });
       out.textContent = JSON.stringify(data, null, 2);
     }
 
     async function testR2Read() {
-      const org = document.getElementById('r2-org').value;
-      const file = document.getElementById('r2-file').value;
       const out = document.getElementById('r2-output');
       out.textContent = 'Reading...';
-      const data = await api('r2Read', { org, file });
+      const data = await api('r2Read', {
+        org: document.getElementById('r2-org').value,
+        file: document.getElementById('r2-file').value
+      });
       out.textContent = JSON.stringify(data, null, 2);
     }
 
     async function listR2() {
-      const org = document.getElementById('r2-org').value;
       const out = document.getElementById('r2-output');
       out.textContent = 'Listing...';
-      const data = await api('r2List', { org });
+      const data = await api('r2List', { org: document.getElementById('r2-org').value });
       out.textContent = JSON.stringify(data, null, 2);
     }
 
     async function testVectorize() {
-      const text = document.getElementById('vec-text').value;
-      const org = document.getElementById('vec-org').value;
       const out = document.getElementById('vec-output');
       out.textContent = 'Embedding and storing...';
-      const data = await api('vecStore', { text, org });
+      const data = await api('vecStore', {
+        text: document.getElementById('vec-text').value,
+        org: document.getElementById('vec-org').value
+      });
       out.textContent = JSON.stringify(data, null, 2);
     }
 
     async function queryVectorize() {
-      const text = document.getElementById('vec-text').value;
-      const org = document.getElementById('vec-org').value;
       const out = document.getElementById('vec-output');
       out.textContent = 'Querying...';
-      const data = await api('vecQuery', { text, org });
+      const data = await api('vecQuery', {
+        text: document.getElementById('vec-text').value,
+        org: document.getElementById('vec-org').value
+      });
       out.textContent = JSON.stringify(data, null, 2);
     }
 
@@ -945,8 +886,16 @@ async function handleStorageDemo(req: Request, env: Env): Promise<Response> {
   </script>
 </body>
 </html>`;
+}
 
-  return new Response(html, { headers: { "Content-Type": "text/html" } });
+// =============================================================================
+// Storage Demo API Actions
+// =============================================================================
+
+interface StorageCheck {
+  name: string;
+  status: "pass" | "fail" | "pending";
+  detail: string;
 }
 
 async function handleStorageAction(
@@ -956,188 +905,32 @@ async function handleStorageAction(
 ): Promise<Response> {
   try {
     switch (action) {
-      case "runChecks": {
-        const checks: StorageCheck[] = [];
+      case "runChecks":
+        return await runStorageChecks(env);
 
-        // Check tables
-        const tables = await env.DB.prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'd1_%' AND name NOT LIKE 'sqlite_%' ORDER BY name"
-        ).all();
-        const tableCount = tables.results.length;
-        checks.push({
-          name: "D1 Tables",
-          status: tableCount >= 17 ? "pass" : "fail",
-          detail: `${tableCount} tables found`,
-        });
+      case "getTables":
+        return await getTableList(env);
 
-        // Check tiers
-        const tiers = await env.DB.prepare(
-          "SELECT COUNT(*) as count FROM tier_limits"
-        ).first<{ count: number }>();
-        checks.push({
-          name: "Tier Limits",
-          status: tiers?.count === 4 ? "pass" : "fail",
-          detail: `${tiers?.count || 0} tiers defined`,
-        });
+      case "getTiers":
+        return await getTierLimits(env);
 
-        // Check permissions
-        const perms = await env.DB.prepare(
-          "SELECT COUNT(*) as count FROM role_permissions"
-        ).first<{ count: number }>();
-        checks.push({
-          name: "Role Permissions",
-          status: (perms?.count || 0) >= 24 ? "pass" : "fail",
-          detail: `${perms?.count || 0} permissions defined`,
-        });
+      case "getPermissions":
+        return await getRolePermissions(env);
 
-        // Check R2
-        const testKey = `demo/check-${Date.now()}.txt`;
-        await env.R2.put(testKey, "check");
-        const r2Obj = await env.R2.get(testKey);
-        checks.push({
-          name: "R2 Storage",
-          status: r2Obj ? "pass" : "fail",
-          detail: r2Obj ? "Read/write working" : "Failed",
-        });
+      case "r2Write":
+        return await testR2Write(url, env);
 
-        // Check Vectorize (may fail locally)
-        try {
-          const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
-            text: "test",
-          })) as { data: number[][] };
-          checks.push({
-            name: "Vectorize",
-            status: data[0].length === 768 ? "pass" : "fail",
-            detail: `${data[0].length} dimensions`,
-          });
-        } catch {
-          checks.push({
-            name: "Vectorize",
-            status: "fail",
-            detail: "Requires remote access",
-          });
-        }
+      case "r2Read":
+        return await testR2Read(url, env);
 
-        return Response.json({
-          checks,
-          stats: {
-            tables: tableCount,
-            tiers: tiers?.count || 0,
-            permissions: perms?.count || 0,
-            r2: r2Obj ? "OK" : "Fail",
-          },
-        });
-      }
+      case "r2List":
+        return await listR2Objects(url, env);
 
-      case "getTables": {
-        const result = await env.DB.prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'd1_%' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
-        ).all();
-        const tables: { name: string; rows: number | string }[] = [];
-        for (const t of result.results as { name: string }[]) {
-          try {
-            const count = await env.DB.prepare(
-              `SELECT COUNT(*) as count FROM [${t.name}]`
-            ).first<{ count: number }>();
-            tables.push({ name: t.name, rows: count?.count || 0 });
-          } catch {
-            tables.push({ name: t.name, rows: "-" });
-          }
-        }
-        return Response.json({ tables });
-      }
+      case "vecStore":
+        return await storeVector(url, env);
 
-      case "getTiers": {
-        const tiers = await env.DB.prepare("SELECT * FROM tier_limits").all();
-        return Response.json({ tiers: tiers.results });
-      }
-
-      case "getPermissions": {
-        const perms = await env.DB.prepare(
-          "SELECT * FROM role_permissions ORDER BY permission, role"
-        ).all();
-        return Response.json({ permissions: perms.results });
-      }
-
-      case "r2Write": {
-        const org = url.searchParams.get("org") || "demo";
-        const file = url.searchParams.get("file") || "test.txt";
-        const path = `orgs/${org}/docs/${file}`;
-        const content = `Written at ${new Date().toISOString()}`;
-        await env.R2.put(path, content, {
-          httpMetadata: { contentType: "text/plain" },
-        });
-        return Response.json({ success: true, path, content });
-      }
-
-      case "r2Read": {
-        const org = url.searchParams.get("org") || "demo";
-        const file = url.searchParams.get("file") || "test.txt";
-        const path = `orgs/${org}/docs/${file}`;
-        const obj = await env.R2.get(path);
-        if (!obj) return Response.json({ success: false, error: "Not found" });
-        const content = await obj.text();
-        return Response.json({ success: true, path, content, size: obj.size });
-      }
-
-      case "r2List": {
-        const org = url.searchParams.get("org") || "demo";
-        const prefix = `orgs/${org}/`;
-        const list = await env.R2.list({ prefix, limit: 20 });
-        return Response.json({
-          prefix,
-          objects: list.objects.map((o) => ({
-            key: o.key,
-            size: o.size,
-            uploaded: o.uploaded,
-          })),
-        });
-      }
-
-      case "vecStore": {
-        const text = url.searchParams.get("text") || "test";
-        const org = url.searchParams.get("org") || "demo";
-        const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
-          text,
-        })) as { data: number[][] };
-        const id = `demo_${org}_${Date.now()}`;
-        await env.VECTORIZE.upsert([
-          {
-            id,
-            values: data[0],
-            metadata: { type: "org_context", org_id: org, text },
-          },
-        ]);
-        return Response.json({
-          success: true,
-          id,
-          dimensions: data[0].length,
-          org_id: org,
-        });
-      }
-
-      case "vecQuery": {
-        const text = url.searchParams.get("text") || "test";
-        const org = url.searchParams.get("org");
-        const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
-          text,
-        })) as { data: number[][] };
-        const filter = org ? { org_id: org } : undefined;
-        const results = await env.VECTORIZE.query(data[0], {
-          topK: 5,
-          filter,
-          returnMetadata: "all",
-        });
-        return Response.json({
-          query: text,
-          filter,
-          matches: results.matches.map((m) => ({
-            id: m.id,
-            score: m.score,
-            metadata: m.metadata,
-          })),
-        });
-      }
+      case "vecQuery":
+        return await queryVectors(url, env);
 
       default:
         return Response.json({ error: "Unknown action" }, { status: 400 });
@@ -1147,7 +940,253 @@ async function handleStorageAction(
   }
 }
 
+async function runStorageChecks(env: Env): Promise<Response> {
+  const checks: StorageCheck[] = [];
+
+  // Check tables
+  const tables = await env.DB.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'd1_%' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+  ).all();
+  checks.push({
+    name: "D1 Tables",
+    status: tables.results.length >= 17 ? "pass" : "fail",
+    detail: `${tables.results.length} tables found`,
+  });
+
+  // Check tiers
+  const tiers = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM tier_limits"
+  ).first<{ count: number }>();
+  checks.push({
+    name: "Tier Limits",
+    status: tiers?.count === 4 ? "pass" : "fail",
+    detail: `${tiers?.count || 0} tiers defined`,
+  });
+
+  // Check permissions
+  const perms = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM role_permissions"
+  ).first<{ count: number }>();
+  checks.push({
+    name: "Role Permissions",
+    status: (perms?.count || 0) >= 24 ? "pass" : "fail",
+    detail: `${perms?.count || 0} permissions defined`,
+  });
+
+  // Check R2
+  const testKey = `demo/check-${Date.now()}.txt`;
+  await env.R2.put(testKey, "check");
+  const r2Obj = await env.R2.get(testKey);
+  checks.push({
+    name: "R2 Storage",
+    status: r2Obj ? "pass" : "fail",
+    detail: r2Obj ? "Read/write working" : "Failed",
+  });
+
+  // Check Vectorize
+  try {
+    const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
+      text: "test",
+    })) as { data: number[][] };
+    checks.push({
+      name: "Vectorize",
+      status: data[0].length === 768 ? "pass" : "fail",
+      detail: `${data[0].length} dimensions`,
+    });
+  } catch {
+    checks.push({
+      name: "Vectorize",
+      status: "fail",
+      detail: "Requires remote access",
+    });
+  }
+
+  return Response.json({
+    checks,
+    stats: {
+      tables: tables.results.length,
+      tiers: tiers?.count || 0,
+      permissions: perms?.count || 0,
+      r2: r2Obj ? "OK" : "Fail",
+    },
+  });
+}
+
+async function getTableList(env: Env): Promise<Response> {
+  const result = await env.DB.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'd1_%' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
+  ).all();
+
+  const tables: { name: string; rows: number | string }[] = [];
+
+  for (const t of result.results as { name: string }[]) {
+    // Validate table name format (alphanumeric, underscores, hyphens only)
+    if (!/^[\w-]+$/.test(t.name)) {
+      tables.push({ name: t.name, rows: "-" });
+      continue;
+    }
+    try {
+      const count = await env.DB.prepare(
+        `SELECT COUNT(*) as count FROM [${t.name}]`
+      ).first<{ count: number }>();
+      tables.push({ name: t.name, rows: count?.count || 0 });
+    } catch {
+      tables.push({ name: t.name, rows: "-" });
+    }
+  }
+
+  return Response.json({ tables });
+}
+
+async function getTierLimits(env: Env): Promise<Response> {
+  const result = await env.DB.prepare("SELECT * FROM tier_limits").all();
+  return Response.json({ tiers: result.results });
+}
+
+async function getRolePermissions(env: Env): Promise<Response> {
+  const result = await env.DB.prepare(
+    "SELECT * FROM role_permissions ORDER BY permission, role"
+  ).all();
+  return Response.json({ permissions: result.results });
+}
+
+/** Sanitize path segment to prevent directory traversal */
+function sanitizePathSegment(segment: string): string | null {
+  if (!segment || segment.includes("..") || segment.includes("/") || segment.includes("\\")) {
+    return null;
+  }
+  // Only allow alphanumeric, hyphens, underscores, and dots (for file extensions)
+  if (!/^[\w.-]+$/.test(segment)) {
+    return null;
+  }
+  return segment;
+}
+
+async function testR2Write(url: URL, env: Env): Promise<Response> {
+  const orgParam = url.searchParams.get("org") || "demo";
+  const fileParam = url.searchParams.get("file") || "test.txt";
+
+  const org = sanitizePathSegment(orgParam);
+  const file = sanitizePathSegment(fileParam);
+  if (!org || !file) {
+    return Response.json({ success: false, error: "Invalid org or file parameter" }, { status: 400 });
+  }
+
+  const path = `orgs/${org}/docs/${file}`;
+  const content = `Written at ${new Date().toISOString()}`;
+
+  await env.R2.put(path, content, {
+    httpMetadata: { contentType: "text/plain" },
+  });
+
+  return Response.json({ success: true, path, content });
+}
+
+async function testR2Read(url: URL, env: Env): Promise<Response> {
+  const orgParam = url.searchParams.get("org") || "demo";
+  const fileParam = url.searchParams.get("file") || "test.txt";
+
+  const org = sanitizePathSegment(orgParam);
+  const file = sanitizePathSegment(fileParam);
+  if (!org || !file) {
+    return Response.json({ success: false, error: "Invalid org or file parameter" }, { status: 400 });
+  }
+
+  const path = `orgs/${org}/docs/${file}`;
+
+  const obj = await env.R2.get(path);
+  if (!obj) {
+    return Response.json({ success: false, error: "Not found" });
+  }
+
+  return Response.json({
+    success: true,
+    path,
+    content: await obj.text(),
+    size: obj.size,
+  });
+}
+
+async function listR2Objects(url: URL, env: Env): Promise<Response> {
+  const orgParam = url.searchParams.get("org") || "demo";
+
+  const org = sanitizePathSegment(orgParam);
+  if (!org) {
+    return Response.json({ success: false, error: "Invalid org parameter" }, { status: 400 });
+  }
+
+  const prefix = `orgs/${org}/`;
+
+  const list = await env.R2.list({ prefix, limit: 20 });
+
+  return Response.json({
+    prefix,
+    objects: list.objects.map((o) => ({
+      key: o.key,
+      size: o.size,
+      uploaded: o.uploaded,
+    })),
+  });
+}
+
+async function storeVector(url: URL, env: Env): Promise<Response> {
+  const text = url.searchParams.get("text") || "test";
+  const org = url.searchParams.get("org") || "demo";
+
+  const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
+    text,
+  })) as { data: number[][] };
+
+  const id = `demo_${org}_${Date.now()}`;
+
+  await env.VECTORIZE.upsert([
+    {
+      id,
+      values: data[0],
+      metadata: { type: "org_context", org_id: org, text },
+    },
+  ]);
+
+  return Response.json({
+    success: true,
+    id,
+    dimensions: data[0].length,
+    org_id: org,
+  });
+}
+
+async function queryVectors(url: URL, env: Env): Promise<Response> {
+  const text = url.searchParams.get("text") || "test";
+  const org = url.searchParams.get("org");
+
+  const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
+    text,
+  })) as { data: number[][] };
+
+  const filter = org ? { org_id: org } : undefined;
+
+  const results = await env.VECTORIZE.query(data[0], {
+    topK: 5,
+    filter,
+    returnMetadata: "all",
+  });
+
+  return Response.json({
+    query: text,
+    filter,
+    matches: results.matches.map((m) => ({
+      id: m.id,
+      score: m.score,
+      metadata: m.metadata,
+    })),
+  });
+}
+
+// =============================================================================
 // Router
+// =============================================================================
+
+type RouteHandler = (req: Request, env: Env) => Promise<Response>;
 
 const routes: Record<string, RouteHandler> = {
   "/api/messages": (req) => handleBotMessage(req),
@@ -1170,8 +1209,8 @@ export default {
       return auth.handler(request);
     }
 
+    // Check for registered route
     const handler = routes[url.pathname];
-
     if (handler) {
       return handler(request, env);
     }

@@ -43,17 +43,30 @@ Accounts exist, credentials are secure, and each service responds correctly.
 
 **Checklist:**
 
-- [ ] All 4 migration files created
-- [ ] Migrations applied locally (`--local`)
-- [ ] All 14+ tables exist in D1
-- [ ] Tier limits seeded (4 tiers)
-- [ ] Role permissions seeded (14 permissions)
-- [ ] Vectorize metadata index created for `org_id`
-- [ ] R2 path helpers implemented
-- [ ] Unit tests passing
-- [ ] Integration tests passing (requires `--remote` for Vectorize)
-- [ ] Demo endpoint returns all checks passing
-- [ ] Migrations applied to production (`--remote`)
+- [x] All 4 migration files created
+- [x] Migrations applied locally (`--local`)
+- [x] All 14+ tables exist in D1
+- [x] Tier limits seeded (4 tiers)
+- [x] Role permissions seeded (24 rows: 3 roles × 8 permissions)
+- [x] Vectorize metadata index created for `org_id`
+- [x] R2 path helpers implemented
+- [x] Unit tests passing
+- [x] Integration tests passing (requires `--remote` for Vectorize)
+- [x] Demo endpoint returns all checks passing
+- [x] Migrations applied to production (`--remote`)
+
+**Files Created/Modified:**
+
+- `migrations/0000_init-auth.sql`
+- `migrations/0001_create_org_tables.sql`
+- `migrations/0002_create_subscription_tables.sql`
+- `migrations/0003_create_kb_tables.sql`
+- `migrations/0004_add_updated_at_triggers.sql`
+- `src/lib/auth.ts`
+- `src/storage/r2-paths.ts`
+- `src/index.ts`
+- `test/migrations.ts`
+- `test/storage.spec.ts`
 
 ## Phase 4: Auth Foundation
 
@@ -145,7 +158,7 @@ Create Teams adapter and acquire real tenant for E2E testing:
 Prepare for first 10,000 users:
 
 - Rate limiting (50 req/min per user IP via Cloudflare dashboard)
-- Audit logging to R2 (hash-chained JSONL)
+- Audit log retrieval endpoint (list R2 by date prefix)
 - Encryption verification (Clio tokens, at-rest)
 - DO Alarms: archive >30d conversations, clean expired confirmations
 
