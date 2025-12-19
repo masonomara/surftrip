@@ -54,27 +54,85 @@ Followed https://www.better-auth.com/docs/authentication/google
 - Created OAuth 2.0 credentials in Google Cloud Console
 - Added to `.dev.vars`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 
-## Step 3: D1 Schema Migrations
+## Step 3: Completed Remaining D1 Migrations
 
 ### 3.1 Created Organization Tables Migration
 
-Created `migrations/0001_create_org_tables.sql` with tables: `org`, `workspace_bindings`, `channel_user_links`, `invitations`, `api_keys`. Includes CHECK constraints for `channel_type` and `role`, foreign keys with cascade delete, and indexes on common query patterns.
+Created `migrations/0001_create_org_tables.sql` with `org`, `workspace_bindings`, `channel_user_links`, `invitations`, `api_keys`.
 
 ### 3.2 Created Subscription Tables Migration
 
-Created `migrations/0002_create_subscription_tables.sql` with tables: `org_members`, `subscriptions`, `tier_limits`, `role_permissions`. Seeded tier limits (free, starter, professional, enterprise) and role permissions (8 permissions × 3 roles = 24 entries).
+Created `migrations/0002_create_subscription_tables.sql` with `org_members`, `subscriptions`, `tier_limits`, `role_permissions`.
 
 ### 3.3 Created Knowledge Base Tables Migration
 
-Created `migrations/0003_create_kb_tables.sql` with tables: `kb_chunks`, `kb_formulas`, `kb_benchmarks`, `org_context_chunks`. KB tables are immutable (populated at build time), org context uses delete/recreate pattern for updates.
+Created `migrations/0003_create_kb_tables.sql` with `kb_chunks`, `kb_formulas`, `kb_benchmarks`, `org_context_chunks`.
 
 ### 3.4 Applied Migrations
 
-Auth tables existed from Step 1 but weren't tracked. Manually inserted migration record, then applied remaining migrations:
-
 ```bash
+npx wrangler d1 execute docket-db --remote --command "INSERT INTO d1_migrations (name, applied_at) VALUES ('0000_init-auth.sql', datetime('now'))"
+npx wrangler d1 migrations apply docket-db --remote
 npx wrangler d1 execute docket-db --local --command "INSERT INTO d1_migrations (name, applied_at) VALUES ('0000_init-auth.sql', datetime('now'))"
 npx wrangler d1 migrations apply docket-db --local
 ```
 
 Result: 17 application tables + `d1_migrations` tracking table.
+
+## Step 4: Applied Metadata Filter
+
+### 4.1 Set up filters by org_id
+
+```bash
+npx wrangler vectorize create-metadata-index docket-vectors --property-name=org_id --type=string
+```
+
+## Step 5: R2 Path Helpers
+
+### 5.1 Created Path Utilities
+
+Created `src/storage/r2-paths.ts` with:
+
+- `R2Paths` object for consistent path generation (docs, audit logs, archived conversations)
+- `AuditEntry` interface with hash chaining for tamper detection
+- `appendAuditLog()` function for append-only audit logging with SHA-256 hash chain
+
+## Step 6: Unit Tests
+
+### 6.1 Created Storage Tests
+
+Created `test/storage.spec.ts` and `test/migrations.ts` with tests for:
+
+- D1 tables exist (17 tables)
+- Role constraints enforced (CHECK constraints)
+- Tier limits seeded (4 tiers)
+- Role permissions seeded (24 entries)
+- R2 path helpers generate correct paths
+- R2 org isolation works
+
+All 11 tests passing.
+
+### 6.2 Added Integration Tests
+
+Added Vectorize metadata filtering tests (skipped locally, require `--remote`):
+
+- Embedding dimension verification (768)
+- Vector storage with metadata
+- Org context filtering by `org_id`
+- KB content retrieval by type filter
+
+Run integration tests with remote access: `npm test -- test/storage.spec.ts` (requires wrangler auth)
+
+## Step 7: Interactive Demo Endpoint
+
+### 7.1 Created `/demo/storage` Route
+
+Interactive Phase 3 verification page with:
+
+- **Overview tab**: Run all checks, view stats (tables, tiers, permissions, R2)
+- **D1 Tables tab**: Browse all tables with row counts
+- **Permissions tab**: View tier limits and role permissions matrices
+- **R2 Storage tab**: Test write/read/list with custom org and file paths
+- **Vectorize tab**: Embed text and query with org_id filtering
+
+Auto-runs checks on load. All actions use query params for API calls.

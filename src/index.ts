@@ -606,12 +606,554 @@ async function handleBotMessage(req: Request): Promise<Response> {
   return new Response(null, { status: 200 });
 }
 
+// Storage Demo - Interactive Phase 3 verification
+
+interface StorageCheck {
+  name: string;
+  status: "pass" | "fail" | "pending";
+  detail: string;
+  data?: unknown;
+}
+
+async function handleStorageDemo(req: Request, env: Env): Promise<Response> {
+  const url = new URL(req.url);
+  const action = url.searchParams.get("action");
+
+  // Handle API actions
+  if (action) {
+    return handleStorageAction(action, url, env);
+  }
+
+  // Render interactive page
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Docket - Phase 3 Storage Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      min-height: 100vh;
+      color: #e2e8f0;
+      padding: 24px;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 32px; }
+    h1 { font-size: 2rem; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { color: #64748b; }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 8px;
+    }
+    .tab {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .tab:hover { background: #1e293b; color: #e2e8f0; }
+    .tab.active { background: #3b82f6; color: white; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card h3 { font-size: 14px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .stat {
+      background: #0f172a;
+      padding: 16px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-value { font-size: 2rem; font-weight: 700; color: #3b82f6; }
+    .stat-label { font-size: 12px; color: #64748b; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #334155; }
+    th { color: #64748b; font-weight: 500; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge-pass { background: #065f46; color: #6ee7b7; }
+    .badge-fail { background: #7f1d1d; color: #fca5a5; }
+    .badge-pending { background: #78350f; color: #fcd34d; }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-secondary { background: #334155; color: #e2e8f0; }
+    .btn-secondary:hover { background: #475569; }
+    .input {
+      padding: 10px 12px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 14px;
+      width: 100%;
+    }
+    .input:focus { outline: none; border-color: #3b82f6; }
+    .flex { display: flex; gap: 12px; align-items: center; }
+    .mt-4 { margin-top: 16px; }
+    .output {
+      background: #0f172a;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .check-row { display: flex; align-items: center; padding: 12px; background: #0f172a; border-radius: 8px; margin-bottom: 8px; }
+    .check-icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 14px; }
+    .check-pass .check-icon { background: #065f46; }
+    .check-fail .check-icon { background: #7f1d1d; }
+    .check-pending .check-icon { background: #78350f; }
+    .check-content { flex: 1; }
+    .check-name { font-weight: 500; }
+    .check-detail { font-size: 13px; color: #64748b; }
+    .spinner { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Phase 3: Storage Layer</h1>
+      <p class="subtitle">Interactive verification of D1, R2, and Vectorize</p>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('overview')">Overview</button>
+      <button class="tab" onclick="showTab('tables')">D1 Tables</button>
+      <button class="tab" onclick="showTab('permissions')">Permissions</button>
+      <button class="tab" onclick="showTab('r2')">R2 Storage</button>
+      <button class="tab" onclick="showTab('vectorize')">Vectorize</button>
+    </div>
+
+    <div id="overview" class="panel active">
+      <div class="card">
+        <h3>Quick Checks</h3>
+        <button class="btn btn-primary" onclick="runAllChecks()">Run All Checks</button>
+        <div id="checks-output" class="mt-4"></div>
+      </div>
+      <div class="card">
+        <h3>Stats</h3>
+        <div class="grid" id="stats-grid">
+          <div class="stat"><div class="stat-value">-</div><div class="stat-label">Tables</div></div>
+          <div class="stat"><div class="stat-value">-</div><div class="stat-label">Tiers</div></div>
+          <div class="stat"><div class="stat-value">-</div><div class="stat-label">Permissions</div></div>
+          <div class="stat"><div class="stat-value">-</div><div class="stat-label">R2 Objects</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tables" class="panel">
+      <div class="card">
+        <h3>D1 Database Tables</h3>
+        <button class="btn btn-secondary" onclick="loadTables()">Refresh</button>
+        <div id="tables-output" class="mt-4 output">Click refresh to load tables...</div>
+      </div>
+    </div>
+
+    <div id="permissions" class="panel">
+      <div class="card">
+        <h3>Tier Limits</h3>
+        <button class="btn btn-secondary" onclick="loadTiers()">Load Tiers</button>
+        <div id="tiers-output" class="mt-4"></div>
+      </div>
+      <div class="card">
+        <h3>Role Permissions</h3>
+        <button class="btn btn-secondary" onclick="loadPermissions()">Load Permissions</button>
+        <div id="permissions-output" class="mt-4"></div>
+      </div>
+    </div>
+
+    <div id="r2" class="panel">
+      <div class="card">
+        <h3>Test R2 Path</h3>
+        <div class="flex">
+          <input type="text" class="input" id="r2-org" placeholder="org-id" value="demo-org" style="width: 150px;">
+          <input type="text" class="input" id="r2-file" placeholder="file-id" value="test-doc.txt" style="width: 200px;">
+          <button class="btn btn-primary" onclick="testR2Write()">Write</button>
+          <button class="btn btn-secondary" onclick="testR2Read()">Read</button>
+          <button class="btn btn-secondary" onclick="listR2()">List</button>
+        </div>
+        <div id="r2-output" class="mt-4 output">Results will appear here...</div>
+      </div>
+    </div>
+
+    <div id="vectorize" class="panel">
+      <div class="card">
+        <h3>Test Vectorize</h3>
+        <div class="flex">
+          <input type="text" class="input" id="vec-text" placeholder="Text to embed..." value="legal contract management">
+          <input type="text" class="input" id="vec-org" placeholder="org_id filter" value="demo" style="width: 120px;">
+          <button class="btn btn-primary" onclick="testVectorize()">Embed & Store</button>
+          <button class="btn btn-secondary" onclick="queryVectorize()">Query</button>
+        </div>
+        <div id="vec-output" class="mt-4 output">Results will appear here...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showTab(name) {
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById(name).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    async function api(action, params = {}) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('action', action);
+      Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+      const res = await fetch(url);
+      return res.json();
+    }
+
+    async function runAllChecks() {
+      const out = document.getElementById('checks-output');
+      out.innerHTML = '<div class="check-row check-pending"><div class="check-icon spinner">⏳</div><div class="check-content"><div class="check-name">Running checks...</div></div></div>';
+
+      const data = await api('runChecks');
+      let html = '';
+      data.checks.forEach(c => {
+        const cls = 'check-' + c.status;
+        const icon = c.status === 'pass' ? '✓' : c.status === 'fail' ? '✗' : '○';
+        html += '<div class="check-row ' + cls + '"><div class="check-icon">' + icon + '</div><div class="check-content"><div class="check-name">' + c.name + '</div><div class="check-detail">' + c.detail + '</div></div></div>';
+      });
+      out.innerHTML = html;
+
+      // Update stats
+      const stats = document.getElementById('stats-grid');
+      stats.innerHTML = '<div class="stat"><div class="stat-value">' + data.stats.tables + '</div><div class="stat-label">Tables</div></div>' +
+        '<div class="stat"><div class="stat-value">' + data.stats.tiers + '</div><div class="stat-label">Tiers</div></div>' +
+        '<div class="stat"><div class="stat-value">' + data.stats.permissions + '</div><div class="stat-label">Permissions</div></div>' +
+        '<div class="stat"><div class="stat-value">' + (data.stats.r2 || '-') + '</div><div class="stat-label">R2 Test</div></div>';
+    }
+
+    async function loadTables() {
+      const out = document.getElementById('tables-output');
+      out.textContent = 'Loading...';
+      const data = await api('getTables');
+      out.textContent = JSON.stringify(data.tables, null, 2);
+    }
+
+    async function loadTiers() {
+      const out = document.getElementById('tiers-output');
+      out.innerHTML = 'Loading...';
+      const data = await api('getTiers');
+      let html = '<table><tr><th>Tier</th><th>Users</th><th>Queries/Day</th><th>Docs</th><th>Clio Write</th></tr>';
+      data.tiers.forEach(t => {
+        html += '<tr><td>' + t.tier + '</td><td>' + (t.max_users === -1 ? '∞' : t.max_users) + '</td><td>' + (t.max_queries_per_day === -1 ? '∞' : t.max_queries_per_day) + '</td><td>' + (t.max_context_docs === -1 ? '∞' : t.max_context_docs) + '</td><td>' + (t.clio_write ? '✓' : '✗') + '</td></tr>';
+      });
+      html += '</table>';
+      out.innerHTML = html;
+    }
+
+    async function loadPermissions() {
+      const out = document.getElementById('permissions-output');
+      out.innerHTML = 'Loading...';
+      const data = await api('getPermissions');
+      const perms = {};
+      data.permissions.forEach(p => {
+        if (!perms[p.permission]) perms[p.permission] = {};
+        perms[p.permission][p.role] = p.allowed;
+      });
+      let html = '<table><tr><th>Permission</th><th>Owner</th><th>Admin</th><th>Member</th></tr>';
+      Object.entries(perms).forEach(([perm, roles]) => {
+        html += '<tr><td>' + perm + '</td><td>' + (roles.owner ? '✓' : '✗') + '</td><td>' + (roles.admin ? '✓' : '✗') + '</td><td>' + (roles.member ? '✓' : '✗') + '</td></tr>';
+      });
+      html += '</table>';
+      out.innerHTML = html;
+    }
+
+    async function testR2Write() {
+      const org = document.getElementById('r2-org').value;
+      const file = document.getElementById('r2-file').value;
+      const out = document.getElementById('r2-output');
+      out.textContent = 'Writing...';
+      const data = await api('r2Write', { org, file });
+      out.textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function testR2Read() {
+      const org = document.getElementById('r2-org').value;
+      const file = document.getElementById('r2-file').value;
+      const out = document.getElementById('r2-output');
+      out.textContent = 'Reading...';
+      const data = await api('r2Read', { org, file });
+      out.textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function listR2() {
+      const org = document.getElementById('r2-org').value;
+      const out = document.getElementById('r2-output');
+      out.textContent = 'Listing...';
+      const data = await api('r2List', { org });
+      out.textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function testVectorize() {
+      const text = document.getElementById('vec-text').value;
+      const org = document.getElementById('vec-org').value;
+      const out = document.getElementById('vec-output');
+      out.textContent = 'Embedding and storing...';
+      const data = await api('vecStore', { text, org });
+      out.textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function queryVectorize() {
+      const text = document.getElementById('vec-text').value;
+      const org = document.getElementById('vec-org').value;
+      const out = document.getElementById('vec-output');
+      out.textContent = 'Querying...';
+      const data = await api('vecQuery', { text, org });
+      out.textContent = JSON.stringify(data, null, 2);
+    }
+
+    // Auto-run checks on load
+    runAllChecks();
+  </script>
+</body>
+</html>`;
+
+  return new Response(html, { headers: { "Content-Type": "text/html" } });
+}
+
+async function handleStorageAction(
+  action: string,
+  url: URL,
+  env: Env
+): Promise<Response> {
+  try {
+    switch (action) {
+      case "runChecks": {
+        const checks: StorageCheck[] = [];
+
+        // Check tables
+        const tables = await env.DB.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'd1_%' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        ).all();
+        const tableCount = tables.results.length;
+        checks.push({
+          name: "D1 Tables",
+          status: tableCount >= 17 ? "pass" : "fail",
+          detail: `${tableCount} tables found`,
+        });
+
+        // Check tiers
+        const tiers = await env.DB.prepare(
+          "SELECT COUNT(*) as count FROM tier_limits"
+        ).first<{ count: number }>();
+        checks.push({
+          name: "Tier Limits",
+          status: tiers?.count === 4 ? "pass" : "fail",
+          detail: `${tiers?.count || 0} tiers defined`,
+        });
+
+        // Check permissions
+        const perms = await env.DB.prepare(
+          "SELECT COUNT(*) as count FROM role_permissions"
+        ).first<{ count: number }>();
+        checks.push({
+          name: "Role Permissions",
+          status: (perms?.count || 0) >= 24 ? "pass" : "fail",
+          detail: `${perms?.count || 0} permissions defined`,
+        });
+
+        // Check R2
+        const testKey = `demo/check-${Date.now()}.txt`;
+        await env.R2.put(testKey, "check");
+        const r2Obj = await env.R2.get(testKey);
+        checks.push({
+          name: "R2 Storage",
+          status: r2Obj ? "pass" : "fail",
+          detail: r2Obj ? "Read/write working" : "Failed",
+        });
+
+        // Check Vectorize (may fail locally)
+        try {
+          const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
+            text: "test",
+          })) as { data: number[][] };
+          checks.push({
+            name: "Vectorize",
+            status: data[0].length === 768 ? "pass" : "fail",
+            detail: `${data[0].length} dimensions`,
+          });
+        } catch {
+          checks.push({
+            name: "Vectorize",
+            status: "fail",
+            detail: "Requires remote access",
+          });
+        }
+
+        return Response.json({
+          checks,
+          stats: {
+            tables: tableCount,
+            tiers: tiers?.count || 0,
+            permissions: perms?.count || 0,
+            r2: r2Obj ? "OK" : "Fail",
+          },
+        });
+      }
+
+      case "getTables": {
+        const result = await env.DB.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'd1_%' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
+        ).all();
+        const tables: { name: string; rows: number | string }[] = [];
+        for (const t of result.results as { name: string }[]) {
+          try {
+            const count = await env.DB.prepare(
+              `SELECT COUNT(*) as count FROM [${t.name}]`
+            ).first<{ count: number }>();
+            tables.push({ name: t.name, rows: count?.count || 0 });
+          } catch {
+            tables.push({ name: t.name, rows: "-" });
+          }
+        }
+        return Response.json({ tables });
+      }
+
+      case "getTiers": {
+        const tiers = await env.DB.prepare("SELECT * FROM tier_limits").all();
+        return Response.json({ tiers: tiers.results });
+      }
+
+      case "getPermissions": {
+        const perms = await env.DB.prepare(
+          "SELECT * FROM role_permissions ORDER BY permission, role"
+        ).all();
+        return Response.json({ permissions: perms.results });
+      }
+
+      case "r2Write": {
+        const org = url.searchParams.get("org") || "demo";
+        const file = url.searchParams.get("file") || "test.txt";
+        const path = `orgs/${org}/docs/${file}`;
+        const content = `Written at ${new Date().toISOString()}`;
+        await env.R2.put(path, content, {
+          httpMetadata: { contentType: "text/plain" },
+        });
+        return Response.json({ success: true, path, content });
+      }
+
+      case "r2Read": {
+        const org = url.searchParams.get("org") || "demo";
+        const file = url.searchParams.get("file") || "test.txt";
+        const path = `orgs/${org}/docs/${file}`;
+        const obj = await env.R2.get(path);
+        if (!obj) return Response.json({ success: false, error: "Not found" });
+        const content = await obj.text();
+        return Response.json({ success: true, path, content, size: obj.size });
+      }
+
+      case "r2List": {
+        const org = url.searchParams.get("org") || "demo";
+        const prefix = `orgs/${org}/`;
+        const list = await env.R2.list({ prefix, limit: 20 });
+        return Response.json({
+          prefix,
+          objects: list.objects.map((o) => ({
+            key: o.key,
+            size: o.size,
+            uploaded: o.uploaded,
+          })),
+        });
+      }
+
+      case "vecStore": {
+        const text = url.searchParams.get("text") || "test";
+        const org = url.searchParams.get("org") || "demo";
+        const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
+          text,
+        })) as { data: number[][] };
+        const id = `demo_${org}_${Date.now()}`;
+        await env.VECTORIZE.upsert([
+          {
+            id,
+            values: data[0],
+            metadata: { type: "org_context", org_id: org, text },
+          },
+        ]);
+        return Response.json({
+          success: true,
+          id,
+          dimensions: data[0].length,
+          org_id: org,
+        });
+      }
+
+      case "vecQuery": {
+        const text = url.searchParams.get("text") || "test";
+        const org = url.searchParams.get("org");
+        const { data } = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
+          text,
+        })) as { data: number[][] };
+        const filter = org ? { org_id: org } : undefined;
+        const results = await env.VECTORIZE.query(data[0], {
+          topK: 5,
+          filter,
+          returnMetadata: "all",
+        });
+        return Response.json({
+          query: text,
+          filter,
+          matches: results.matches.map((m) => ({
+            id: m.id,
+            score: m.score,
+            metadata: m.metadata,
+          })),
+        });
+      }
+
+      default:
+        return Response.json({ error: "Unknown action" }, { status: 400 });
+    }
+  } catch (e) {
+    return Response.json({ error: String(e) }, { status: 500 });
+  }
+}
+
 // Router
 
 const routes: Record<string, RouteHandler> = {
   "/api/messages": (req) => handleBotMessage(req),
   "/callback": handleClioCallback,
   "/demo": handleDemo,
+  "/demo/storage": handleStorageDemo,
   "/test/d1": handleTestD1,
   "/test/do": handleTestDO,
   "/test/r2": handleTestR2,

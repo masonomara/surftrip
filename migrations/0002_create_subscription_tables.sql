@@ -82,6 +82,6 @@ INSERT INTO `role_permissions` (`role`, `permission`, `allowed`) VALUES
 	('member', 'org_invite', 0),
 	('member', 'org_context_manage', 0),
 	('member', 'clio_read', 1),
-	('member', 'clio_create', 1),
+	('member', 'clio_create', 0),
 	('member', 'clio_update', 0),
 	('member', 'clio_delete', 0);

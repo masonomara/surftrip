@@ -9,7 +9,8 @@
     {
       "binding": "DB",
       "database_name": "docket-db",
-      "database_id": "afb86a9d-5697-401d-b55a-6079a7aa8779"
+      "database_id": "afb86a9d-5697-401d-b55a-6079a7aa8779",
+      "migrations_dir": "migrations"
     }
   ],
   "r2_buckets": [{ "bucket_name": "docket-storage", "binding": "R2" }],
