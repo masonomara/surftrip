@@ -41,11 +41,19 @@ Accounts exist, credentials are secure, and each service responds correctly.
 
 ## Phase 3: Storage Layer
 
-Create schemas and structure within existing Cloudflare resources:
+**Checklist:**
 
-- D1 migrations for Better Auth tables, org registry, KB chunks
-- Vectorize namespace setup for KB + Org Context embeddings
-- R2 path structure for org isolation (docs, audit logs, archives)
+- [ ] All 4 migration files created
+- [ ] Migrations applied locally (`--local`)
+- [ ] All 14+ tables exist in D1
+- [ ] Tier limits seeded (4 tiers)
+- [ ] Role permissions seeded (14 permissions)
+- [ ] Vectorize metadata index created for `org_id`
+- [ ] R2 path helpers implemented
+- [ ] Unit tests passing
+- [ ] Integration tests passing (requires `--remote` for Vectorize)
+- [ ] Demo endpoint returns all checks passing
+- [ ] Migrations applied to production (`--remote`)
 
 ## Phase 4: Auth Foundation
 
