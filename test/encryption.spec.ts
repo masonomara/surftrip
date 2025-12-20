@@ -5,119 +5,154 @@ import {
   decryptAndRotate,
   arrayBufferToBase64,
   base64ToArrayBuffer,
-  type EncryptionEnv,
 } from "../src/lib/encryption";
 
-describe("Encryption", () => {
-  const testKey = "test-encryption-key-32-chars-ok!";
-  const testKeyOld = "old-encryption-key-32-chars-ok!!";
-  const userId = "user-123";
+// ============================================================================
+// Test Constants
+// ============================================================================
 
+const TEST_KEY = "test-encryption-key-32-chars-ok!";
+const OLD_KEY = "old-encryption-key-32-chars-ok!!";
+const TEST_USER_ID = "user-123";
+
+// ============================================================================
+// Encryption Tests
+// ============================================================================
+
+describe("Encryption", () => {
   it("encrypts and decrypts data", async () => {
-    const original = "sensitive-oauth-token-12345";
-    const encrypted = await encrypt(original, userId, testKey);
-    expect(await decrypt(encrypted, userId, { ENCRYPTION_KEY: testKey })).toBe(
-      original
-    );
+    const originalData = "sensitive-oauth-token-12345";
+
+    const encrypted = await encrypt(originalData, TEST_USER_ID, TEST_KEY);
+    const decrypted = await decrypt(encrypted, TEST_USER_ID, {
+      ENCRYPTION_KEY: TEST_KEY,
+    });
+
+    expect(decrypted).toBe(originalData);
   });
 
   it("produces different ciphertext for same plaintext (random IV)", async () => {
-    const encrypted1 = await encrypt("same-data", userId, testKey);
-    const encrypted2 = await encrypt("same-data", userId, testKey);
-    expect(arrayBufferToBase64(encrypted1)).not.toBe(
-      arrayBufferToBase64(encrypted2)
-    );
+    const plaintext = "same-data";
+
+    const encrypted1 = await encrypt(plaintext, TEST_USER_ID, TEST_KEY);
+    const encrypted2 = await encrypt(plaintext, TEST_USER_ID, TEST_KEY);
+
+    const ciphertext1 = arrayBufferToBase64(encrypted1);
+    const ciphertext2 = arrayBufferToBase64(encrypted2);
+
+    // Random IV should produce different ciphertext each time
+    expect(ciphertext1).not.toBe(ciphertext2);
   });
 
   it("produces different ciphertext for different users", async () => {
-    const encrypted1 = await encrypt("same-data", "user-1", testKey);
+    const plaintext = "same-data";
+
+    const encryptedForUser1 = await encrypt(plaintext, "user-1", TEST_KEY);
+
+    // Should fail to decrypt with different user's salt
     await expect(
-      decrypt(encrypted1, "user-2", { ENCRYPTION_KEY: testKey })
+      decrypt(encryptedForUser1, "user-2", { ENCRYPTION_KEY: TEST_KEY })
     ).rejects.toThrow();
   });
 
   it("fails to decrypt with wrong key", async () => {
-    const encrypted = await encrypt("secret-data", userId, testKey);
+    const encrypted = await encrypt("secret", TEST_USER_ID, TEST_KEY);
+
     await expect(
-      decrypt(encrypted, userId, {
+      decrypt(encrypted, TEST_USER_ID, {
         ENCRYPTION_KEY: "wrong-key-that-wont-work!!",
       })
     ).rejects.toThrow();
   });
 
   it("decrypts with old key when current fails", async () => {
-    const encrypted = await encrypt(
-      "legacy-encrypted-data",
-      userId,
-      testKeyOld
-    );
-    expect(
-      await decrypt(encrypted, userId, {
-        ENCRYPTION_KEY: testKey,
-        ENCRYPTION_KEY_OLD: testKeyOld,
-      })
-    ).toBe("legacy-encrypted-data");
+    // Encrypt with old key
+    const encrypted = await encrypt("legacy", TEST_USER_ID, OLD_KEY);
+
+    // Decrypt should fall back to old key
+    const decrypted = await decrypt(encrypted, TEST_USER_ID, {
+      ENCRYPTION_KEY: TEST_KEY,
+      ENCRYPTION_KEY_OLD: OLD_KEY,
+    });
+
+    expect(decrypted).toBe("legacy");
   });
 
   it("decrypts and rotates to new key", async () => {
-    const encrypted = await encrypt(
-      "data-needing-rotation",
-      userId,
-      testKeyOld
-    );
-    const { value, rotated } = await decryptAndRotate(encrypted, userId, {
-      ENCRYPTION_KEY: testKey,
-      ENCRYPTION_KEY_OLD: testKeyOld,
+    // Encrypt with old key
+    const encrypted = await encrypt("rotate-me", TEST_USER_ID, OLD_KEY);
+
+    // Decrypt and rotate
+    const { value, rotated } = await decryptAndRotate(encrypted, TEST_USER_ID, {
+      ENCRYPTION_KEY: TEST_KEY,
+      ENCRYPTION_KEY_OLD: OLD_KEY,
     });
-    expect(value).toBe("data-needing-rotation");
+
+    expect(value).toBe("rotate-me");
     expect(rotated).not.toBeNull();
-    expect(await decrypt(rotated!, userId, { ENCRYPTION_KEY: testKey })).toBe(
-      "data-needing-rotation"
-    );
+
+    // Rotated ciphertext should now decrypt with current key
+    const decryptedRotated = await decrypt(rotated!, TEST_USER_ID, {
+      ENCRYPTION_KEY: TEST_KEY,
+    });
+    expect(decryptedRotated).toBe("rotate-me");
   });
 
   it("returns null for rotated when already using current key", async () => {
-    const encrypted = await encrypt("already-current", userId, testKey);
-    const { value, rotated } = await decryptAndRotate(encrypted, userId, {
-      ENCRYPTION_KEY: testKey,
-      ENCRYPTION_KEY_OLD: testKeyOld,
+    // Encrypt with current key
+    const encrypted = await encrypt("current", TEST_USER_ID, TEST_KEY);
+
+    const { rotated } = await decryptAndRotate(encrypted, TEST_USER_ID, {
+      ENCRYPTION_KEY: TEST_KEY,
+      ENCRYPTION_KEY_OLD: OLD_KEY,
     });
-    expect(value).toBe("already-current");
+
+    // No rotation needed
     expect(rotated).toBeNull();
   });
 
   it("fails when no old key and current key fails", async () => {
-    const encrypted = await encrypt(
-      "orphaned-data",
-      userId,
-      "unknown-key-12345678901234"
-    );
+    const unknownKey = "unknown-key-12345678901234";
+    const encrypted = await encrypt("orphaned", TEST_USER_ID, unknownKey);
+
     await expect(
-      decrypt(encrypted, userId, { ENCRYPTION_KEY: testKey })
+      decrypt(encrypted, TEST_USER_ID, { ENCRYPTION_KEY: TEST_KEY })
     ).rejects.toThrow("Decryption failed");
   });
 });
 
+// ============================================================================
+// Base64 Helper Tests
+// ============================================================================
+
 describe("Base64 Helpers", () => {
   it("converts ArrayBuffer to base64 and back", () => {
-    const original = new Uint8Array([1, 2, 3, 4, 5, 255, 0, 128]);
-    expect(
-      new Uint8Array(base64ToArrayBuffer(arrayBufferToBase64(original.buffer)))
-    ).toEqual(original);
+    const originalBytes = new Uint8Array([1, 2, 3, 4, 5, 255, 0, 128]);
+
+    const base64 = arrayBufferToBase64(originalBytes.buffer);
+    const roundTripped = new Uint8Array(base64ToArrayBuffer(base64));
+
+    expect(roundTripped).toEqual(originalBytes);
   });
 
   it("handles empty buffer", () => {
-    const empty = new Uint8Array([]);
-    expect(
-      new Uint8Array(base64ToArrayBuffer(arrayBufferToBase64(empty.buffer)))
-    ).toEqual(empty);
+    const emptyBuffer = new Uint8Array([]).buffer;
+
+    const base64 = arrayBufferToBase64(emptyBuffer);
+    const roundTripped = new Uint8Array(base64ToArrayBuffer(base64));
+
+    expect(roundTripped).toEqual(new Uint8Array([]));
   });
 
   it("produces valid base64 string", () => {
-    const base64 = arrayBufferToBase64(
-      new Uint8Array([72, 101, 108, 108, 111]).buffer
-    );
+    // "Hello" in ASCII
+    const helloBytes = new Uint8Array([72, 101, 108, 108, 111]);
+    const base64 = arrayBufferToBase64(helloBytes.buffer);
+
+    // Should match base64 pattern
     expect(base64).toMatch(/^[A-Za-z0-9+/]*={0,2}$/);
+
+    // "Hello" in base64 is "SGVsbG8="
     expect(base64).toBe("SGVsbG8=");
   });
 });

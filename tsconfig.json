@@ -7,14 +7,14 @@
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "allowJs": true,
-    "noEmit": true,
-    "isolatedModules": true,
     "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
     "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
     "skipLibCheck": true,
+    "noEmit": true,
     "types": ["./worker-configuration.d.ts"]
   },
-  "exclude": ["test"],
-  "include": ["worker-configuration.d.ts", "src/**/*.ts"]
+  "include": ["worker-configuration.d.ts", "src/**/*.ts"],
+  "exclude": ["test"]
 }

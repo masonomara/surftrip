@@ -6,6 +6,9 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
+/**
+ * User table - stores authenticated users
+ */
 export const user = sqliteTable(
   "user",
   {
@@ -22,6 +25,9 @@ export const user = sqliteTable(
   (table) => [uniqueIndex("user_email_unique").on(table.email)]
 );
 
+/**
+ * Session table - stores active user sessions for authentication
+ */
 export const session = sqliteTable(
   "session",
   {
@@ -42,6 +48,9 @@ export const session = sqliteTable(
   ]
 );
 
+/**
+ * Account table - stores OAuth provider connections and credentials
+ */
 export const account = sqliteTable(
   "account",
   {
@@ -68,6 +77,9 @@ export const account = sqliteTable(
   (table) => [index("account_userId_idx").on(table.userId)]
 );
 
+/**
+ * Verification table - stores email verification tokens and password reset codes
+ */
 export const verification = sqliteTable(
   "verification",
   {

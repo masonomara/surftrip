@@ -8,293 +8,292 @@ import {
   type SoleOwnershipError,
 } from "../src/services/gdpr";
 
+// ============================================================================
+// Test Helpers
+// ============================================================================
+
+/**
+ * Creates a test user in the database
+ */
+async function insertUser(
+  id: string,
+  email: string,
+  name = "Test"
+): Promise<void> {
+  const now = Date.now();
+  await env.DB.prepare(
+    `INSERT INTO user (id, name, email, email_verified, created_at, updated_at)
+     VALUES (?, ?, ?, 1, ?, ?)`
+  )
+    .bind(id, name, email, now, now)
+    .run();
+}
+
+/**
+ * Creates a test organization in the database
+ */
+async function insertOrg(id: string, name: string): Promise<void> {
+  const now = Date.now();
+  await env.DB.prepare(
+    `INSERT INTO org (id, name, created_at, updated_at)
+     VALUES (?, ?, ?, ?)`
+  )
+    .bind(id, name, now, now)
+    .run();
+}
+
+/**
+ * Adds a user as an owner of an organization
+ */
+async function insertOwner(orgId: string, userId: string): Promise<void> {
+  const now = Date.now();
+  await env.DB.prepare(
+    `INSERT INTO org_members (id, org_id, user_id, role, is_owner, created_at)
+     VALUES (?, ?, ?, 'admin', 1, ?)`
+  )
+    .bind(crypto.randomUUID(), orgId, userId, now)
+    .run();
+}
+
+/**
+ * Generates a unique test email
+ */
+function uniqueEmail(prefix: string): string {
+  return `${prefix}-${Date.now()}@test.com`;
+}
+
+// ============================================================================
+// hashUserId Tests
+// ============================================================================
+
 describe("GDPR Deletion", () => {
   describe("hashUserId", () => {
-    it("produces consistent hash for same input", () => {
-      expect(hashUserId("user-123")).toBe(hashUserId("user-123"));
+    it("produces consistent hash", () => {
+      const hash1 = hashUserId("user-123");
+      const hash2 = hashUserId("user-123");
+
+      expect(hash1).toBe(hash2);
     });
 
-    it("produces different hashes for different inputs", () => {
-      expect(hashUserId("user-123")).not.toBe(hashUserId("user-456"));
+    it("produces different hashes for different users", () => {
+      const hash1 = hashUserId("user-123");
+      const hash2 = hashUserId("user-456");
+
+      expect(hash1).not.toBe(hash2);
     });
 
     it("produces 8-character hex string", () => {
-      expect(hashUserId("any-user-id")).toMatch(/^[0-9a-f]{8}$/);
+      const hash = hashUserId("any-user-id");
+
+      expect(hash).toMatch(/^[0-9a-f]{8}$/);
     });
   });
 
+  // ============================================================================
+  // checkSoleOwnerships Tests
+  // ============================================================================
+
   describe("checkSoleOwnerships", () => {
-    it("returns empty array when user owns no orgs", async () => {
+    it("returns empty when user owns no orgs", async () => {
       const userId = crypto.randomUUID();
-      await env.DB.prepare(
-        `INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(
-          userId,
-          "No Orgs User",
-          `no-orgs-${Date.now()}@test.com`,
-          1,
-          Date.now(),
-          Date.now()
-        )
-        .run();
-      expect(await checkSoleOwnerships(env.DB, userId)).toEqual([]);
+      await insertUser(userId, uniqueEmail("no-orgs"));
+
+      const soleOwnerOrgs = await checkSoleOwnerships(env.DB, userId);
+
+      expect(soleOwnerOrgs).toEqual([]);
     });
 
-    it("returns org ID when user is sole owner", async () => {
+    it("returns org ID when sole owner", async () => {
       const userId = crypto.randomUUID();
       const orgId = crypto.randomUUID();
-      await env.DB.prepare(
-        `INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(
-          userId,
-          "Sole Owner",
-          `sole-${Date.now()}@test.com`,
-          1,
-          Date.now(),
-          Date.now()
-        )
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO org (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`
-      )
-        .bind(orgId, "Sole Org", Date.now(), Date.now())
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO org_members (id, org_id, user_id, role, is_owner, created_at) VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(crypto.randomUUID(), orgId, userId, "admin", 1, Date.now())
-        .run();
-      expect(await checkSoleOwnerships(env.DB, userId)).toContain(orgId);
+
+      await insertUser(userId, uniqueEmail("sole"));
+      await insertOrg(orgId, "Sole Org");
+      await insertOwner(orgId, userId);
+
+      const soleOwnerOrgs = await checkSoleOwnerships(env.DB, userId);
+
+      expect(soleOwnerOrgs).toContain(orgId);
     });
 
-    it("returns empty when org has multiple owners", async () => {
+    it("returns empty when multiple owners exist", async () => {
       const userId1 = crypto.randomUUID();
       const userId2 = crypto.randomUUID();
       const orgId = crypto.randomUUID();
+      const now = Date.now();
+
+      // Create two users
       await env.DB.batch([
         env.DB.prepare(
-          `INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-        ).bind(
-          userId1,
-          "Owner 1",
-          `owner1-${Date.now()}@test.com`,
-          1,
-          Date.now(),
-          Date.now()
-        ),
+          `INSERT INTO user (id, name, email, email_verified, created_at, updated_at)
+           VALUES (?, ?, ?, 1, ?, ?)`
+        ).bind(userId1, "Owner 1", uniqueEmail("o1"), now, now),
         env.DB.prepare(
-          `INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-        ).bind(
-          userId2,
-          "Owner 2",
-          `owner2-${Date.now()}@test.com`,
-          1,
-          Date.now(),
-          Date.now()
-        ),
+          `INSERT INTO user (id, name, email, email_verified, created_at, updated_at)
+           VALUES (?, ?, ?, 1, ?, ?)`
+        ).bind(userId2, "Owner 2", uniqueEmail("o2"), now, now),
       ]);
-      await env.DB.prepare(
-        `INSERT INTO org (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`
-      )
-        .bind(orgId, "Multi Owner Org", Date.now(), Date.now())
-        .run();
+
+      await insertOrg(orgId, "Multi-Owner Org");
+
+      // Add both as owners
       await env.DB.batch([
         env.DB.prepare(
-          `INSERT INTO org_members (id, org_id, user_id, role, is_owner, created_at) VALUES (?, ?, ?, ?, ?, ?)`
-        ).bind(crypto.randomUUID(), orgId, userId1, "admin", 1, Date.now()),
+          `INSERT INTO org_members (id, org_id, user_id, role, is_owner, created_at)
+           VALUES (?, ?, ?, 'admin', 1, ?)`
+        ).bind(crypto.randomUUID(), orgId, userId1, now),
         env.DB.prepare(
-          `INSERT INTO org_members (id, org_id, user_id, role, is_owner, created_at) VALUES (?, ?, ?, ?, ?, ?)`
-        ).bind(crypto.randomUUID(), orgId, userId2, "admin", 1, Date.now()),
+          `INSERT INTO org_members (id, org_id, user_id, role, is_owner, created_at)
+           VALUES (?, ?, ?, 'admin', 1, ?)`
+        ).bind(crypto.randomUUID(), orgId, userId2, now),
       ]);
-      expect(await checkSoleOwnerships(env.DB, userId1)).toEqual([]);
+
+      const soleOwnerOrgs = await checkSoleOwnerships(env.DB, userId1);
+
+      expect(soleOwnerOrgs).toEqual([]);
     });
   });
 
+  // ============================================================================
+  // deleteUserData Tests
+  // ============================================================================
+
   describe("deleteUserData", () => {
-    it("deletes user and all related records", async () => {
+    it("deletes user and related records", async () => {
       const userId = crypto.randomUUID();
+      const now = Date.now();
+
+      await insertUser(userId, uniqueEmail("delete"), "Delete Me");
+
+      // Create related records
       await env.DB.prepare(
-        `INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT INTO session (id, user_id, token, expires_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
-        .bind(
-          userId,
-          "Delete Me",
-          `delete-${Date.now()}@test.com`,
-          1,
-          Date.now(),
-          Date.now()
-        )
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO session (id, user_id, token, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(
-          crypto.randomUUID(),
-          userId,
-          "token-123",
-          Date.now() + 86400000,
-          Date.now(),
-          Date.now()
-        )
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO account (id, user_id, account_id, provider_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(
-          crypto.randomUUID(),
-          userId,
-          "acc-123",
-          "credential",
-          Date.now(),
-          Date.now()
-        )
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO channel_user_links (id, channel_type, channel_user_id, user_id, created_at) VALUES (?, ?, ?, ?, ?)`
-      )
-        .bind(crypto.randomUUID(), "teams", "29:test", userId, Date.now())
+        .bind(crypto.randomUUID(), userId, "tok", now + 86400000, now, now)
         .run();
 
-      const result = await deleteUserData(env.DB, env.R2, userId);
-      expect(result).not.toHaveProperty("type");
-      const gdprResult = result as {
+      await env.DB.prepare(
+        `INSERT INTO account (id, user_id, account_id, provider_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+        .bind(crypto.randomUUID(), userId, "acc", "credential", now, now)
+        .run();
+
+      await env.DB.prepare(
+        `INSERT INTO channel_user_links (id, channel_type, channel_user_id, user_id, created_at)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+        .bind(crypto.randomUUID(), "teams", "29:test", userId, now)
+        .run();
+
+      // Delete user data
+      const result = (await deleteUserData(env.DB, env.R2, userId)) as {
         success: boolean;
-        deletedRecords: {
-          user: boolean;
-          sessions: number;
-          accounts: number;
-          channelLinks: number;
-        };
+        deletedRecords: { user: boolean; sessions: number };
       };
-      expect(gdprResult.success).toBe(true);
-      expect(gdprResult.deletedRecords.user).toBe(true);
-      expect(gdprResult.deletedRecords.sessions).toBe(1);
-      expect(
-        await env.DB.prepare(`SELECT id FROM user WHERE id = ?`)
-          .bind(userId)
-          .first()
-      ).toBeNull();
+
+      expect(result.success).toBe(true);
+      expect(result.deletedRecords.user).toBe(true);
+      expect(result.deletedRecords.sessions).toBe(1);
+
+      // Verify user is gone
+      const userCheck = await env.DB.prepare(`SELECT id FROM user WHERE id = ?`)
+        .bind(userId)
+        .first();
+
+      expect(userCheck).toBeNull();
     });
 
     it("fails when user is sole owner", async () => {
       const userId = crypto.randomUUID();
       const orgId = crypto.randomUUID();
-      await env.DB.prepare(
-        `INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(
-          userId,
-          "Sole Owner Delete",
-          `sole-delete-${Date.now()}@test.com`,
-          1,
-          Date.now(),
-          Date.now()
-        )
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO org (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`
-      )
-        .bind(orgId, "Sole Delete Org", Date.now(), Date.now())
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO org_members (id, org_id, user_id, role, is_owner, created_at) VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(crypto.randomUUID(), orgId, userId, "admin", 1, Date.now())
-        .run();
 
-      const result = await deleteUserData(env.DB, env.R2, userId);
-      expect((result as SoleOwnershipError).type).toBe("sole_owner");
-      expect(
-        await env.DB.prepare(`SELECT id FROM user WHERE id = ?`)
-          .bind(userId)
-          .first()
-      ).not.toBeNull();
+      await insertUser(userId, uniqueEmail("sole-del"));
+      await insertOrg(orgId, "Sole Del Org");
+      await insertOwner(orgId, userId);
+
+      const result = (await deleteUserData(
+        env.DB,
+        env.R2,
+        userId
+      )) as SoleOwnershipError;
+
+      expect(result.type).toBe("sole_owner");
+
+      // Verify user still exists
+      const userCheck = await env.DB.prepare(`SELECT id FROM user WHERE id = ?`)
+        .bind(userId)
+        .first();
+
+      expect(userCheck).not.toBeNull();
     });
 
     it("returns error for non-existent user", async () => {
-      const result = await deleteUserData(env.DB, env.R2, crypto.randomUUID());
-      expect((result as { success: boolean }).success).toBe(false);
-      expect((result as { errors: string[] }).errors).toContain(
-        "User not found"
-      );
+      const result = (await deleteUserData(
+        env.DB,
+        env.R2,
+        crypto.randomUUID()
+      )) as {
+        success: boolean;
+        errors: string[];
+      };
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toContain("User not found");
     });
   });
 
+  // ============================================================================
+  // getDataDeletionPreview Tests
+  // ============================================================================
+
   describe("getDataDeletionPreview", () => {
-    it("returns count of records to be deleted", async () => {
+    it("returns count of records", async () => {
       const userId = crypto.randomUUID();
-      const email = `preview-${Date.now()}@test.com`;
+      const email = uniqueEmail("preview");
+      const now = Date.now();
+
+      await insertUser(userId, email, "Preview");
+
+      // Create two sessions
       await env.DB.prepare(
-        `INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT INTO session (id, user_id, token, expires_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
-        .bind(userId, "Preview User", email, 1, Date.now(), Date.now())
+        .bind(crypto.randomUUID(), userId, "t1", now + 86400000, now, now)
         .run();
+
       await env.DB.prepare(
-        `INSERT INTO session (id, user_id, token, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT INTO session (id, user_id, token, expires_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
-        .bind(
-          crypto.randomUUID(),
-          userId,
-          "token-1",
-          Date.now() + 86400000,
-          Date.now(),
-          Date.now()
-        )
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO session (id, user_id, token, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(
-          crypto.randomUUID(),
-          userId,
-          "token-2",
-          Date.now() + 86400000,
-          Date.now(),
-          Date.now()
-        )
+        .bind(crypto.randomUUID(), userId, "t2", now + 86400000, now, now)
         .run();
 
       const preview = await getDataDeletionPreview(env.DB, userId);
+
       expect(preview.user?.email).toBe(email);
       expect(preview.sessions).toBe(2);
     });
 
-    it("returns null user for non-existent user", async () => {
+    it("returns null user for non-existent", async () => {
       const preview = await getDataDeletionPreview(env.DB, crypto.randomUUID());
+
       expect(preview.user).toBeNull();
     });
 
     it("includes sole owner orgs in preview", async () => {
       const userId = crypto.randomUUID();
       const orgId = crypto.randomUUID();
-      await env.DB.prepare(
-        `INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(
-          userId,
-          "Preview Sole",
-          `preview-sole-${Date.now()}@test.com`,
-          1,
-          Date.now(),
-          Date.now()
-        )
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO org (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`
-      )
-        .bind(orgId, "Preview Org", Date.now(), Date.now())
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO org_members (id, org_id, user_id, role, is_owner, created_at) VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(crypto.randomUUID(), orgId, userId, "admin", 1, Date.now())
-        .run();
 
-      expect(
-        (await getDataDeletionPreview(env.DB, userId)).soleOwnerOrgs
-      ).toContain(orgId);
+      await insertUser(userId, uniqueEmail("prev-sole"));
+      await insertOrg(orgId, "Preview Org");
+      await insertOwner(orgId, userId);
+
+      const preview = await getDataDeletionPreview(env.DB, userId);
+
+      expect(preview.soleOwnerOrgs).toContain(orgId);
     });
   });
 });

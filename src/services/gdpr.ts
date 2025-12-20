@@ -17,40 +17,63 @@ export interface SoleOwnershipError {
   message: string;
 }
 
+/**
+ * Creates a deterministic hash of a user ID for anonymization.
+ * Used to replace user_id in audit logs while maintaining traceability.
+ */
 export function hashUserId(userId: string): string {
   let hash = 0;
+
   for (let i = 0; i < userId.length; i++) {
-    hash = (hash << 5) - hash + userId.charCodeAt(i);
-    hash = hash & hash;
+    // Simple hash: shift left 5, subtract original, add char code
+    hash = ((hash << 5) - hash + userId.charCodeAt(i)) & 0xffffffff;
   }
+
+  // Convert to positive hex, padded to 8 chars
   return Math.abs(hash).toString(16).padStart(8, "0");
 }
 
+/**
+ * Checks if a user is the sole owner of any organizations.
+ * Returns list of org IDs where user is the only owner.
+ */
 export async function checkSoleOwnerships(
   db: D1Database,
   userId: string
 ): Promise<string[]> {
+  // Find all orgs where this user is an owner
   const ownerships = await db
     .prepare(
       `SELECT org_id FROM org_members WHERE user_id = ? AND is_owner = 1`
     )
     .bind(userId)
     .all<{ org_id: string }>();
+
   const soleOwnerOrgs: string[] = [];
 
-  for (const { org_id } of ownerships.results) {
+  // Check each org for other owners
+  for (const { org_id: orgId } of ownerships.results) {
     const otherOwners = await db
       .prepare(
-        `SELECT COUNT(*) as count FROM org_members WHERE org_id = ? AND is_owner = 1 AND user_id != ?`
+        `SELECT COUNT(*) as count
+         FROM org_members
+         WHERE org_id = ? AND is_owner = 1 AND user_id != ?`
       )
-      .bind(org_id, userId)
+      .bind(orgId, userId)
       .first<{ count: number }>();
-    if (otherOwners?.count === 0) soleOwnerOrgs.push(org_id);
+
+    if (otherOwners?.count === 0) {
+      soleOwnerOrgs.push(orgId);
+    }
   }
 
   return soleOwnerOrgs;
 }
 
+/**
+ * Anonymizes audit logs in R2 by replacing user_id with a hashed version.
+ * Returns the count of anonymized entries.
+ */
 export async function anonymizeAuditLogs(
   r2: R2Bucket,
   userId: string
@@ -60,37 +83,52 @@ export async function anonymizeAuditLogs(
   let cursor: string | undefined;
 
   do {
-    const list = await r2.list({ prefix: "orgs/", cursor, limit: 100 });
-    for (const obj of list.objects) {
-      if (!obj.key.includes("/audit/")) continue;
+    const listResult = await r2.list({
+      prefix: "orgs/",
+      cursor,
+      limit: 100,
+    });
+
+    for (const obj of listResult.objects) {
+      // Only process audit log entries
+      if (!obj.key.includes("/audit/")) {
+        continue;
+      }
+
       const content = await r2.get(obj.key);
-      if (!content) continue;
+      if (!content) {
+        continue;
+      }
+
       try {
         const entry = (await content.json()) as { user_id?: string };
+
         if (entry.user_id === userId) {
           entry.user_id = hashedId;
+
           await r2.put(obj.key, JSON.stringify(entry), {
             httpMetadata: { contentType: "application/json" },
           });
+
           count++;
         }
-      } catch {}
+      } catch {
+        // Skip entries that can't be parsed
+      }
     }
-    cursor = list.truncated ? list.cursor : undefined;
+
+    cursor = listResult.truncated ? listResult.cursor : undefined;
   } while (cursor);
 
   return count;
 }
 
-async function deleteUserFromD1(
-  db: D1Database,
-  userId: string
-): Promise<{
-  sessions: number;
-  accounts: number;
-  channelLinks: number;
-  orgMemberships: number;
-}> {
+/**
+ * Counts and deletes all user-related records from D1.
+ * Returns counts of deleted records by type.
+ */
+async function deleteUserFromD1(db: D1Database, userId: string) {
+  // First, count all related records
   const [sessions, accounts, channelLinks, orgMemberships] = await Promise.all([
     db
       .prepare(`SELECT COUNT(*) as count FROM session WHERE user_id = ?`)
@@ -112,6 +150,7 @@ async function deleteUserFromD1(
       .first<{ count: number }>(),
   ]);
 
+  // Delete user (cascades to related tables)
   await db.prepare(`DELETE FROM user WHERE id = ?`).bind(userId).run();
 
   return {
@@ -122,12 +161,16 @@ async function deleteUserFromD1(
   };
 }
 
+/**
+ * Deletes all user data for GDPR compliance.
+ * Fails if user is sole owner of any organization.
+ */
 export async function deleteUserData(
   db: D1Database,
   r2: R2Bucket,
   userId: string
 ): Promise<GdprDeleteResult | SoleOwnershipError> {
-  const errors: string[] = [];
+  // Check for sole ownership - must transfer ownership first
   const soleOwnerOrgs = await checkSoleOwnerships(db, userId);
 
   if (soleOwnerOrgs.length > 0) {
@@ -138,10 +181,12 @@ export async function deleteUserData(
     };
   }
 
+  // Verify user exists
   const user = await db
     .prepare(`SELECT id FROM user WHERE id = ?`)
     .bind(userId)
     .first<{ id: string }>();
+
   if (!user) {
     return {
       success: false,
@@ -157,11 +202,13 @@ export async function deleteUserData(
     };
   }
 
+  const errors: string[] = [];
+
+  // Delete from D1
   let deletedRecords;
   try {
     deletedRecords = await deleteUserFromD1(db, userId);
-  } catch (e) {
-    errors.push(`D1 deletion failed: ${e}`);
+  } catch (error) {
     return {
       success: false,
       deletedRecords: {
@@ -172,36 +219,34 @@ export async function deleteUserData(
         orgMemberships: 0,
       },
       anonymizedAuditLogs: 0,
-      errors,
+      errors: [`D1 deletion failed: ${error}`],
     };
   }
 
+  // Anonymize audit logs
   let anonymizedCount = 0;
   try {
     anonymizedCount = await anonymizeAuditLogs(r2, userId);
-  } catch (e) {
-    errors.push(`Audit log anonymization failed: ${e}`);
+  } catch (error) {
+    errors.push(`Audit log anonymization failed: ${error}`);
   }
 
   return {
     success: errors.length === 0,
-    deletedRecords: { user: true, ...deletedRecords },
+    deletedRecords: {
+      user: true,
+      ...deletedRecords,
+    },
     anonymizedAuditLogs: anonymizedCount,
     errors,
   };
 }
 
-export async function getDataDeletionPreview(
-  db: D1Database,
-  userId: string
-): Promise<{
-  user: { email: string; name: string } | null;
-  sessions: number;
-  accounts: number;
-  channelLinks: number;
-  orgMemberships: number;
-  soleOwnerOrgs: string[];
-}> {
+/**
+ * Gets a preview of what data would be deleted for a user.
+ * Useful for showing users before they confirm deletion.
+ */
+export async function getDataDeletionPreview(db: D1Database, userId: string) {
   const [user, sessions, accounts, channelLinks, orgMemberships] =
     await Promise.all([
       db
@@ -228,12 +273,14 @@ export async function getDataDeletionPreview(
         .first<{ count: number }>(),
     ]);
 
+  const soleOwnerOrgs = await checkSoleOwnerships(db, userId);
+
   return {
     user: user ?? null,
     sessions: sessions?.count ?? 0,
     accounts: accounts?.count ?? 0,
     channelLinks: channelLinks?.count ?? 0,
     orgMemberships: orgMemberships?.count ?? 0,
-    soleOwnerOrgs: await checkSoleOwnerships(db, userId),
+    soleOwnerOrgs,
   };
 }
