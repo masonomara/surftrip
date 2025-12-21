@@ -37,6 +37,7 @@ export interface Env {
   APPLE_APP_BUNDLE_IDENTIFIER: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  ENVIRONMENT?: string;
 }
 
 export interface AuditEntry {
@@ -547,21 +548,25 @@ async function handleRAGDebug(request: Request, env: Env): Promise<Response> {
 
 type RouteHandler = (request: Request, env: Env) => Promise<Response>;
 
-const routes: Record<string, RouteHandler> = {
+const productionRoutes: Record<string, RouteHandler> = {
   "/api/messages": (request) => handleBotMessage(request),
   "/callback": handleClioCallback,
+};
+
+const devOnlyRoutes: Record<string, RouteHandler> = {
+  "/demo/auth": handleAuthDemo,
   "/demo/org-membership": handleOrgMembershipDemo,
   "/demo/org-deletion": handleOrgDeletionDemo,
   "/demo/kb": handleKBDemo,
   "/test/org-context": handleOrgContextTest,
   "/test/rag": handleRAGTest,
   "/test/rag-debug": handleRAGDebug,
-  "/": handleAuthDemo,
 };
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
     if (url.pathname.startsWith("/api/auth")) {
       try {
         return await getAuth(env).handler(request);
@@ -569,8 +574,24 @@ export default {
         return Response.json({ error: String(error) }, { status: 500 });
       }
     }
-    const handler = routes[url.pathname];
-    if (handler) return handler(request, env);
-    return Response.json({ routes: Object.keys(routes) });
+
+    const prodHandler = productionRoutes[url.pathname];
+    if (prodHandler) return prodHandler(request, env);
+
+    if (env.ENVIRONMENT !== "production") {
+      const devHandler = devOnlyRoutes[url.pathname];
+      if (devHandler) return devHandler(request, env);
+
+      if (url.pathname === "/") return handleAuthDemo(request, env);
+
+      return Response.json({
+        routes: [
+          ...Object.keys(productionRoutes),
+          ...Object.keys(devOnlyRoutes),
+        ],
+      });
+    }
+
+    return Response.json({ error: "Not found" }, { status: 404 });
   },
 };

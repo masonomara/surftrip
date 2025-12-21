@@ -70,3 +70,4 @@ CLAUDE.md
 AuthKey_Y34VLSKMZM.p8
 migrations/meta/
 /kb
+worker-configuration.d.ts
