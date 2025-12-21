@@ -20,8 +20,9 @@ import {
   buildOrgDeletionPage,
   buildKBPage,
   buildTenantDOPage,
+  buildLLMPage,
 } from "./demo";
-import { type ChannelMessage, validateChannelMessage } from "./types/channel";
+import { type ChannelMessage } from "./types/channel";
 
 export { TenantDO } from "./services/tenant-do";
 
@@ -291,7 +292,7 @@ async function handleKBDemo(request: Request, env: Env): Promise<Response> {
 }
 
 async function handleOrgContextTest(
-  request: Request,
+  _request: Request,
   env: Env
 ): Promise<Response> {
   const testOrgId = `test-org-${Date.now()}`;
@@ -416,7 +417,7 @@ async function handleRAGTest(request: Request, env: Env): Promise<Response> {
   }
 }
 
-async function handleRAGDebug(request: Request, env: Env): Promise<Response> {
+async function handleRAGDebug(_request: Request, env: Env): Promise<Response> {
   try {
     const d1Count = await env.DB.prepare(
       "SELECT COUNT(*) as count FROM kb_chunks"
@@ -615,6 +616,41 @@ async function handleTenantDODemo(
   });
 }
 
+async function handleLLMDemo(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  if (request.method === "POST") {
+    const body = (await request.json()) as TenantDemoRequest;
+
+    if (body.action === "process-message" && body.orgId && body.message) {
+      // Ensure org exists for demo
+      await env.DB.prepare("INSERT OR IGNORE INTO org (id, name) VALUES (?, ?)")
+        .bind(body.orgId, `Demo Org ${body.orgId}`)
+        .run();
+
+      const doId = env.TENANT.idFromName(body.orgId);
+      const stub = env.TENANT.get(doId);
+      const doRequest = new Request("http://do/process-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body.message),
+      });
+      return stub.fetch(doRequest);
+    }
+
+    if (body.action === "status" && body.orgId) {
+      return handleDOStatus(env, body.orgId);
+    }
+
+    return Response.json({ error: "Invalid action" }, { status: 400 });
+  }
+
+  return new Response(buildLLMPage(), {
+    headers: { "Content-Type": "text/html" },
+  });
+}
+
 type RouteHandler = (request: Request, env: Env) => Promise<Response>;
 
 const routes: Record<string, RouteHandler> = {
@@ -624,6 +660,7 @@ const routes: Record<string, RouteHandler> = {
   "/demo/org-deletion": handleOrgDeletionDemo,
   "/demo/kb": handleKBDemo,
   "/demo/tenant-do": handleTenantDODemo,
+  "/demo/llm": handleLLMDemo,
   "/test/org-context": handleOrgContextTest,
   "/test/rag": handleRAGTest,
   "/test/rag-debug": handleRAGDebug,
