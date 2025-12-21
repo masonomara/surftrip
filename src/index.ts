@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { z } from "zod";
 import { getAuth } from "./lib/auth";
 import {
   getOrgMembership,
@@ -21,6 +22,80 @@ import {
   buildOrgDeletionPage,
   buildKBPage,
 } from "./demo";
+
+// ============================================================================
+// Request Validation Schemas
+// ============================================================================
+
+const BotActivitySchema = z.object({
+  type: z.string(),
+  id: z.string().optional(),
+  text: z.string().optional(),
+  from: z.object({ id: z.string() }).optional(),
+  recipient: z.object({ id: z.string() }).optional(),
+  conversation: z.object({ id: z.string() }).optional(),
+  serviceUrl: z.string().optional(),
+});
+
+const OrgMembershipRequestSchema = z.object({
+  action: z.string(),
+  userId: z.string().optional(),
+  orgId: z.string().optional(),
+  toUserId: z.string().optional(),
+});
+
+const OrgDeletionRequestSchema = z.object({
+  action: z.string(),
+  orgId: z.string().optional(),
+  userId: z.string().optional(),
+});
+
+const KBQueryRequestSchema = z.object({
+  query: z.string(),
+  orgId: z.string(),
+  jurisdiction: z.string().nullable(),
+  practiceType: z.string().nullable(),
+  firmSize: z.string().nullable(),
+});
+
+const RAGTestRequestSchema = z.object({
+  query: z.string(),
+  orgId: z.string().optional(),
+  jurisdiction: z.string().optional(),
+  practiceType: z.string().optional(),
+  firmSize: z.string().optional(),
+});
+
+const AuditEntryInputSchema = z.object({
+  user_id: z.string(),
+  action: z.string(),
+  object_type: z.string(),
+  params: z.record(z.string(), z.unknown()),
+  result: z.enum(["success", "error"]),
+  error_message: z.string().optional(),
+});
+
+/**
+ * Safely parses JSON and validates against a Zod schema.
+ * Returns a 400 response with error details if validation fails.
+ */
+async function parseBody<T>(
+  request: Request,
+  schema: z.ZodSchema<T>
+): Promise<T | Response> {
+  try {
+    const json = await request.json();
+    return schema.parse(json);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return Response.json(
+        { error: "Validation failed", details: error.issues },
+        { status: 400 }
+      );
+    }
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+}
 
 export interface Env {
   DB: D1Database;
@@ -115,9 +190,19 @@ export class TenantDO extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "POST" && url.pathname === "/audit") {
-      return Response.json(
-        await this.appendAuditLog((await request.json()) as AuditEntryInput)
-      );
+      try {
+        const json = await request.json();
+        const entry = AuditEntryInputSchema.parse(json);
+        return Response.json(await this.appendAuditLog(entry));
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return Response.json(
+            { error: "Validation failed", details: error.issues },
+            { status: 400 }
+          );
+        }
+        return Response.json({ error: "Invalid JSON" }, { status: 400 });
+      }
     }
     return Response.json({ error: "Not found" }, { status: 404 });
   }
@@ -167,20 +252,14 @@ async function handleClioCallback(
   });
 }
 
-interface BotActivity {
-  type: string;
-  id?: string;
-  text?: string;
-  from?: { id: string };
-  recipient?: { id: string };
-  conversation?: { id: string };
-  serviceUrl?: string;
-}
-
 async function handleBotMessage(request: Request): Promise<Response> {
   if (request.method !== "POST")
     return new Response("Method not allowed", { status: 405 });
-  const activity = (await request.json()) as BotActivity;
+
+  const result = await parseBody(request, BotActivitySchema);
+  if (result instanceof Response) return result;
+  const activity = result;
+
   if (!activity.serviceUrl || !activity.conversation?.id)
     return new Response(null, { status: 200 });
 
@@ -221,19 +300,15 @@ async function handleAuthDemo(request: Request, env: Env): Promise<Response> {
   });
 }
 
-interface OrgMembershipRequest {
-  action: string;
-  userId?: string;
-  orgId?: string;
-  toUserId?: string;
-}
-
 async function handleOrgMembershipDemo(
   request: Request,
   env: Env
 ): Promise<Response> {
   if (request.method === "POST") {
-    const body = (await request.json()) as OrgMembershipRequest;
+    const result = await parseBody(request, OrgMembershipRequestSchema);
+    if (result instanceof Response) return result;
+    const body = result;
+
     if (body.action === "get-membership" && body.userId && body.orgId)
       return Response.json({
         membership: await getOrgMembership(env.DB, body.userId, body.orgId),
@@ -263,18 +338,15 @@ async function handleOrgMembershipDemo(
   });
 }
 
-interface OrgDeletionRequest {
-  action: string;
-  orgId?: string;
-  userId?: string;
-}
-
 async function handleOrgDeletionDemo(
   request: Request,
   env: Env
 ): Promise<Response> {
   if (request.method === "POST") {
-    const body = (await request.json()) as OrgDeletionRequest;
+    const result = await parseBody(request, OrgDeletionRequestSchema);
+    if (result instanceof Response) return result;
+    const body = result;
+
     if (body.action === "preview" && body.orgId)
       return Response.json(await getOrgDeletionPreview(env.DB, body.orgId));
     if (body.action === "delete" && body.orgId && body.userId)
@@ -294,14 +366,10 @@ async function handleKBDemo(request: Request, env: Env): Promise<Response> {
   const action = url.searchParams.get("action");
 
   if (request.method === "POST" && action === "query") {
-    const { query, orgId, jurisdiction, practiceType, firmSize } =
-      (await request.json()) as {
-        query: string;
-        orgId: string;
-        jurisdiction: string | null;
-        practiceType: string | null;
-        firmSize: string | null;
-      };
+    const result = await parseBody(request, KBQueryRequestSchema);
+    if (result instanceof Response) return result;
+    const { query, orgId, jurisdiction, practiceType, firmSize } = result;
+
     const context = await retrieveRAGContext(env, query, orgId, {
       jurisdiction,
       practiceType,
@@ -442,14 +510,6 @@ async function handleOrgContextTest(
   }
 }
 
-interface RAGTestRequest {
-  query: string;
-  orgId?: string;
-  jurisdiction?: string;
-  practiceType?: string;
-  firmSize?: string;
-}
-
 async function handleRAGTest(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST")
     return Response.json(
@@ -463,9 +523,10 @@ async function handleRAGTest(request: Request, env: Env): Promise<Response> {
       },
       { status: 400 }
     );
-  const body = (await request.json()) as RAGTestRequest;
-  if (!body.query)
-    return Response.json({ error: "query is required" }, { status: 400 });
+
+  const result = await parseBody(request, RAGTestRequestSchema);
+  if (result instanceof Response) return result;
+  const body = result;
 
   try {
     const context = await retrieveRAGContext(

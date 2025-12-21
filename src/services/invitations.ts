@@ -1,15 +1,6 @@
-export type OrgRole = "admin" | "member";
+import { type OrgRole, type Invitation } from "../types";
 
-export interface Invitation {
-  id: string;
-  email: string;
-  orgId: string;
-  role: OrgRole;
-  invitedBy: string;
-  createdAt: number;
-  expiresAt: number;
-  acceptedAt: number | null;
-}
+export type { OrgRole, Invitation };
 
 export interface CreateInvitationInput {
   email: string;

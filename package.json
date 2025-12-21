@@ -22,6 +22,7 @@
   "dependencies": {
     "@microsoft/m365agentsplayground": "^0.2.20",
     "better-auth": "^1.4.7",
-    "drizzle-orm": "^0.41.0"
+    "drizzle-orm": "^0.41.0",
+    "zod": "^4.2.1"
   }
 }

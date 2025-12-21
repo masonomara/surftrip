@@ -1,10 +1,6 @@
-export type ChannelType = "teams" | "slack";
+import { type ChannelType, type ChannelLink } from "../types";
 
-export interface ChannelLink {
-  channelType: ChannelType;
-  channelUserId: string;
-  userId: string;
-}
+export type { ChannelType, ChannelLink };
 
 /**
  * Finds a user ID by their channel-specific identifier.

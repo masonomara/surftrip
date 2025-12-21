@@ -1,33 +1,11 @@
-export type OrgRole = "admin" | "member";
+import {
+  type OrgRole,
+  type OrgMembership,
+  type OrgMemberRow,
+  orgMemberRowToEntity,
+} from "../types";
 
-export interface OrgMembership {
-  id: string;
-  userId: string;
-  orgId: string;
-  role: OrgRole;
-  isOwner: boolean;
-  createdAt: number;
-}
-
-interface MemberRow {
-  id: string;
-  user_id: string;
-  org_id: string;
-  role: OrgRole;
-  is_owner: number;
-  created_at: number;
-}
-
-function rowToMembership(row: MemberRow): OrgMembership {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    orgId: row.org_id,
-    role: row.role,
-    isOwner: row.is_owner === 1,
-    createdAt: row.created_at,
-  };
-}
+export type { OrgRole, OrgMembership };
 
 export async function getOrgMembership(
   db: D1Database,
@@ -35,13 +13,13 @@ export async function getOrgMembership(
   orgId: string
 ): Promise<OrgMembership | null> {
   const query = `SELECT * FROM org_members WHERE user_id = ? AND org_id = ?`;
-  const row = await db.prepare(query).bind(userId, orgId).first<MemberRow>();
+  const row = await db.prepare(query).bind(userId, orgId).first<OrgMemberRow>();
 
   if (!row) {
     return null;
   }
 
-  return rowToMembership(row);
+  return orgMemberRowToEntity(row);
 }
 
 export async function getOrgMembers(
@@ -49,9 +27,9 @@ export async function getOrgMembers(
   orgId: string
 ): Promise<OrgMembership[]> {
   const query = `SELECT * FROM org_members WHERE org_id = ? ORDER BY created_at`;
-  const result = await db.prepare(query).bind(orgId).all<MemberRow>();
+  const result = await db.prepare(query).bind(orgId).all<OrgMemberRow>();
 
-  return result.results.map(rowToMembership);
+  return result.results.map(orgMemberRowToEntity);
 }
 
 type RemoveUserResult =
