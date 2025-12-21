@@ -64,6 +64,7 @@ dist
 .editorconfig
 .vscode/
 /docs/archive
+/docs/admin
 /docs/99*
 CLAUDE.md
 /devTools
