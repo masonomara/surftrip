@@ -122,27 +122,27 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 **Checklist:**
 
 - [x] KB folder structure created (`/kb/federal/`, `/kb/jurisdictions/`, `/kb/practice-types/`, `/kb/firm-sizes/`)
-- [ ] Placeholder KB markdown files created
-- [ ] Build-time KB function implemented (full rebuild on deploy)
-- [ ] KB clearing: delete all `kb_chunks` rows
-- [ ] KB clearing: delete all non-org embeddings from Vectorize
-- [ ] Metadata extraction from folder path (jurisdiction, practice_type, firm_size)
-- [ ] Markdown parsing respects section boundaries
-- [ ] Chunk size ~500 characters
-- [ ] Embeddings via Workers AI (`@cf/baai/bge-base-en-v1.5`)
-- [ ] Insert to D1 (`kb_chunks`) and Vectorize with `{ category, jurisdiction, practice_type, firm_size }` metadata
-- [ ] Org Context upload validation (MIME + extension: PDF/DOCX/MD, 25MB limit, filename sanitization)
-- [ ] Raw file storage in R2 (`/orgs/{org_id}/docs/{file_id}`)
-- [ ] Text parsing (pdf-parse for PDF, mammoth for DOCX, direct for MD)
-- [ ] Org Context chunks stored in D1 (`org_context_chunks`)
-- [ ] Org Context embeddings upserted to Vectorize with `{ org_id, jurisdiction, practice_type, firm_size }` metadata (inherited from org settings)
-- [ ] Delete/update flow (delete from D1, Vectorize, R2; updates = delete + re-upload)
-- [ ] RAG retrieval: two parallel Vectorize queries (KB filtered by jurisdiction/practice_type/firm_size, Org Context filtered by org_id, topK: 5)
-- [ ] Token budget enforcement (3000 tokens for RAG context)
-- [ ] Graceful degradation on RAG failure (return empty context, log error)
-- [ ] Unit tests passing
-- [ ] Integration tests passing
-- [ ] Demo endpoint deployed
+- [x] Placeholder KB markdown files created
+- [x] Build-time KB function implemented (full rebuild on deploy)
+- [x] KB clearing: delete all `kb_chunks` rows
+- [x] KB clearing: delete all non-org embeddings from Vectorize
+- [x] Metadata extraction from folder path (jurisdiction, practice_type, firm_size)
+- [x] Markdown parsing respects section boundaries
+- [x] Chunk size ~500 characters
+- [x] Embeddings via Workers AI (`@cf/baai/bge-base-en-v1.5`)
+- [x] Insert to D1 (`kb_chunks`) and Vectorize with `{ category, jurisdiction, practice_type, firm_size }` metadata
+- [x] Org Context upload validation (MIME + extension: PDF/DOCX/MD, 25MB limit, filename sanitization)
+- [x] Raw file storage in R2 (`/orgs/{org_id}/docs/{file_id}`)
+- [x] Text parsing (pdf-parse for PDF, mammoth for DOCX, direct for MD)
+- [x] Org Context chunks stored in D1 (`org_context_chunks`)
+- [x] Org Context embeddings upserted to Vectorize with `{ org_id, jurisdiction, practice_type, firm_size }` metadata (inherited from org settings)
+- [x] Delete/update flow (delete from D1, Vectorize, R2; updates = delete + re-upload)
+- [x] RAG retrieval: two parallel Vectorize queries (KB filtered by jurisdiction/practice_type/firm_size, Org Context filtered by org_id, topK: 5)
+- [x] Token budget enforcement (3000 tokens for RAG context)
+- [x] Graceful degradation on RAG failure (return empty context, log error)
+- [x] Unit tests passing
+- [x] Integration tests passing
+- [x] Demo endpoint deployed
 
 **Note:** Shared KB content (Clio workflows, deadline calculations, billing guidance) requires legal expert review. Use placeholder content if unavailable.
 
@@ -150,7 +150,7 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 
 **Checklist:**
 
-- [ ] DO bindings configured in `wrangler.jsonc`
+- [x] DO bindings configured in `wrangler.jsonc`
 - [ ] One DO per organization (DO ID = org identity)
 - [ ] DO derives `orgId` from DO ID, rejects mismatched `ChannelMessage.orgId`
 - [ ] Constructor uses `blockConcurrencyWhile()` for migrations + schema loading

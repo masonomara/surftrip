@@ -1,33 +1,41 @@
 /**
- * Loads KB markdown files at build time using Vite's import.meta.glob.
- * Files are bundled into the worker, no runtime filesystem access needed.
+ * Knowledge Base Loader
+ *
+ * Provides access to the bundled KB files and utilities for seeding
+ * the database. The actual file content comes from the auto-generated
+ * kb-manifest.ts (created by scripts/generate-kb-manifest.ts).
  */
 
-// Import all .md files from /kb/ directory at build time
-const kbModules = import.meta.glob("/kb/**/*.md", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
+import { Env } from "../index";
+import { buildKB } from "./kb-builder";
+import { kbFiles } from "./kb-manifest";
 
 /**
- * Returns a Map of file paths to content for all KB files.
- * Paths are relative to /kb/ (e.g., "general/billing.md")
+ * Seeds the Knowledge Base by building it from bundled markdown files.
+ * This is typically called once during initial setup or when KB content updates.
  */
-export function loadKBFiles(): Map<string, string> {
-  const files = new Map<string, string>();
+export async function seedKB(
+  env: Env
+): Promise<{ chunks: number; files: number }> {
+  const result = await buildKB(env, kbFiles);
 
-  for (const [path, content] of Object.entries(kbModules)) {
-    // Convert "/kb/general/file.md" to "general/file.md"
-    const relativePath = path.replace(/^\/kb\//, "");
-    files.set(relativePath, content);
-  }
-
-  return files;
+  return {
+    chunks: result.chunks,
+    files: kbFiles.size,
+  };
 }
 
 /**
- * Returns stats about loaded KB files without loading content.
+ * Returns the map of KB files (path -> content).
+ * Useful for inspection or custom processing.
+ */
+export function loadKBFiles(): Map<string, string> {
+  return kbFiles;
+}
+
+/**
+ * Returns statistics about the loaded KB files.
+ * Useful for the demo UI and debugging.
  */
 export function getKBStats(): {
   totalFiles: number;
@@ -35,15 +43,14 @@ export function getKBStats(): {
 } {
   const byCategory: Record<string, number> = {};
 
-  for (const path of Object.keys(kbModules)) {
-    // Extract category from path: /kb/{category}/...
-    const match = path.match(/^\/kb\/([^/]+)\//);
-    const category = match ? match[1] : "unknown";
+  for (const filePath of kbFiles.keys()) {
+    // The category is the first folder in the path
+    const category = filePath.split("/")[0] || "unknown";
     byCategory[category] = (byCategory[category] || 0) + 1;
   }
 
   return {
-    totalFiles: Object.keys(kbModules).length,
+    totalFiles: kbFiles.size,
     byCategory,
   };
 }

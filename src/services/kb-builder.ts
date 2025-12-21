@@ -1,10 +1,26 @@
+/**
+ * Knowledge Base Builder
+ *
+ * Builds the shared KB by:
+ * 1. Reading markdown files from the kb/ directory
+ * 2. Extracting metadata from folder structure (jurisdiction, practice type, etc.)
+ * 3. Chunking content into embedding-sized pieces
+ * 4. Generating embeddings via Workers AI
+ * 5. Storing chunks in D1 and vectors in Vectorize
+ */
+
 import { Env } from "../index";
+import { KB_CONFIG } from "../config/kb";
+
+// ============================================================================
+// Types
+// ============================================================================
 
 interface KBMetadata {
-  category: "general" | null;
+  category: string | null;
   jurisdiction: string | null;
-  practiceType: string | null;
-  firmSize: string | null;
+  practice_type: string | null;
+  firm_size: string | null;
 }
 
 interface KBChunk {
@@ -16,139 +32,206 @@ interface KBChunk {
   metadata: KBMetadata;
 }
 
+// ============================================================================
+// Metadata Extraction
+// ============================================================================
 
 /**
- * Extracts metadata from file path based on folder structure.
+ * Extracts metadata from the file's path within the KB directory.
  *
- * /kb/general/           → category: "general" (always included)
- * /kb/jurisdictions/CA/  → jurisdiction: "CA"
- * /kb/practice-types/X/  → practiceType: "X"
- * /kb/firm-sizes/solo/   → firmSize: "solo"
+ * The KB folder structure encodes metadata:
+ *   - general/billing.md           -> category: "general"
+ *   - jurisdictions/CA/deadlines.md -> jurisdiction: "CA"
+ *   - practice-types/pi/intake.md  -> practice_type: "pi"
+ *   - firm-sizes/solo/handbook.md  -> firm_size: "solo"
  */
 export function extractMetadataFromPath(filePath: string): KBMetadata {
   const metadata: KBMetadata = {
     category: null,
     jurisdiction: null,
-    practiceType: null,
-    firmSize: null,
+    practice_type: null,
+    firm_size: null,
   };
 
-  // Normalize path separators
-  const normalizedPath = filePath.replace(/\\/g, "/");
+  const pathParts = filePath.split("/");
+  const rootFolder = pathParts[0];
+  const subfolder = pathParts[1];
 
-  if (normalizedPath.includes("/general/")) {
-    metadata.category = "general";
-  } else if (normalizedPath.includes("/jurisdictions/")) {
-    const match = normalizedPath.match(/\/jurisdictions\/([^/]+)\//);
-    if (match) {
-      metadata.jurisdiction = match[1];
-    }
-  } else if (normalizedPath.includes("/practice-types/")) {
-    const match = normalizedPath.match(/\/practice-types\/([^/]+)\//);
-    if (match) {
-      metadata.practiceType = match[1];
-    }
-  } else if (normalizedPath.includes("/firm-sizes/")) {
-    const match = normalizedPath.match(/\/firm-sizes\/([^/]+)\//);
-    if (match) {
-      metadata.firmSize = match[1];
-    }
+  // Determine which type of content this is based on the root folder
+  switch (rootFolder) {
+    case "general":
+      metadata.category = "general";
+      break;
+    case "jurisdictions":
+      if (subfolder) metadata.jurisdiction = subfolder;
+      break;
+    case "practice-types":
+      if (subfolder) metadata.practice_type = subfolder;
+      break;
+    case "firm-sizes":
+      if (subfolder) metadata.firm_size = subfolder;
+      break;
   }
 
   return metadata;
 }
 
+// ============================================================================
+// Text Chunking
+// ============================================================================
+
 /**
- * Chunks text into ~500 character segments, respecting section boundaries.
+ * Splits markdown text into chunks suitable for embedding.
+ *
+ * Strategy:
+ * 1. First, split on markdown headers (# or ##) to respect section boundaries
+ * 2. If a section is still too long, split on paragraph breaks
+ * 3. Combine short paragraphs to avoid tiny chunks
  */
-export function chunkText(text: string, maxChars = 500): string[] {
+export function chunkText(
+  text: string,
+  maxChars: number = KB_CONFIG.CHUNK_SIZE
+): string[] {
   const chunks: string[] = [];
+
+  // Split on markdown headers (# or ##)
+  // The regex captures the header so it stays with its content
   const sections = text.split(/(?=^##?\s)/m);
 
   for (const section of sections) {
-    if (section.length <= maxChars) {
-      if (section.trim()) chunks.push(section.trim());
+    const trimmedSection = section.trim();
+    if (!trimmedSection) continue;
+
+    // If section fits in one chunk, use it as-is
+    if (trimmedSection.length <= maxChars) {
+      chunks.push(trimmedSection);
       continue;
     }
 
-    const paragraphs = section.split(/\n\n+/);
-    let current = "";
+    // Section is too long - split by paragraphs
+    const paragraphs = trimmedSection.split(/\n\n+/);
+    let currentChunk = "";
 
-    for (const para of paragraphs) {
-      if (current.length + para.length > maxChars && current) {
-        chunks.push(current.trim());
-        current = para;
+    for (const paragraph of paragraphs) {
+      const wouldExceedLimit =
+        currentChunk.length + paragraph.length > maxChars;
+      const hasExistingContent = currentChunk.length > 0;
+
+      if (wouldExceedLimit && hasExistingContent) {
+        // Save current chunk and start a new one
+        chunks.push(currentChunk.trim());
+        currentChunk = paragraph;
       } else {
-        current += (current ? "\n\n" : "") + para;
+        // Add to current chunk
+        const separator = currentChunk ? "\n\n" : "";
+        currentChunk += separator + paragraph;
       }
     }
 
-    if (current.trim()) chunks.push(current.trim());
+    // Don't forget the last chunk
+    if (currentChunk.trim()) {
+      chunks.push(currentChunk.trim());
+    }
   }
 
   return chunks;
 }
 
+// ============================================================================
+// Embedding Generation
+// ============================================================================
 
 /**
- * Generates embeddings for text using Workers AI.
- * Batches requests (max 100 per call) to avoid rate limits.
+ * Generates embeddings for an array of texts using Workers AI.
+ * Processes in batches to respect API limits.
  */
-async function generateEmbeddings(
+export async function generateEmbeddings(
   ai: Ai,
   texts: string[]
 ): Promise<number[][]> {
-  const BATCH_SIZE = 100;
   const allEmbeddings: number[][] = [];
+  const batchSize = KB_CONFIG.EMBEDDING_BATCH_SIZE;
 
-  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-    const batch = texts.slice(i, i + BATCH_SIZE);
-    const result = await ai.run("@cf/baai/bge-base-en-v1.5", { text: batch });
-    // Result is { shape: number[], data: number[][] }
-    const embeddings = (result as { data: number[][] }).data;
-    allEmbeddings.push(...embeddings);
+  for (let i = 0; i < texts.length; i += batchSize) {
+    const batch = texts.slice(i, i + batchSize);
+
+    const result = (await ai.run("@cf/baai/bge-base-en-v1.5", {
+      text: batch,
+    })) as { data: number[][] };
+
+    allEmbeddings.push(...result.data);
   }
 
   return allEmbeddings;
 }
 
-/**
- * Clears all KB data from D1 and Vectorize.
- */
-async function clearKB(env: Env): Promise<void> {
-  await env.DB.prepare("DELETE FROM kb_chunks").run();
+// ============================================================================
+// KB Management
+// ============================================================================
 
-  // Note: Vectorize bulk delete by query not supported.
-  // KB embeddings are cleared by upserting with same IDs (overwrite).
+/**
+ * Clears all existing KB data from D1 and Vectorize.
+ * Called before rebuilding the KB to ensure a clean slate.
+ */
+async function clearExistingKB(env: Env): Promise<void> {
+  // Get all existing chunk IDs
+  const existingChunks = await env.DB.prepare("SELECT id FROM kb_chunks").all<{
+    id: string;
+  }>();
+
+  // Delete vectors in batches
+  if (existingChunks.results.length > 0) {
+    const ids = existingChunks.results.map((row) => row.id);
+
+    for (let i = 0; i < ids.length; i += KB_CONFIG.VECTORIZE_BATCH_SIZE) {
+      const batch = ids.slice(i, i + KB_CONFIG.VECTORIZE_BATCH_SIZE);
+      await env.VECTORIZE.deleteByIds(batch);
+    }
+  }
+
+  // Clear D1 table
+  await env.DB.prepare("DELETE FROM kb_chunks").run();
 }
 
 /**
- * Main KB build function. Call this at deploy time.
+ * Builds the entire Knowledge Base from source markdown files.
  *
- * @param kbFiles - Map of file paths to content (path relative to /kb/)
+ * This is a full rebuild - it clears existing data first.
+ * Should be called when KB content is updated.
  */
 export async function buildKB(
   env: Env,
   kbFiles: Map<string, string>
 ): Promise<{ chunks: number }> {
-  await clearKB(env);
+  // Start fresh
+  await clearExistingKB(env);
 
+  // Process all files into chunks
   const allChunks: KBChunk[] = [];
 
   for (const [filePath, content] of kbFiles) {
     const metadata = extractMetadataFromPath(filePath);
+    const textChunks = chunkText(content);
     const filename = filePath.split("/").pop() || filePath;
-    const chunks = chunkText(content);
 
+    // Track which section we're in for better context
     let currentSection: string | null = null;
 
-    for (let i = 0; i < chunks.length; i++) {
-      const headerMatch = chunks[i].match(/^##?\s+(.+)/m);
-      if (headerMatch) currentSection = headerMatch[1];
+    for (let i = 0; i < textChunks.length; i++) {
+      const chunkContent = textChunks[i];
+
+      // Update section if this chunk starts with a header
+      const headerMatch = chunkContent.match(/^##?\s+(.+)/m);
+      if (headerMatch) {
+        currentSection = headerMatch[1];
+      }
+
+      // Create a unique, readable ID
+      const chunkId = `kb_${filePath.replace(/\//g, "_")}_${i}`;
 
       allChunks.push({
-        id: `kb_${filename}_${i}`,
-        content: chunks[i],
+        id: chunkId,
+        content: chunkContent,
         source: filename,
         section: currentSection,
         chunkIndex: i,
@@ -157,66 +240,71 @@ export async function buildKB(
     }
   }
 
-  // Generate embeddings
-  const embeddings = await generateEmbeddings(
-    env.AI,
-    allChunks.map((c) => c.content)
-  );
+  // Generate embeddings for all chunks
+  const chunkTexts = allChunks.map((chunk) => chunk.content);
+  const embeddings = await generateEmbeddings(env.AI, chunkTexts);
 
   // Insert chunks into D1
-  const chunkStmt = env.DB.prepare(
-    `INSERT INTO kb_chunks (id, content, source, section, chunk_index, category, jurisdiction, practice_type, firm_size)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
+  const insertStatement = env.DB.prepare(`
+    INSERT INTO kb_chunks (
+      id, content, source, section, chunk_index,
+      category, jurisdiction, practice_type, firm_size
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
 
-  await env.DB.batch(
-    allChunks.map((c) =>
-      chunkStmt.bind(
-        c.id,
-        c.content,
-        c.source,
-        c.section,
-        c.chunkIndex,
-        c.metadata.category,
-        c.metadata.jurisdiction,
-        c.metadata.practiceType,
-        c.metadata.firmSize
-      )
+  const insertOperations = allChunks.map((chunk) =>
+    insertStatement.bind(
+      chunk.id,
+      chunk.content,
+      chunk.source,
+      chunk.section,
+      chunk.chunkIndex,
+      chunk.metadata.category,
+      chunk.metadata.jurisdiction,
+      chunk.metadata.practice_type,
+      chunk.metadata.firm_size
     )
   );
 
-  // Upsert embeddings to Vectorize with metadata
-  // Filter out null values as Vectorize doesn't accept them
-  const vectors = allChunks.map((chunk, i) => {
-    const metadata: Record<string, string> = {
-      source: chunk.source,
-      type: "kb",
-    };
+  await env.DB.batch(insertOperations);
 
-    if (chunk.metadata.category) {
-      metadata.category = chunk.metadata.category;
-    }
-    if (chunk.metadata.jurisdiction) {
-      metadata.jurisdiction = chunk.metadata.jurisdiction;
-    }
-    if (chunk.metadata.practiceType) {
-      metadata.practice_type = chunk.metadata.practiceType;
-    }
-    if (chunk.metadata.firmSize) {
-      metadata.firm_size = chunk.metadata.firmSize;
-    }
+  // Insert vectors into Vectorize
+  const vectors = allChunks.map((chunk, index) => ({
+    id: chunk.id,
+    values: embeddings[index],
+    metadata: buildVectorMetadata(chunk),
+  }));
 
-    return {
-      id: chunk.id,
-      values: embeddings[i],
-      metadata,
-    };
-  });
-
-  // Vectorize upsert in batches of 100
-  for (let i = 0; i < vectors.length; i += 100) {
-    await env.VECTORIZE.upsert(vectors.slice(i, i + 100));
+  for (let i = 0; i < vectors.length; i += KB_CONFIG.VECTORIZE_BATCH_SIZE) {
+    const batch = vectors.slice(i, i + KB_CONFIG.VECTORIZE_BATCH_SIZE);
+    await env.VECTORIZE.upsert(batch);
   }
 
   return { chunks: allChunks.length };
+}
+
+/**
+ * Builds the metadata object for a vector, only including non-null fields.
+ */
+function buildVectorMetadata(chunk: KBChunk): Record<string, string> {
+  const metadata: Record<string, string> = {
+    type: "kb",
+    source: chunk.source,
+  };
+
+  // Only add non-null metadata fields
+  if (chunk.metadata.category) {
+    metadata.category = chunk.metadata.category;
+  }
+  if (chunk.metadata.jurisdiction) {
+    metadata.jurisdiction = chunk.metadata.jurisdiction;
+  }
+  if (chunk.metadata.practice_type) {
+    metadata.practice_type = chunk.metadata.practice_type;
+  }
+  if (chunk.metadata.firm_size) {
+    metadata.firm_size = chunk.metadata.firm_size;
+  }
+
+  return metadata;
 }

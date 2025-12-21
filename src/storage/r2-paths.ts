@@ -1,19 +1,32 @@
 /**
- * Helper functions for generating consistent R2 storage paths.
- * All paths follow the pattern: orgs/{orgId}/{resource-type}/...
+ * R2 Storage Path Builders
+ *
+ * Centralizes all R2 bucket path construction to ensure consistent
+ * naming conventions across the codebase.
+ *
+ * Bucket structure:
+ *   orgs/{orgId}/
+ *     docs/{fileId}              - uploaded org context files
+ *     audit/{year}/{month}/{day}/ - audit log entries
+ *     conversations/{id}.json    - archived conversation history
  */
+
 export const R2Paths = {
   /**
-   * Path for storing organization documents
-   * Example: orgs/acme-corp/docs/doc-123
+   * Path to an org's uploaded document
+   * Example: orgs/abc123/docs/file-uuid
    */
   orgDoc(orgId: string, fileId: string): string {
     return `orgs/${orgId}/docs/${fileId}`;
   },
 
   /**
-   * Prefix for audit log entries (for listing/filtering)
-   * Example: orgs/acme-corp/audit/2025/01/ or orgs/acme-corp/audit/2025/01/15/
+   * Prefix for audit log entries. Can filter by year/month/day.
+   *
+   * Examples:
+   *   orgs/abc123/audit/2024/         - all of 2024
+   *   orgs/abc123/audit/2024/03/      - March 2024
+   *   orgs/abc123/audit/2024/03/15/   - March 15, 2024
    */
   auditLogPrefix(
     orgId: string,
@@ -28,8 +41,8 @@ export const R2Paths = {
   },
 
   /**
-   * Path for archived conversation JSON files
-   * Example: orgs/acme-corp/conversations/conv-456.json
+   * Path to an archived conversation
+   * Example: orgs/abc123/conversations/conv-uuid.json
    */
   archivedConversation(orgId: string, conversationId: string): string {
     return `orgs/${orgId}/conversations/${conversationId}.json`;

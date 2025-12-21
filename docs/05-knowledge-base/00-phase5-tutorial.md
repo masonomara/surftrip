@@ -477,7 +477,9 @@ interface KBManifest {
  * Seeds the KB from the bundled manifest.
  * Call this after deploy via a seeding endpoint or scheduled task.
  */
-export async function seedKB(env: Env): Promise<{ chunks: number; files: number }> {
+export async function seedKB(
+  env: Env
+): Promise<{ chunks: number; files: number }> {
   const manifest = kbManifest as KBManifest;
 
   const kbFiles = new Map<string, string>();
@@ -645,8 +647,15 @@ async function extractText(
         throw new Error(`Unsupported type: ${mimeType}`);
     }
   } catch (error) {
-    console.error(`[OrgContext] Text extraction failed for ${filename}:`, error);
-    throw new Error(`Failed to extract text from ${filename}: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `[OrgContext] Text extraction failed for ${filename}:`,
+      error
+    );
+    throw new Error(
+      `Failed to extract text from ${filename}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
   }
 }
 
@@ -664,7 +673,11 @@ async function extractPdfText(content: ArrayBuffer): Promise<string> {
     return text;
   } catch (error) {
     // Re-throw with context
-    throw new Error(`PDF extraction error: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `PDF extraction error: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
   }
 }
 
@@ -681,7 +694,11 @@ async function extractDocxText(content: ArrayBuffer): Promise<string> {
     }
     return result.value;
   } catch (error) {
-    throw new Error(`DOCX extraction error: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `DOCX extraction error: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
   }
 }
 
@@ -854,7 +871,18 @@ The `type` field prevents KB vectors from appearing in Org Context queries (and 
 
 ## Part 5: RAG Retrieval System
 
-Now we build the retrieval functions that the Durable Object will call. Two parallel queries with different filters.
+Now we build the retrieval functions that the Durable Object will call.
+
+### Why Multi-Query?
+
+Vectorize doesn't support `$or` across different metadata fields. To filter KB content by category, jurisdiction, practice type, AND firm size, we run multiple parallel queries and merge results.
+
+**Multi-query approach:**
+
+1. Always query `category: "general"` and `jurisdiction: "federal"`
+2. Conditionally query org-specific filters (jurisdiction, practice_type, firm_size)
+3. Merge results, dedupe by ID, keep highest scores
+4. Return top 5 combined results
 
 Create `src/services/rag-retrieval.ts`:
 
@@ -872,63 +900,95 @@ interface RAGContext {
   orgChunks: Array<{ content: string; source: string }>;
 }
 
+interface ScoredMatch {
+  id: string;
+  score: number;
+}
+
 const TOKEN_BUDGET = 3000;
 const CHARS_PER_TOKEN = 4;
+const KB_TOP_K = 3; // Per-filter topK (we merge multiple queries)
 
 /**
- * Builds the KB filter based on org settings.
- * Each setting is optional - include filter clause only if setting exists.
- * Always includes general + federal.
+ * Runs a single Vectorize query with a specific filter.
  */
-function buildKBFilter(orgSettings: OrgSettings): Record<string, unknown> {
-  const orClauses: Record<string, unknown>[] = [
-    { category: "general" },
-    { jurisdiction: "federal" }, // Always include federal
-  ];
-
-  // Add clauses for each setting that exists
-  if (orgSettings.jurisdiction) {
-    orClauses.push({ jurisdiction: orgSettings.jurisdiction });
-  }
-  if (orgSettings.practiceType) {
-    orClauses.push({ practice_type: orgSettings.practiceType });
-  }
-  if (orgSettings.firmSize) {
-    orClauses.push({ firm_size: orgSettings.firmSize });
-  }
-
-  return { type: "kb", $or: orClauses };
+async function queryKBWithFilter(
+  env: Env,
+  queryVector: number[],
+  filter: VectorizeVectorMetadataFilter
+): Promise<ScoredMatch[]> {
+  const results = await env.VECTORIZE.query(queryVector, {
+    topK: KB_TOP_K,
+    returnMetadata: "all",
+    filter,
+  });
+  return results.matches.map((m) => ({ id: m.id, score: m.score }));
 }
 
 /**
- * Retrieves KB context with compound filter.
- * Always includes general + federal; adds other filters based on available settings.
+ * Retrieves KB context using multiple parallel queries.
+ * Vectorize doesn't support $or across fields, so we run separate queries
+ * for each filter type and merge/dedupe results.
  */
 async function retrieveKBContext(
   env: Env,
   queryVector: number[],
   orgSettings: OrgSettings
 ): Promise<Array<{ content: string; source: string }>> {
-  const filter = buildKBFilter(orgSettings);
+  // Build list of filters to query
+  const filters: VectorizeVectorMetadataFilter[] = [
+    { type: "kb", category: "general" },
+    { type: "kb", jurisdiction: "federal" },
+  ];
 
-  const kbResults = await env.VECTORIZE.query(queryVector, {
-    topK: 5,
-    returnMetadata: "all",
-    filter,
-  });
+  if (orgSettings.jurisdiction) {
+    filters.push({ type: "kb", jurisdiction: orgSettings.jurisdiction });
+  }
+  if (orgSettings.practiceType) {
+    filters.push({ type: "kb", practice_type: orgSettings.practiceType });
+  }
+  if (orgSettings.firmSize) {
+    filters.push({ type: "kb", firm_size: orgSettings.firmSize });
+  }
 
-  if (kbResults.matches.length === 0) return [];
+  // Run all queries in parallel
+  const allResults = await Promise.all(
+    filters.map((filter) => queryKBWithFilter(env, queryVector, filter))
+  );
 
-  const kbIds = kbResults.matches.map((m) => m.id);
+  // Merge and dedupe by ID, keeping highest score
+  const scoreMap = new Map<string, number>();
+  for (const results of allResults) {
+    for (const match of results) {
+      const existing = scoreMap.get(match.id);
+      if (!existing || match.score > existing) {
+        scoreMap.set(match.id, match.score);
+      }
+    }
+  }
+
+  // Sort by score descending, take top 5
+  const sortedIds = [...scoreMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([id]) => id);
+
+  if (sortedIds.length === 0) return [];
+
+  // Fetch content from D1
+  const placeholders = sortedIds.map(() => "?").join(",");
   const chunks = await env.DB.prepare(
-    `SELECT content, source FROM kb_chunks WHERE id IN (${kbIds
-      .map(() => "?")
-      .join(",")})`
+    `SELECT id, content, source FROM kb_chunks WHERE id IN (${placeholders})`
   )
-    .bind(...kbIds)
-    .all<{ content: string; source: string }>();
+    .bind(...sortedIds)
+    .all<{ id: string; content: string; source: string }>();
 
-  return chunks.results;
+  // Preserve score-based ordering
+  const chunkMap = new Map(chunks.results.map((c) => [c.id, c]));
+  return sortedIds
+    .map((id) => chunkMap.get(id))
+    .filter((c): c is { id: string; content: string; source: string } => !!c)
+    .map(({ content, source }) => ({ content, source }));
 }
 
 /**
@@ -948,10 +1008,9 @@ async function retrieveOrgContext(
   if (orgResults.matches.length === 0) return [];
 
   const orgIds = orgResults.matches.map((m) => m.id);
+  const placeholders = orgIds.map(() => "?").join(",");
   const chunks = await env.DB.prepare(
-    `SELECT content, source FROM org_context_chunks WHERE id IN (${orgIds
-      .map(() => "?")
-      .join(",")})`
+    `SELECT content, source FROM org_context_chunks WHERE id IN (${placeholders})`
   )
     .bind(...orgIds)
     .all<{ content: string; source: string }>();
@@ -960,8 +1019,35 @@ async function retrieveOrgContext(
 }
 
 /**
+ * Applies token budget to RAG context.
+ * Prioritizes KB chunks, then Org Context.
+ */
+function applyTokenBudget(context: RAGContext): RAGContext {
+  let remainingChars = TOKEN_BUDGET * CHARS_PER_TOKEN;
+  const result: RAGContext = { kbChunks: [], orgChunks: [] };
+
+  for (const c of context.kbChunks) {
+    const len = c.content.length + c.source.length + 20;
+    if (len <= remainingChars) {
+      result.kbChunks.push(c);
+      remainingChars -= len;
+    }
+  }
+
+  for (const c of context.orgChunks) {
+    const len = c.content.length + c.source.length + 20;
+    if (len <= remainingChars) {
+      result.orgChunks.push(c);
+      remainingChars -= len;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Main RAG retrieval function.
- * Two parallel Vectorize queries with different filters.
+ * Runs KB and Org Context queries in parallel, applies token budget.
  */
 export async function retrieveRAGContext(
   env: Env,
@@ -971,9 +1057,9 @@ export async function retrieveRAGContext(
 ): Promise<RAGContext> {
   try {
     // Generate embedding for the query
-    const embeddingResult = await env.AI.run("@cf/baai/bge-base-en-v1.5", {
+    const embeddingResult = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
       text: [query],
-    });
+    })) as { data: number[][] };
     const queryVector = embeddingResult.data[0];
 
     // Parallel Vectorize queries with different filters
@@ -990,54 +1076,26 @@ export async function retrieveRAGContext(
 }
 
 /**
- * Applies token budget to RAG context.
- */
-function applyTokenBudget(context: RAGContext): RAGContext {
-  let remainingChars = TOKEN_BUDGET * CHARS_PER_TOKEN;
-  const result: RAGContext = { kbChunks: [], orgChunks: [] };
-
-  // KB chunks first
-  for (const c of context.kbChunks) {
-    const len = c.content.length + c.source.length + 20;
-    if (len <= remainingChars) {
-      result.kbChunks.push(c);
-      remainingChars -= len;
-    }
-  }
-
-  // Org Context chunks
-  for (const c of context.orgChunks) {
-    const len = c.content.length + c.source.length + 20;
-    if (len <= remainingChars) {
-      result.orgChunks.push(c);
-      remainingChars -= len;
-    }
-  }
-
-  return result;
-}
-
-/**
  * Formats RAG context for injection into system prompt.
  */
 export function formatRAGContext(context: RAGContext): string {
-  const kbSection =
-    context.kbChunks.length > 0
-      ? "## Knowledge Base Context\n\n" +
-        context.kbChunks
-          .map((c) => `${c.content}\n*Source: ${c.source}*`)
-          .join("\n\n")
-      : "";
+  const sections: string[] = [];
 
-  const orgSection =
-    context.orgChunks.length > 0
-      ? "## Org Context (This Firm's Practices)\n\n" +
-        context.orgChunks
-          .map((c) => `${c.content}\n*Source: ${c.source}*`)
-          .join("\n\n")
-      : "";
+  if (context.kbChunks.length > 0) {
+    const kbContent = context.kbChunks
+      .map((c) => `${c.content}\n*Source: ${c.source}*`)
+      .join("\n\n");
+    sections.push(`## Knowledge Base\n\n${kbContent}`);
+  }
 
-  return [kbSection, orgSection].filter(Boolean).join("\n\n");
+  if (context.orgChunks.length > 0) {
+    const orgContent = context.orgChunks
+      .map((c) => `${c.content}\n*Source: ${c.source}*`)
+      .join("\n\n");
+    sections.push(`## Firm Context\n\n${orgContent}`);
+  }
+
+  return sections.join("\n\n");
 }
 ```
 
@@ -1423,11 +1481,61 @@ function buildKBDemoPage(): string {
         <div class="form-group" style="flex: 1;">
           <label>Jurisdiction</label>
           <select id="jurisdiction" class="input">
-            <option value="">(Not set)</option>
-            <option value="CA">California</option>
-            <option value="NY">New York</option>
-            <option value="TX">Texas</option>
-          </select>
+  <option value="">(Not set)</option>
+
+  <option value="AL">Alabama</option>
+  <option value="AK">Alaska</option>
+  <option value="AZ">Arizona</option>
+  <option value="AR">Arkansas</option>
+  <option value="CA">California</option>
+  <option value="CO">Colorado</option>
+  <option value="CT">Connecticut</option>
+  <option value="DE">Delaware</option>
+  <option value="DC">District of Columbia</option>
+  <option value="FL">Florida</option>
+  <option value="GA">Georgia</option>
+  <option value="HI">Hawaii</option>
+  <option value="ID">Idaho</option>
+  <option value="IL">Illinois</option>
+  <option value="IN">Indiana</option>
+  <option value="IA">Iowa</option>
+  <option value="KS">Kansas</option>
+  <option value="KY">Kentucky</option>
+  <option value="LA">Louisiana</option>
+  <option value="ME">Maine</option>
+  <option value="MD">Maryland</option>
+  <option value="MA">Massachusetts</option>
+  <option value="MI">Michigan</option>
+  <option value="MN">Minnesota</option>
+  <option value="MS">Mississippi</option>
+  <option value="MO">Missouri</option>
+  <option value="MT">Montana</option>
+  <option value="NE">Nebraska</option>
+  <option value="NV">Nevada</option>
+  <option value="NH">New Hampshire</option>
+  <option value="NJ">New Jersey</option>
+  <option value="NM">New Mexico</option>
+  <option value="NY">New York</option>
+  <option value="NC">North Carolina</option>
+  <option value="ND">North Dakota</option>
+  <option value="OH">Ohio</option>
+  <option value="OK">Oklahoma</option>
+  <option value="OR">Oregon</option>
+  <option value="PA">Pennsylvania</option>
+  <option value="RI">Rhode Island</option>
+  <option value="SC">South Carolina</option>
+  <option value="SD">South Dakota</option>
+  <option value="TN">Tennessee</option>
+  <option value="TX">Texas</option>
+  <option value="UT">Utah</option>
+  <option value="VT">Vermont</option>
+  <option value="VA">Virginia</option>
+  <option value="WA">Washington</option>
+  <option value="WV">West Virginia</option>
+  <option value="WI">Wisconsin</option>
+  <option value="WY">Wyoming</option>
+</select>
+
         </div>
         <div class="form-group" style="flex: 1;">
           <label>Practice Type</label>
@@ -1444,7 +1552,9 @@ function buildKBDemoPage(): string {
             <option value="">(Not set)</option>
             <option value="solo">Solo</option>
             <option value="small">Small</option>
-            <option value="mid">Mid</option>
+            <option value="mid">Mid-Sized</option>
+                        <option value="large">Enterprise</option>
+
           </select>
         </div>
       </div>
@@ -1583,13 +1693,13 @@ npm install mammoth unpdf tsx
 npm install -D vitest @cloudflare/vitest-pool-workers
 ```
 
-| Package | Purpose |
-|---------|---------|
-| `mammoth` | Extract text from DOCX files |
-| `unpdf` | Extract text from PDF files (works in Workers) |
-| `tsx` | Run TypeScript scripts (KB manifest generation) |
-| `vitest` | Testing framework |
-| `@cloudflare/vitest-pool-workers` | Run tests in Workers environment |
+| Package                           | Purpose                                         |
+| --------------------------------- | ----------------------------------------------- |
+| `mammoth`                         | Extract text from DOCX files                    |
+| `unpdf`                           | Extract text from PDF files (works in Workers)  |
+| `tsx`                             | Run TypeScript scripts (KB manifest generation) |
+| `vitest`                          | Testing framework                               |
+| `@cloudflare/vitest-pool-workers` | Run tests in Workers environment                |
 
 ## Summary: What We Built
 
@@ -1603,7 +1713,7 @@ npm install -D vitest @cloudflare/vitest-pool-workers
 2. **KB Loader** (`scripts/generate-kb-manifest.ts` + `src/services/kb-loader.ts`)
 
    - Build script generates JSON manifest from `/kb` folder
-   - Manifest bundled with worker at deploy
+   - Manifest bundled with worker ats deploy
    - Seeding endpoint (`/admin/seed-kb`) triggers rebuild
 
 3. **Org Context Service** (`src/services/org-context.ts`)
