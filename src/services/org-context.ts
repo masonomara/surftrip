@@ -1,12 +1,11 @@
 /**
  * Org Context Management
  *
- * Handles firm-specific documents that provide context for RAG.
- * Each org can upload documents (PDFs, Word docs, etc.) that get:
- * 1. Stored in R2 (original file)
- * 2. Converted to text via Workers AI
- * 3. Chunked and embedded
- * 4. Stored in D1 and Vectorize for retrieval
+ * Handles uploading, processing, and deleting organization-specific documents
+ * for RAG (Retrieval-Augmented Generation). Documents are:
+ * 1. Stored in R2
+ * 2. Chunked and stored in D1
+ * 3. Embedded and indexed in Vectorize
  */
 
 import { Env } from "../index";
@@ -14,16 +13,8 @@ import { KB_CONFIG } from "../config/kb";
 import { R2Paths } from "../storage/r2-paths";
 import { chunkText, generateEmbeddings } from "./kb-builder";
 
-// ============================================================================
-// File Type Validation
-// ============================================================================
-
-/**
- * Maps MIME types to expected file extensions.
- * Only these file types can be uploaded.
- */
-const ALLOWED_FILE_TYPES = new Map<string, string>([
-  // Microsoft Office
+// Map of allowed MIME types to their expected file extensions
+const ALLOWED_FILE_TYPES: Map<string, string> = new Map([
   ["application/pdf", ".pdf"],
   [
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -37,15 +28,9 @@ const ALLOWED_FILE_TYPES = new Map<string, string>([
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".pptx",
   ],
-
-  // OpenDocument
   ["application/vnd.oasis.opendocument.text", ".odt"],
   ["application/vnd.oasis.opendocument.spreadsheet", ".ods"],
-
-  // Apple
   ["application/vnd.apple.numbers", ".numbers"],
-
-  // Plain text formats
   ["text/markdown", ".md"],
   ["text/plain", ".txt"],
   ["text/html", ".html"],
@@ -54,44 +39,26 @@ const ALLOWED_FILE_TYPES = new Map<string, string>([
   ["text/xml", ".xml"],
 ]);
 
-interface ValidationResult {
-  valid: boolean;
-  error?: string;
-}
-
 /**
- * Sanitizes a filename for safe storage.
- *
- * Handles:
- * - Unicode normalization attacks
- * - Control characters and null bytes
- * - Windows reserved names
- * - Path traversal attempts
+ * Clean and validate a filename for security issues.
  */
 function sanitizeFilename(filename: string): { safe: string; error?: string } {
-  // Normalize Unicode to prevent bypass via alternative encodings
-  const normalized = filename.normalize("NFC");
+  // Normalize unicode and strip control characters
+  const cleaned = filename.normalize("NFC").replace(/[\x00-\x1f\x7f]/g, "");
 
-  // Remove control characters and null bytes
-  const cleaned = normalized.replace(/[\x00-\x1f\x7f]/g, "");
-
-  // Check for path traversal (after normalization)
-  if (
-    cleaned.includes("..") ||
-    cleaned.includes("/") ||
-    cleaned.includes("\\")
-  ) {
+  // Check for path traversal attempts
+  if (cleaned.includes("..") || cleaned.includes("/") || cleaned.includes("\\")) {
     return { safe: "", error: "Invalid filename: path traversal detected" };
   }
 
-  // Block Windows reserved names
-  const baseName = cleaned.split(".")[0].toUpperCase();
-  const reserved = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/;
-  if (reserved.test(baseName)) {
+  // Reject Windows reserved device names
+  const baseName = cleaned.split(".")[0];
+  const windowsReserved = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
+  if (windowsReserved.test(baseName)) {
     return { safe: "", error: "Invalid filename: reserved name" };
   }
 
-  // Block hidden files (starting with .)
+  // Reject hidden files (dot prefix)
   if (cleaned.startsWith(".")) {
     return { safe: "", error: "Invalid filename: hidden files not allowed" };
   }
@@ -100,23 +67,17 @@ function sanitizeFilename(filename: string): { safe: string; error?: string } {
 }
 
 /**
- * Validates an uploaded file before processing.
- *
- * Checks:
- * - Filename is safe (no path traversal, reserved names, etc.)
- * - File size within limits
- * - Supported MIME type
- * - Extension matches MIME type
+ * Validate an uploaded file for security and type constraints.
  */
 export function validateFile(
   filename: string,
   mimeType: string,
   size: number
-): ValidationResult {
-  // Security: sanitize filename
-  const { safe: safeFilename, error: sanitizeError } = sanitizeFilename(filename);
-  if (sanitizeError) {
-    return { valid: false, error: sanitizeError };
+): { valid: boolean; error?: string } {
+  // Check filename is safe
+  const { safe, error } = sanitizeFilename(filename);
+  if (error) {
+    return { valid: false, error };
   }
 
   // Check file size (25MB limit)
@@ -124,35 +85,24 @@ export function validateFile(
     return { valid: false, error: "File exceeds 25MB limit" };
   }
 
-  // Check if MIME type is supported
-  const expectedExtension = ALLOWED_FILE_TYPES.get(mimeType);
-  if (!expectedExtension) {
+  // Check MIME type is allowed
+  const expectedExt = ALLOWED_FILE_TYPES.get(mimeType);
+  if (!expectedExt) {
     return { valid: false, error: `Unsupported file type: ${mimeType}` };
   }
 
   // Verify extension matches MIME type
-  const actualExtension = safeFilename
-    .toLowerCase()
-    .slice(safeFilename.lastIndexOf("."));
-  if (actualExtension !== expectedExtension) {
-    return {
-      valid: false,
-      error: `Extension mismatch: expected ${expectedExtension}`,
-    };
+  const actualExt = safe.toLowerCase().slice(safe.lastIndexOf("."));
+  if (actualExt !== expectedExt) {
+    return { valid: false, error: `Extension mismatch: expected ${expectedExt}` };
   }
 
   return { valid: true };
 }
 
-// ============================================================================
-// Text Extraction
-// ============================================================================
-
 /**
- * Extracts text content from an uploaded file.
- *
- * Plain text files are decoded directly. Other formats (PDF, DOCX, etc.)
- * are converted to markdown using Workers AI.
+ * Extract text from a file using Workers AI.
+ * Plain text and markdown are passed through directly.
  */
 async function extractText(
   ai: Ai,
@@ -160,32 +110,25 @@ async function extractText(
   mimeType: string,
   filename: string
 ): Promise<string> {
-  // Plain text files can be decoded directly
+  // Plain text formats don't need AI extraction
   if (mimeType === "text/markdown" || mimeType === "text/plain") {
     return new TextDecoder().decode(content);
   }
 
-  // Use Workers AI to convert other formats to markdown
-  const conversionResults = await ai.toMarkdown([
-    { name: filename, blob: new Blob([content], { type: mimeType }) },
-  ]);
+  // Use Workers AI to convert document to markdown
+  const blob = new Blob([content], { type: mimeType });
+  const results = await ai.toMarkdown([{ name: filename, blob }]);
 
-  const result = conversionResults[0];
-
-  if (result.format === "error") {
-    throw new Error(`Failed to extract text: ${result.error}`);
+  if (results[0].format === "error") {
+    throw new Error(`Failed to extract text: ${results[0].error}`);
   }
 
-  if (!result.data) {
+  if (!results[0].data) {
     throw new Error(`No content extracted from ${filename}`);
   }
 
-  return result.data;
+  return results[0].data;
 }
-
-// ============================================================================
-// Upload Flow
-// ============================================================================
 
 interface UploadResult {
   success: boolean;
@@ -195,17 +138,13 @@ interface UploadResult {
 }
 
 /**
- * Uploads a document to an org's context.
+ * Upload and process an org context document.
  *
- * Flow:
- * 1. Validate the file
- * 2. Store original in R2
- * 3. Extract text content
- * 4. Chunk the text
- * 5. Generate embeddings
- * 6. Store in D1 and Vectorize
- *
- * If any step fails, we clean up R2 and return an error.
+ * 1. Validates the file
+ * 2. Stores original in R2
+ * 3. Extracts text and chunks it
+ * 4. Stores chunks in D1
+ * 5. Generates embeddings and indexes in Vectorize
  */
 export async function uploadOrgContext(
   env: Env,
@@ -215,7 +154,7 @@ export async function uploadOrgContext(
   content: ArrayBuffer,
   userId?: string
 ): Promise<UploadResult> {
-  // Step 1: Validate
+  // Validate the file first
   const validation = validateFile(filename, mimeType, content.byteLength);
   if (!validation.valid) {
     return { success: false, error: validation.error };
@@ -224,47 +163,45 @@ export async function uploadOrgContext(
   const fileId = crypto.randomUUID();
 
   try {
-    // Step 2: Store original file in R2
+    // Store the original file in R2
     await env.R2.put(R2Paths.orgDoc(orgId, fileId), content, {
       httpMetadata: { contentType: mimeType },
       customMetadata: { originalFilename: filename },
     });
 
-    // Step 3: Extract text
+    // Extract text and chunk it
     const text = await extractText(env.AI, content, mimeType, filename);
-
-    // Step 4: Chunk the text
     const chunks = chunkText(text);
+
     if (chunks.length === 0) {
       throw new Error("No content extracted from file");
     }
 
-    // Step 5: Generate embeddings
+    // Generate embeddings for all chunks
     const embeddings = await generateEmbeddings(env.AI, chunks);
 
-    // Step 6a: Store chunks in D1
-    const insertStatement = env.DB.prepare(`
-      INSERT INTO org_context_chunks
-        (id, org_id, file_id, content, source, chunk_index, uploaded_by)
+    // Store chunks in D1
+    const insertQuery = `
+      INSERT INTO org_context_chunks (id, org_id, file_id, content, source, chunk_index, uploaded_by)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+    `;
+    const insertStmt = env.DB.prepare(insertQuery);
 
-    const insertOperations = chunks.map((chunkContent, index) => {
-      const chunkId = `${orgId}_${fileId}_${index}`;
-      return insertStatement.bind(
-        chunkId,
-        orgId,
-        fileId,
-        chunkContent,
-        filename,
-        index,
-        userId ?? null
-      );
-    });
+    await env.DB.batch(
+      chunks.map((chunk, index) =>
+        insertStmt.bind(
+          `${orgId}_${fileId}_${index}`,
+          orgId,
+          fileId,
+          chunk,
+          filename,
+          index,
+          userId ?? null
+        )
+      )
+    );
 
-    await env.DB.batch(insertOperations);
-
-    // Step 6b: Store vectors in Vectorize
+    // Index embeddings in Vectorize
     const vectors = chunks.map((_, index) => ({
       id: `${orgId}_${fileId}_${index}`,
       values: embeddings[index],
@@ -275,6 +212,7 @@ export async function uploadOrgContext(
       },
     }));
 
+    // Upsert in batches to respect Vectorize limits
     for (let i = 0; i < vectors.length; i += KB_CONFIG.VECTORIZE_BATCH_SIZE) {
       const batch = vectors.slice(i, i + KB_CONFIG.VECTORIZE_BATCH_SIZE);
       await env.VECTORIZE.upsert(batch);
@@ -286,7 +224,7 @@ export async function uploadOrgContext(
       chunksCreated: chunks.length,
     };
   } catch (error) {
-    // Clean up R2 on failure
+    // Clean up the R2 file if anything fails
     await env.R2.delete(R2Paths.orgDoc(orgId, fileId));
 
     return {
@@ -296,17 +234,8 @@ export async function uploadOrgContext(
   }
 }
 
-// ============================================================================
-// Delete Flow
-// ============================================================================
-
 /**
- * Deletes a document from an org's context.
- *
- * Removes:
- * - Vectors from Vectorize
- * - Chunks from D1
- * - Original file from R2
+ * Delete an org context document and all its associated data.
  */
 export async function deleteOrgContext(
   env: Env,
@@ -315,34 +244,30 @@ export async function deleteOrgContext(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Find all chunk IDs for this file
-    const chunksResult = await env.DB.prepare(
+    const chunks = await env.DB.prepare(
       "SELECT id FROM org_context_chunks WHERE org_id = ? AND file_id = ?"
     )
       .bind(orgId, fileId)
       .all<{ id: string }>();
 
-    // Delete vectors from Vectorize
-    if (chunksResult.results.length > 0) {
-      const chunkIds = chunksResult.results.map((row) => row.id);
+    // Delete from Vectorize in batches
+    if (chunks.results.length > 0) {
+      const ids = chunks.results.map((row) => row.id);
 
-      for (
-        let i = 0;
-        i < chunkIds.length;
-        i += KB_CONFIG.VECTORIZE_BATCH_SIZE
-      ) {
-        const batch = chunkIds.slice(i, i + KB_CONFIG.VECTORIZE_BATCH_SIZE);
+      for (let i = 0; i < ids.length; i += KB_CONFIG.VECTORIZE_BATCH_SIZE) {
+        const batch = ids.slice(i, i + KB_CONFIG.VECTORIZE_BATCH_SIZE);
         await env.VECTORIZE.deleteByIds(batch);
       }
     }
 
-    // Delete chunks from D1
+    // Delete from D1
     await env.DB.prepare(
       "DELETE FROM org_context_chunks WHERE org_id = ? AND file_id = ?"
     )
       .bind(orgId, fileId)
       .run();
 
-    // Delete original file from R2
+    // Delete from R2
     await env.R2.delete(R2Paths.orgDoc(orgId, fileId));
 
     return { success: true };
@@ -354,31 +279,21 @@ export async function deleteOrgContext(
   }
 }
 
-// ============================================================================
-// List Files
-// ============================================================================
-
-interface OrgFile {
-  fileId: string;
-  source: string;
-  chunkCount: number;
-}
-
 /**
- * Lists all documents uploaded to an org's context.
+ * List all context documents for an org.
  */
 export async function listOrgContext(
   env: Env,
   orgId: string
-): Promise<OrgFile[]> {
-  const result = await env.DB.prepare(
-    `
+): Promise<Array<{ fileId: string; source: string; chunkCount: number }>> {
+  const query = `
     SELECT file_id, source, COUNT(*) as chunk_count
     FROM org_context_chunks
     WHERE org_id = ?
     GROUP BY file_id, source
-  `
-  )
+  `;
+
+  const result = await env.DB.prepare(query)
     .bind(orgId)
     .all<{ file_id: string; source: string; chunk_count: number }>();
 

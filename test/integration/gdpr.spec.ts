@@ -8,13 +8,13 @@ import {
   type SoleOwnershipError,
 } from "../../src/services/gdpr";
 
-// ============================================================================
-// Test Helpers
-// ============================================================================
+// Helper to generate unique test emails
+function uniqueEmail(prefix: string): string {
+  return `${prefix}-${Date.now()}@test.com`;
+}
 
-/**
- * Creates a test user in the database
- */
+// Database helper functions
+
 async function insertUser(
   id: string,
   email: string,
@@ -29,9 +29,6 @@ async function insertUser(
     .run();
 }
 
-/**
- * Creates a test organization in the database
- */
 async function insertOrg(id: string, name: string): Promise<void> {
   const now = Date.now();
   await env.DB.prepare(
@@ -42,9 +39,6 @@ async function insertOrg(id: string, name: string): Promise<void> {
     .run();
 }
 
-/**
- * Adds a user as an owner of an organization
- */
 async function insertOwner(orgId: string, userId: string): Promise<void> {
   const now = Date.now();
   await env.DB.prepare(
@@ -55,24 +49,14 @@ async function insertOwner(orgId: string, userId: string): Promise<void> {
     .run();
 }
 
-/**
- * Generates a unique test email
- */
-function uniqueEmail(prefix: string): string {
-  return `${prefix}-${Date.now()}@test.com`;
-}
-
-// ============================================================================
-// hashUserId Tests
-// ============================================================================
-
 describe("GDPR Deletion", () => {
   describe("hashUserId", () => {
-    it("produces consistent hash", async () => {
+    it("produces consistent 16-char hex hash", async () => {
       const hash1 = await hashUserId("user-123");
       const hash2 = await hashUserId("user-123");
 
       expect(hash1).toBe(hash2);
+      expect(hash1).toMatch(/^[0-9a-f]{16}$/);
     });
 
     it("produces different hashes for different users", async () => {
@@ -81,29 +65,19 @@ describe("GDPR Deletion", () => {
 
       expect(hash1).not.toBe(hash2);
     });
-
-    it("produces 16-character hex string", async () => {
-      const hash = await hashUserId("any-user-id");
-
-      expect(hash).toMatch(/^[0-9a-f]{16}$/);
-    });
   });
-
-  // ============================================================================
-  // checkSoleOwnerships Tests
-  // ============================================================================
 
   describe("checkSoleOwnerships", () => {
     it("returns empty when user owns no orgs", async () => {
       const userId = crypto.randomUUID();
       await insertUser(userId, uniqueEmail("no-orgs"));
 
-      const soleOwnerOrgs = await checkSoleOwnerships(env.DB, userId);
+      const result = await checkSoleOwnerships(env.DB, userId);
 
-      expect(soleOwnerOrgs).toEqual([]);
+      expect(result).toEqual([]);
     });
 
-    it("returns org ID when sole owner", async () => {
+    it("returns org ID when user is sole owner", async () => {
       const userId = crypto.randomUUID();
       const orgId = crypto.randomUUID();
 
@@ -111,9 +85,9 @@ describe("GDPR Deletion", () => {
       await insertOrg(orgId, "Sole Org");
       await insertOwner(orgId, userId);
 
-      const soleOwnerOrgs = await checkSoleOwnerships(env.DB, userId);
+      const result = await checkSoleOwnerships(env.DB, userId);
 
-      expect(soleOwnerOrgs).toContain(orgId);
+      expect(result).toContain(orgId);
     });
 
     it("returns empty when multiple owners exist", async () => {
@@ -134,9 +108,8 @@ describe("GDPR Deletion", () => {
         ).bind(userId2, "Owner 2", uniqueEmail("o2"), now, now),
       ]);
 
+      // Create org with both as owners
       await insertOrg(orgId, "Multi-Owner Org");
-
-      // Add both as owners
       await env.DB.batch([
         env.DB.prepare(
           `INSERT INTO org_members (id, org_id, user_id, role, is_owner, created_at)
@@ -148,24 +121,20 @@ describe("GDPR Deletion", () => {
         ).bind(crypto.randomUUID(), orgId, userId2, now),
       ]);
 
-      const soleOwnerOrgs = await checkSoleOwnerships(env.DB, userId1);
+      const result = await checkSoleOwnerships(env.DB, userId1);
 
-      expect(soleOwnerOrgs).toEqual([]);
+      expect(result).toEqual([]);
     });
   });
-
-  // ============================================================================
-  // deleteUserData Tests
-  // ============================================================================
 
   describe("deleteUserData", () => {
     it("deletes user and related records", async () => {
       const userId = crypto.randomUUID();
       const now = Date.now();
 
+      // Create user with related records
       await insertUser(userId, uniqueEmail("delete"), "Delete Me");
 
-      // Create related records
       await env.DB.prepare(
         `INSERT INTO session (id, user_id, token, expires_at, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)`
@@ -187,7 +156,7 @@ describe("GDPR Deletion", () => {
         .bind(crypto.randomUUID(), "teams", "29:test", userId, now)
         .run();
 
-      // Delete user data
+      // Delete the user
       const result = (await deleteUserData(env.DB, env.R2, userId)) as {
         success: boolean;
         deletedRecords: { user: boolean; sessions: number };
@@ -234,19 +203,12 @@ describe("GDPR Deletion", () => {
         env.DB,
         env.R2,
         crypto.randomUUID()
-      )) as {
-        success: boolean;
-        errors: string[];
-      };
+      )) as { success: boolean; errors: string[] };
 
       expect(result.success).toBe(false);
       expect(result.errors).toContain("User not found");
     });
   });
-
-  // ============================================================================
-  // getDataDeletionPreview Tests
-  // ============================================================================
 
   describe("getDataDeletionPreview", () => {
     it("returns count of records", async () => {
@@ -256,7 +218,7 @@ describe("GDPR Deletion", () => {
 
       await insertUser(userId, email, "Preview");
 
-      // Create two sessions
+      // Add two sessions
       await env.DB.prepare(
         `INSERT INTO session (id, user_id, token, expires_at, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)`

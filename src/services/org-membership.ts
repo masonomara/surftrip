@@ -7,13 +7,18 @@ import {
 
 export type { OrgRole, OrgMembership };
 
+/**
+ * Get a user's membership in a specific org.
+ */
 export async function getOrgMembership(
   db: D1Database,
   userId: string,
   orgId: string
 ): Promise<OrgMembership | null> {
-  const query = `SELECT * FROM org_members WHERE user_id = ? AND org_id = ?`;
-  const row = await db.prepare(query).bind(userId, orgId).first<OrgMemberRow>();
+  const row = await db
+    .prepare(`SELECT * FROM org_members WHERE user_id = ? AND org_id = ?`)
+    .bind(userId, orgId)
+    .first<OrgMemberRow>();
 
   if (!row) {
     return null;
@@ -22,17 +27,24 @@ export async function getOrgMembership(
   return orgMemberRowToEntity(row);
 }
 
+/**
+ * Get all members of an org.
+ */
 export async function getOrgMembers(
   db: D1Database,
   orgId: string
 ): Promise<OrgMembership[]> {
-  const query = `SELECT * FROM org_members WHERE org_id = ? ORDER BY created_at`;
-  const result = await db.prepare(query).bind(orgId).all<OrgMemberRow>();
+  const result = await db
+    .prepare(`SELECT * FROM org_members WHERE org_id = ? ORDER BY created_at`)
+    .bind(orgId)
+    .all<OrgMemberRow>();
 
   return result.results.map(orgMemberRowToEntity);
 }
 
-type RemoveUserResult =
+// Result types for operations that can fail
+
+type RemoveResult =
   | { success: true }
   | {
       success: false;
@@ -40,11 +52,27 @@ type RemoveUserResult =
       message: string;
     };
 
+type TransferResult =
+  | { success: true }
+  | {
+      success: false;
+      error:
+        | "not_owner"
+        | "target_not_member"
+        | "target_not_admin"
+        | "db_error";
+      message: string;
+    };
+
+/**
+ * Remove a user from an org.
+ * Fails if the user is the owner - they must transfer ownership first.
+ */
 export async function removeUserFromOrg(
   db: D1Database,
   userId: string,
   orgId: string
-): Promise<RemoveUserResult> {
+): Promise<RemoveResult> {
   const membership = await getOrgMembership(db, userId, orgId);
 
   if (!membership) {
@@ -64,8 +92,11 @@ export async function removeUserFromOrg(
   }
 
   try {
-    const deleteQuery = `DELETE FROM org_members WHERE user_id = ? AND org_id = ?`;
-    await db.prepare(deleteQuery).bind(userId, orgId).run();
+    await db
+      .prepare(`DELETE FROM org_members WHERE user_id = ? AND org_id = ?`)
+      .bind(userId, orgId)
+      .run();
+
     return { success: true };
   } catch (error) {
     return {
@@ -76,26 +107,18 @@ export async function removeUserFromOrg(
   }
 }
 
-type TransferResult =
-  | { success: true }
-  | {
-      success: false;
-      error:
-        | "not_owner"
-        | "target_not_member"
-        | "target_not_admin"
-        | "db_error";
-      message: string;
-    };
-
+/**
+ * Transfer org ownership from one user to another.
+ * The target must already be an admin of the org.
+ */
 export async function transferOwnership(
   db: D1Database,
   orgId: string,
   fromUserId: string,
   toUserId: string
 ): Promise<TransferResult> {
+  // Verify current user is the owner
   const currentOwner = await getOrgMembership(db, fromUserId, orgId);
-
   if (!currentOwner?.isOwner) {
     return {
       success: false,
@@ -104,9 +127,9 @@ export async function transferOwnership(
     };
   }
 
-  const targetMember = await getOrgMembership(db, toUserId, orgId);
-
-  if (!targetMember) {
+  // Verify target user is a member
+  const target = await getOrgMembership(db, toUserId, orgId);
+  if (!target) {
     return {
       success: false,
       error: "target_not_member",
@@ -114,7 +137,8 @@ export async function transferOwnership(
     };
   }
 
-  if (targetMember.role !== "admin") {
+  // Target must be an admin
+  if (target.role !== "admin") {
     return {
       success: false,
       error: "target_not_admin",
@@ -122,13 +146,19 @@ export async function transferOwnership(
     };
   }
 
+  // Perform the transfer atomically
   try {
-    const removeOwnerQuery = `UPDATE org_members SET is_owner = 0 WHERE user_id = ? AND org_id = ?`;
-    const setOwnerQuery = `UPDATE org_members SET is_owner = 1 WHERE user_id = ? AND org_id = ?`;
-
     await db.batch([
-      db.prepare(removeOwnerQuery).bind(fromUserId, orgId),
-      db.prepare(setOwnerQuery).bind(toUserId, orgId),
+      db
+        .prepare(
+          `UPDATE org_members SET is_owner = 0 WHERE user_id = ? AND org_id = ?`
+        )
+        .bind(fromUserId, orgId),
+      db
+        .prepare(
+          `UPDATE org_members SET is_owner = 1 WHERE user_id = ? AND org_id = ?`
+        )
+        .bind(toUserId, orgId),
     ]);
 
     return { success: true };

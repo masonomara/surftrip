@@ -1,6 +1,4 @@
-/**
- * Shared Domain Types
- */
+// Domain types for the Docket application
 
 export type OrgRole = "admin" | "member";
 export type ChannelType = "teams" | "slack" | "mcp" | "chatgpt";
@@ -55,15 +53,20 @@ export interface AuditEntry {
   createdAt: string;
 }
 
+// Database row type - matches the actual D1 column names
 export interface OrgMemberRow {
   id: string;
   user_id: string;
   org_id: string;
   role: OrgRole;
-  is_owner: number;
+  is_owner: number; // SQLite stores booleans as 0/1
   created_at: number;
 }
 
+/**
+ * Converts a database row to the application entity format.
+ * Handles the snake_case -> camelCase and integer -> boolean conversions.
+ */
 export function orgMemberRowToEntity(row: OrgMemberRow): OrgMembership {
   return {
     id: row.id,

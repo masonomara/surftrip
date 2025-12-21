@@ -3,20 +3,22 @@ import { type ChannelType, type ChannelLink } from "../types";
 export type { ChannelType, ChannelLink };
 
 /**
- * Finds a user ID by their channel-specific identifier.
- * Used to map Teams/Slack users to our internal user IDs.
+ * Look up a Docket user ID by their channel-specific identifier.
+ * For example, find the user linked to a specific Teams user ID.
  */
 export async function findUserByChannelId(
   db: D1Database,
   channelType: ChannelType,
   channelUserId: string
 ): Promise<string | null> {
+  const query = `
+    SELECT user_id
+    FROM channel_user_links
+    WHERE channel_type = ? AND channel_user_id = ?
+  `;
+
   const result = await db
-    .prepare(
-      `SELECT user_id
-       FROM channel_user_links
-       WHERE channel_type = ? AND channel_user_id = ?`
-    )
+    .prepare(query)
     .bind(channelType, channelUserId)
     .first<{ user_id: string }>();
 
@@ -24,8 +26,7 @@ export async function findUserByChannelId(
 }
 
 /**
- * Creates a link between a channel user and an internal user.
- * Allows messages from Teams/Slack to be associated with the correct user.
+ * Create a new link between a channel user and a Docket user.
  */
 export async function linkChannelUser(
   db: D1Database,
@@ -34,11 +35,13 @@ export async function linkChannelUser(
   const id = crypto.randomUUID();
   const now = Date.now();
 
+  const query = `
+    INSERT INTO channel_user_links (id, channel_type, channel_user_id, user_id, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `;
+
   await db
-    .prepare(
-      `INSERT INTO channel_user_links (id, channel_type, channel_user_id, user_id, created_at)
-       VALUES (?, ?, ?, ?, ?)`
-    )
+    .prepare(query)
     .bind(id, link.channelType, link.channelUserId, link.userId, now)
     .run();
 
@@ -46,27 +49,25 @@ export async function linkChannelUser(
 }
 
 /**
- * Removes a channel user link.
- * Returns true if a link was deleted, false if not found.
+ * Remove a channel link. Returns true if a link was deleted, false if none existed.
  */
 export async function unlinkChannelUser(
   db: D1Database,
   channelType: ChannelType,
   channelUserId: string
 ): Promise<boolean> {
-  const result = await db
-    .prepare(
-      `DELETE FROM channel_user_links
-       WHERE channel_type = ? AND channel_user_id = ?`
-    )
-    .bind(channelType, channelUserId)
-    .run();
+  const query = `
+    DELETE FROM channel_user_links
+    WHERE channel_type = ? AND channel_user_id = ?
+  `;
+
+  const result = await db.prepare(query).bind(channelType, channelUserId).run();
 
   return result.meta.changes > 0;
 }
 
 /**
- * Finds a user ID by their email address.
+ * Look up a user ID by their email address.
  */
 export async function findUserByEmail(
   db: D1Database,
@@ -81,8 +82,7 @@ export async function findUserByEmail(
 }
 
 /**
- * Gets all channel links for a user.
- * Useful for showing which channels a user has connected.
+ * Get all channel links for a user.
  */
 export async function getUserChannelLinks(
   db: D1Database,
@@ -90,12 +90,14 @@ export async function getUserChannelLinks(
 ): Promise<
   Array<{ channelType: ChannelType; channelUserId: string; createdAt: number }>
 > {
+  const query = `
+    SELECT channel_type, channel_user_id, created_at
+    FROM channel_user_links
+    WHERE user_id = ?
+  `;
+
   const result = await db
-    .prepare(
-      `SELECT channel_type, channel_user_id, created_at
-       FROM channel_user_links
-       WHERE user_id = ?`
-    )
+    .prepare(query)
     .bind(userId)
     .all<{
       channel_type: ChannelType;
