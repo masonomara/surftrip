@@ -12,7 +12,7 @@ These are guidelines, not final schemas. Implementation will reveal what's actua
   - `account` - OAuth account links
   - `verification` - email verification, password reset tokens
 - Cross-tenant:
-  - `org` - org registry (includes `jurisdiction`, `practice_type`, `firm_size` for KB filtering)
+  - `org` - org registry (includes `jurisdictions`, `practice_types` as JSON arrays, `firm_size` for KB filtering)
   - `workspace_bindings` - Teams/Slack workspace → org mapping
   - `channel_user_links` - channel user → Docket user
   - `api_keys` - API keys for MCP/ChatGPT access

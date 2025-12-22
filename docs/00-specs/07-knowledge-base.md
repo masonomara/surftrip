@@ -8,10 +8,12 @@ All users access both sections. Role restrictions apply only to editing Org Cont
 
 The Durable Object makes two parallel Vectorize queries with the same embedding. Results inject into the system prompt alongside Clio Schema:
 
-- `retrieveKBContext(query, jurisdiction, practiceType, firmSize)` → Vectorize with compound filter for Shared KB chunks
+- `retrieveKBContext(query, jurisdictions[], practiceTypes[], firmSize)` → Vectorize with parallel queries for Shared KB chunks
 - `retrieveOrgContext(query, orgId)` → Vectorize (filter `{ type: "org", org_id }`) for firm-specific Org Context chunks
 
-KB filtering uses org settings (jurisdiction, practiceType, firmSize) passed via ChannelMessage. General content and federal jurisdiction always included. Org Context is filtered by `org_id` only.
+KB filtering uses org settings (jurisdictions[], practiceTypes[], firmSize) passed via ChannelMessage. General content and federal jurisdiction always included. Org Context is filtered by `org_id` only.
+
+**Query Limiting:** To prevent unbounded queries with large arrays, limit to first 5 jurisdictions and 5 practice types. This caps parallel Vectorize calls at ~13 (general + federal + 5 jurisdictions + 5 practice types + firmSize).
 
 **Vector Type Separation:** All vectors include a `type` field (`"kb"` or `"org"`) to prevent cross-contamination when filtering on fields that may not exist on all vectors.
 
@@ -140,8 +142,8 @@ Full rebuild on each deploy ensures KB stays in sync with source markdown. No in
 |--------|----------|---------------|
 | `general/` | `category: "general"` | Always |
 | `jurisdictions/federal/` | `jurisdiction: "federal"` | Always (federal applies to all) |
-| `jurisdictions/{state}/` | `jurisdiction: "{state}"` | When org.jurisdiction matches |
-| `practice-types/{type}/` | `practice_type: "{type}"` | When org.practiceType matches |
+| `jurisdictions/{state}/` | `jurisdiction: "{state}"` | When state in org.jurisdictions[] (limit 5) |
+| `practice-types/{type}/` | `practice_type: "{type}"` | When type in org.practiceTypes[] (limit 5) |
 | `firm-sizes/{size}/` | `firm_size: "{size}"` | When org.firmSize matches |
 
 **Vectorize Query Strategy:**
@@ -155,11 +157,12 @@ const filters: VectorizeVectorMetadataFilter[] = [
   { type: "kb", jurisdiction: "federal" },
 ];
 
-if (org.jurisdiction) {
-  filters.push({ type: "kb", jurisdiction: org.jurisdiction });
+// Limit arrays to prevent query explosion (max 5 each)
+for (const jurisdiction of org.jurisdictions.slice(0, 5)) {
+  filters.push({ type: "kb", jurisdiction });
 }
-if (org.practiceType) {
-  filters.push({ type: "kb", practice_type: org.practiceType });
+for (const practiceType of org.practiceTypes.slice(0, 5)) {
+  filters.push({ type: "kb", practice_type: practiceType });
 }
 if (org.firmSize) {
   filters.push({ type: "kb", firm_size: org.firmSize });
@@ -171,7 +174,7 @@ const results = await Promise.all(
 );
 ```
 
-Each setting is optional. An org with only `practiceType` set gets: general + federal + matching practice type.
+Arrays can be empty. An org with only `practiceTypes` set gets: general + federal + matching practice types (up to 5).
 
 ## Error Handling
 

@@ -156,7 +156,7 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 - [ ] Constructor uses `blockConcurrencyWhile()` for migrations + schema loading
 - [ ] `PRAGMA user_version` for DO SQLite migration tracking
 - [ ] DO SQLite tables (conversations, messages, pending_confirmations, org_settings, clio_schema_cache)
-- [ ] `ChannelMessage` interface (channel, orgId, userId, userRole, conversationId, conversationScope, message, jurisdiction, practiceType, firmSize, metadata)
+- [ ] `ChannelMessage` interface (channel, orgId, userId, userRole, conversationId, conversationScope, message, jurisdictions[], practiceTypes[], firmSize, metadata)
 - [ ] `POST /process-message` endpoint
 - [ ] Channel Adapter routing (unified format)
 - [ ] ChannelMessage validation
