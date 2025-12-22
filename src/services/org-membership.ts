@@ -1,3 +1,12 @@
+/**
+ * Organization Membership Service
+ *
+ * Manages user membership in organizations:
+ * - Looking up memberships
+ * - Removing users from orgs
+ * - Transferring ownership
+ */
+
 import {
   type OrgRole,
   type OrgMembership,
@@ -5,10 +14,16 @@ import {
   orgMemberRowToEntity,
 } from "../types";
 
+// Re-export types for convenience
 export type { OrgRole, OrgMembership };
 
+// =============================================================================
+// Lookup Functions
+// =============================================================================
+
 /**
- * Get a user's membership in a specific org.
+ * Gets a user's membership in an organization.
+ * Returns null if the user is not a member.
  */
 export async function getOrgMembership(
   db: D1Database,
@@ -28,7 +43,8 @@ export async function getOrgMembership(
 }
 
 /**
- * Get all members of an org.
+ * Gets all members of an organization.
+ * Returned in order of when they joined (created_at).
  */
 export async function getOrgMembers(
   db: D1Database,
@@ -42,7 +58,9 @@ export async function getOrgMembers(
   return result.results.map(orgMemberRowToEntity);
 }
 
-// Result types for operations that can fail
+// =============================================================================
+// Member Removal
+// =============================================================================
 
 type RemoveResult =
   | { success: true }
@@ -51,6 +69,74 @@ type RemoveResult =
       error: "user_not_member" | "is_owner" | "db_error";
       message: string;
     };
+
+/**
+ * Removes a user from an organization.
+ *
+ * Rules:
+ * - User must be a member
+ * - Owners cannot leave (must transfer ownership first)
+ *
+ * Also cleans up any pending confirmations in the TenantDO.
+ */
+export async function removeUserFromOrg(
+  db: D1Database,
+  userId: string,
+  orgId: string,
+  tenant?: DurableObjectNamespace
+): Promise<RemoveResult> {
+  // Check current membership
+  const membership = await getOrgMembership(db, userId, orgId);
+
+  if (!membership) {
+    return {
+      success: false,
+      error: "user_not_member",
+      message: "User is not a member of this organization.",
+    };
+  }
+
+  // Owners cannot leave directly
+  if (membership.isOwner) {
+    return {
+      success: false,
+      error: "is_owner",
+      message: "Owner cannot leave. Transfer ownership first.",
+    };
+  }
+
+  // Remove from database
+  try {
+    await db
+      .prepare(`DELETE FROM org_members WHERE user_id = ? AND org_id = ?`)
+      .bind(userId, orgId)
+      .run();
+
+    // Clean up any pending confirmations in the DO
+    if (tenant) {
+      const doStub = tenant.get(tenant.idFromName(orgId));
+      await doStub.fetch(
+        new Request("https://do/remove-user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        })
+      );
+    }
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: "db_error",
+      message: `Database error: ${error}`,
+    };
+  }
+}
+
+// =============================================================================
+// Ownership Transfer
+// =============================================================================
 
 type TransferResult =
   | { success: true }
@@ -65,51 +151,12 @@ type TransferResult =
     };
 
 /**
- * Remove a user from an org.
- * Fails if the user is the owner - they must transfer ownership first.
- */
-export async function removeUserFromOrg(
-  db: D1Database,
-  userId: string,
-  orgId: string
-): Promise<RemoveResult> {
-  const membership = await getOrgMembership(db, userId, orgId);
-
-  if (!membership) {
-    return {
-      success: false,
-      error: "user_not_member",
-      message: "User is not a member of this organization.",
-    };
-  }
-
-  if (membership.isOwner) {
-    return {
-      success: false,
-      error: "is_owner",
-      message: "Owner cannot leave. Transfer ownership first.",
-    };
-  }
-
-  try {
-    await db
-      .prepare(`DELETE FROM org_members WHERE user_id = ? AND org_id = ?`)
-      .bind(userId, orgId)
-      .run();
-
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      error: "db_error",
-      message: `Database error: ${error}`,
-    };
-  }
-}
-
-/**
- * Transfer org ownership from one user to another.
- * The target must already be an admin of the org.
+ * Transfers ownership of an organization to another user.
+ *
+ * Rules:
+ * - Only the current owner can transfer ownership
+ * - Target must be an existing member with admin role
+ * - The old owner remains as an admin after transfer
  */
 export async function transferOwnership(
   db: D1Database,
@@ -119,6 +166,7 @@ export async function transferOwnership(
 ): Promise<TransferResult> {
   // Verify current user is the owner
   const currentOwner = await getOrgMembership(db, fromUserId, orgId);
+
   if (!currentOwner?.isOwner) {
     return {
       success: false,
@@ -127,9 +175,10 @@ export async function transferOwnership(
     };
   }
 
-  // Verify target user is a member
-  const target = await getOrgMembership(db, toUserId, orgId);
-  if (!target) {
+  // Verify target is a member
+  const targetMember = await getOrgMembership(db, toUserId, orgId);
+
+  if (!targetMember) {
     return {
       success: false,
       error: "target_not_member",
@@ -137,8 +186,8 @@ export async function transferOwnership(
     };
   }
 
-  // Target must be an admin
-  if (target.role !== "admin") {
+  // Target must be an admin (promotion path: member -> admin -> owner)
+  if (targetMember.role !== "admin") {
     return {
       success: false,
       error: "target_not_admin",
@@ -149,11 +198,14 @@ export async function transferOwnership(
   // Perform the transfer atomically
   try {
     await db.batch([
+      // Remove ownership from current owner (they stay as admin)
       db
         .prepare(
           `UPDATE org_members SET is_owner = 0 WHERE user_id = ? AND org_id = ?`
         )
         .bind(fromUserId, orgId),
+
+      // Grant ownership to new owner
       db
         .prepare(
           `UPDATE org_members SET is_owner = 1 WHERE user_id = ? AND org_id = ?`

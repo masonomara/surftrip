@@ -1,12 +1,23 @@
 /**
- * GDPR data deletion service.
+ * GDPR Data Deletion Service
  *
- * Handles user data deletion requests including:
- * - Checking for sole ownership blocking conditions
- * - Deleting user records from D1 (cascades via foreign keys)
- * - Anonymizing audit logs in R2
+ * Handles the "right to be forgotten" - complete deletion of a user's data
+ * across all storage locations (D1, DOs, R2 audit logs).
  */
 
+// =============================================================================
+// Types
+// =============================================================================
+
+/** Result of purging user data from a single Durable Object */
+export interface DOPurgeResult {
+  orgId: string;
+  messages: number;
+  pendingConfirmations: number;
+  clioToken: boolean;
+}
+
+/** Complete result of a GDPR deletion request */
 export interface GdprDeleteResult {
   success: boolean;
   deletedRecords: {
@@ -16,49 +27,59 @@ export interface GdprDeleteResult {
     channelLinks: number;
     orgMemberships: number;
   };
+  purgedFromDOs: DOPurgeResult[];
   anonymizedAuditLogs: number;
   errors: string[];
 }
 
+/** Error returned when user is sole owner of organization(s) */
 export interface SoleOwnershipError {
   type: "sole_owner";
   orgIds: string[];
   message: string;
 }
 
+// =============================================================================
+// Utility Functions
+// =============================================================================
+
 /**
- * Generate a consistent, truncated hash for anonymizing user IDs in audit logs.
- * Uses SHA-256 and returns first 16 hex characters.
+ * Creates a truncated hash of a user ID for audit log anonymization.
+ * We keep a hash rather than deleting entirely so we can still correlate
+ * actions by "the same deleted user" without knowing who they were.
  */
 export async function hashUserId(userId: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(userId);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
 
-  // Convert to hex string and truncate to 16 chars
+  // Convert to hex string and take first 16 chars
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray
-    .map((b) => b.toString(16).padStart(2, "0"))
+  const fullHash = hashArray
+    .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 
-  return hashHex.substring(0, 16);
+  return fullHash.substring(0, 16);
 }
 
+// =============================================================================
+// Pre-Deletion Checks
+// =============================================================================
+
 /**
- * Find all organizations where the user is the sole owner.
- * These orgs would be orphaned if the user is deleted.
+ * Checks if a user is the sole owner of any organizations.
+ * Users cannot delete their account if they're the only owner - they must
+ * transfer ownership first or delete the organization.
  */
 export async function checkSoleOwnerships(
   db: D1Database,
   userId: string
 ): Promise<string[]> {
-  // Get all orgs where this user is an owner
-  const ownershipsQuery = `
-    SELECT org_id FROM org_members
-    WHERE user_id = ? AND is_owner = 1
-  `;
+  // Find all orgs where this user is an owner
   const ownerships = await db
-    .prepare(ownershipsQuery)
+    .prepare(
+      `SELECT org_id FROM org_members WHERE user_id = ? AND is_owner = 1`
+    )
     .bind(userId)
     .all<{ org_id: string }>();
 
@@ -66,12 +87,11 @@ export async function checkSoleOwnerships(
 
   // For each owned org, check if there are other owners
   for (const { org_id: orgId } of ownerships.results) {
-    const otherOwnersQuery = `
-      SELECT COUNT(*) as count FROM org_members
-      WHERE org_id = ? AND is_owner = 1 AND user_id != ?
-    `;
     const otherOwners = await db
-      .prepare(otherOwnersQuery)
+      .prepare(
+        `SELECT COUNT(*) as count FROM org_members
+         WHERE org_id = ? AND is_owner = 1 AND user_id != ?`
+      )
       .bind(orgId, userId)
       .first<{ count: number }>();
 
@@ -83,19 +103,23 @@ export async function checkSoleOwnerships(
   return soleOwnerOrgs;
 }
 
+// =============================================================================
+// Audit Log Anonymization
+// =============================================================================
+
 /**
- * Replace user IDs with anonymized hashes in R2 audit logs.
- * Processes all audit log files and rewrites those containing the user's ID.
+ * Anonymizes audit logs in R2 by replacing the user_id with a hash.
+ * This preserves audit trail integrity while removing PII.
  */
 export async function anonymizeAuditLogs(
   r2: R2Bucket,
   userId: string
 ): Promise<number> {
   const hashedId = `REDACTED-${await hashUserId(userId)}`;
-  let count = 0;
+  let anonymizedCount = 0;
   let cursor: string | undefined;
 
-  // Paginate through all audit log files
+  // Paginate through all audit logs
   do {
     const listResult = await r2.list({
       prefix: "orgs/",
@@ -104,7 +128,7 @@ export async function anonymizeAuditLogs(
     });
 
     for (const obj of listResult.objects) {
-      // Skip non-audit files
+      // Only process audit log files
       if (!obj.key.includes("/audit/")) {
         continue;
       }
@@ -117,29 +141,34 @@ export async function anonymizeAuditLogs(
       try {
         const entry = (await content.json()) as { user_id?: string };
 
-        // Only rewrite files that contain this user's ID
+        // Only update if this user's audit entry
         if (entry.user_id === userId) {
           entry.user_id = hashedId;
+
           await r2.put(obj.key, JSON.stringify(entry), {
             httpMetadata: { contentType: "application/json" },
           });
-          count++;
+
+          anonymizedCount++;
         }
       } catch {
-        // Skip malformed JSON files
+        // Skip malformed entries
       }
     }
 
     cursor = listResult.truncated ? listResult.cursor : undefined;
   } while (cursor);
 
-  return count;
+  return anonymizedCount;
 }
 
+// =============================================================================
+// D1 Record Deletion
+// =============================================================================
+
 /**
- * Delete all user records from D1.
- * Returns counts of deleted related records (for reporting).
- * Note: Actual deletion cascades via foreign keys, but we count first for the report.
+ * Deletes all user records from D1 database.
+ * Relies on CASCADE deletes for related records (sessions, accounts, etc).
  */
 async function deleteUserFromD1(
   db: D1Database,
@@ -150,7 +179,7 @@ async function deleteUserFromD1(
   channelLinks: number;
   orgMemberships: number;
 }> {
-  // Count related records before deletion (for reporting)
+  // Count records before deletion for reporting
   const [sessions, accounts, channelLinks, orgMemberships] = await Promise.all([
     db
       .prepare(`SELECT COUNT(*) as count FROM session WHERE user_id = ?`)
@@ -172,7 +201,7 @@ async function deleteUserFromD1(
       .first<{ count: number }>(),
   ]);
 
-  // Delete the user - related records cascade via foreign keys
+  // Delete the user - CASCADE handles related records
   await db.prepare(`DELETE FROM user WHERE id = ?`).bind(userId).run();
 
   return {
@@ -183,20 +212,28 @@ async function deleteUserFromD1(
   };
 }
 
+// =============================================================================
+// Main Deletion Function
+// =============================================================================
+
 /**
- * Main GDPR deletion entry point.
+ * Deletes all data associated with a user (GDPR "right to be forgotten").
  *
- * 1. Checks for sole ownership (blocks deletion if found)
- * 2. Deletes user and related records from D1
- * 3. Anonymizes audit logs in R2
+ * Process:
+ * 1. Check for sole ownership (must transfer first)
+ * 2. Purge user data from each org's Durable Object
+ * 3. Delete user record from D1 (cascades to sessions, accounts, etc)
+ * 4. Anonymize audit logs in R2
  */
 export async function deleteUserData(
   db: D1Database,
   r2: R2Bucket,
-  userId: string
+  userId: string,
+  tenant?: DurableObjectNamespace
 ): Promise<GdprDeleteResult | SoleOwnershipError> {
-  // Block deletion if user is sole owner of any org
+  // Step 1: Check for sole ownership
   const soleOwnerOrgs = await checkSoleOwnerships(db, userId);
+
   if (soleOwnerOrgs.length > 0) {
     return {
       type: "sole_owner",
@@ -205,7 +242,7 @@ export async function deleteUserData(
     };
   }
 
-  // Verify user exists
+  // Step 2: Verify user exists
   const user = await db
     .prepare(`SELECT id FROM user WHERE id = ?`)
     .bind(userId)
@@ -221,15 +258,63 @@ export async function deleteUserData(
         channelLinks: 0,
         orgMemberships: 0,
       },
+      purgedFromDOs: [],
       anonymizedAuditLogs: 0,
       errors: ["User not found"],
     };
   }
 
-  // Delete from D1
   const errors: string[] = [];
-  let deletedRecords;
 
+  // Step 3: Get all orgs the user belongs to
+  const orgMemberships = await db
+    .prepare(`SELECT org_id FROM org_members WHERE user_id = ?`)
+    .bind(userId)
+    .all<{ org_id: string }>();
+
+  const orgIds = orgMemberships.results.map((row) => row.org_id);
+
+  // Step 4: Purge user data from each org's Durable Object
+  const purgedFromDOs: DOPurgeResult[] = [];
+
+  if (tenant && orgIds.length > 0) {
+    for (const orgId of orgIds) {
+      try {
+        const doStub = tenant.get(tenant.idFromName(orgId));
+        const response = await doStub.fetch(
+          new Request("https://do/purge-user-data", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId }),
+          })
+        );
+
+        if (response.ok) {
+          const result = (await response.json()) as {
+            purged: {
+              messages: number;
+              pendingConfirmations: number;
+              clioToken: boolean;
+            };
+          };
+
+          purgedFromDOs.push({
+            orgId,
+            messages: result.purged.messages,
+            pendingConfirmations: result.purged.pendingConfirmations,
+            clioToken: result.purged.clioToken,
+          });
+        } else {
+          errors.push(`DO purge failed for org ${orgId}: ${response.status}`);
+        }
+      } catch (error) {
+        errors.push(`DO purge failed for org ${orgId}: ${error}`);
+      }
+    }
+  }
+
+  // Step 5: Delete user from D1
+  let deletedRecords;
   try {
     deletedRecords = await deleteUserFromD1(db, userId);
   } catch (error) {
@@ -242,12 +327,13 @@ export async function deleteUserData(
         channelLinks: 0,
         orgMemberships: 0,
       },
+      purgedFromDOs,
       anonymizedAuditLogs: 0,
       errors: [`D1 deletion failed: ${error}`],
     };
   }
 
-  // Anonymize audit logs (non-blocking failure)
+  // Step 6: Anonymize audit logs
   let anonymizedCount = 0;
   try {
     anonymizedCount = await anonymizeAuditLogs(r2, userId);
@@ -255,20 +341,26 @@ export async function deleteUserData(
     errors.push(`Audit log anonymization failed: ${error}`);
   }
 
+  // Return result
   return {
     success: errors.length === 0,
     deletedRecords: {
       user: true,
       ...deletedRecords,
     },
+    purgedFromDOs,
     anonymizedAuditLogs: anonymizedCount,
     errors,
   };
 }
 
+// =============================================================================
+// Preview Function
+// =============================================================================
+
 /**
- * Preview what would be deleted without actually deleting.
- * Used to show the user what data exists before they confirm deletion.
+ * Returns a preview of what data would be deleted for a user.
+ * Useful for confirmation dialogs before actual deletion.
  */
 export async function getDataDeletionPreview(
   db: D1Database,
@@ -308,7 +400,7 @@ export async function getDataDeletionPreview(
         .first<{ count: number }>(),
     ]);
 
-  // Check for blocking conditions
+  // Check sole ownerships separately
   const soleOwnerOrgs = await checkSoleOwnerships(db, userId);
 
   return {

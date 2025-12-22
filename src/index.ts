@@ -1,9 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { getAuth } from "./lib/auth";
-import {
-  AuditEntryInputSchema,
-  type AuditEntryInput,
-} from "./types/requests";
+import { AuditEntryInputSchema, type AuditEntryInput } from "./types/requests";
 import {
   ChannelMessageSchema,
   type ChannelMessage,
@@ -11,37 +8,51 @@ import {
   type LLMResponse,
   type ToolCall,
 } from "./types";
-import {
-  retrieveRAGContext,
-  formatRAGContext,
-} from "./services/rag-retrieval";
+import { retrieveRAGContext, formatRAGContext } from "./services/rag-retrieval";
 
 // =============================================================================
-// Environment Types
+// Environment Configuration
 // =============================================================================
 
 export interface Env {
+  // Storage
   DB: D1Database;
   TENANT: DurableObjectNamespace;
   R2: R2Bucket;
+
+  // AI Services
   AI: Ai;
   VECTORIZE: VectorizeIndex;
+
+  // Clio OAuth
   CLIO_CLIENT_ID: string;
   CLIO_CLIENT_SECRET: string;
+
+  // Better Auth
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
+
+  // Apple Sign In
   APPLE_CLIENT_ID: string;
   APPLE_CLIENT_SECRET: string;
   APPLE_APP_BUNDLE_IDENTIFIER: string;
+
+  // Google Sign In
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+
+  // Runtime
   ENVIRONMENT?: string;
 }
 
 // =============================================================================
-// TenantDO - Durable Object for per-org state
+// TenantDO - Per-Organization Durable Object
 // =============================================================================
 
+/**
+ * Each organization gets its own TenantDO instance.
+ * This provides tenant isolation for conversations, messages, and Clio operations.
+ */
 export class TenantDO extends DurableObject<Env> {
   private sql: SqlStorage;
   private orgId: string;
@@ -52,7 +63,7 @@ export class TenantDO extends DurableObject<Env> {
     this.sql = ctx.storage.sql;
     this.orgId = ctx.id.toString();
 
-    // Initialize the DO on first wake
+    // Initialize the DO - runs migrations, loads cache, sets up alarms
     ctx.blockConcurrencyWhile(async () => {
       await this.runMigrations();
       await this.loadSchemaCache();
@@ -60,9 +71,9 @@ export class TenantDO extends DurableObject<Env> {
     });
   }
 
-  // ===========================================================================
-  // HTTP Request Handler
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // Request Router
+  // ---------------------------------------------------------------------------
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -71,10 +82,22 @@ export class TenantDO extends DurableObject<Env> {
       switch (url.pathname) {
         case "/process-message":
           return this.handleProcessMessage(request);
+
         case "/audit":
           return this.handleAudit(request);
+
         case "/refresh-schema":
           return this.handleRefreshSchema(request);
+
+        case "/remove-user":
+          return this.handleRemoveUser(request);
+
+        case "/delete-org":
+          return this.handleDeleteOrg(request);
+
+        case "/purge-user-data":
+          return this.handlePurgeUserData(request);
+
         default:
           return Response.json({ error: "Not found" }, { status: 404 });
       }
@@ -84,17 +107,20 @@ export class TenantDO extends DurableObject<Env> {
     }
   }
 
-  // ===========================================================================
-  // Message Processing
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // Message Processing - Core Chat Flow
+  // ---------------------------------------------------------------------------
 
   private async handleProcessMessage(request: Request): Promise<Response> {
+    // Only accept POST requests
     if (request.method !== "POST") {
       return Response.json({ error: "Method not allowed" }, { status: 405 });
     }
 
-    // Validate the incoming message
-    const parseResult = ChannelMessageSchema.safeParse(await request.json());
+    // Parse and validate the incoming message
+    const body = await request.json();
+    const parseResult = ChannelMessageSchema.safeParse(body);
+
     if (!parseResult.success) {
       return Response.json(
         { error: "Invalid message format", details: parseResult.error.issues },
@@ -104,18 +130,15 @@ export class TenantDO extends DurableObject<Env> {
 
     const message = parseResult.data;
 
-    // Security check: ensure message is for this org
+    // Security check: message must be for this org's DO
     if (message.orgId !== this.orgId) {
-      console.error(
-        `[TenantDO:${this.orgId}] OrgId mismatch: received ${message.orgId}, expected ${this.orgId}`
-      );
       return Response.json({ error: "Organization mismatch" }, { status: 403 });
     }
 
-    // Process the message
+    // Ensure conversation exists (creates if new)
     await this.ensureConversationExists(message);
 
-    // Check if user has a pending confirmation to respond to
+    // Check if there's a pending confirmation waiting for this user
     const pendingConfirmation = await this.claimPendingConfirmation(
       message.conversationId,
       message.userId
@@ -128,8 +151,9 @@ export class TenantDO extends DurableObject<Env> {
       userId: message.userId,
     });
 
-    // Generate response (either handle confirmation or generate new response)
+    // Generate response - either handle confirmation or generate new response
     let response: string;
+
     if (pendingConfirmation) {
       response = await this.handleConfirmationResponse(
         message,
@@ -149,14 +173,14 @@ export class TenantDO extends DurableObject<Env> {
     return Response.json({ response });
   }
 
-  // ===========================================================================
-  // Response Generation
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // Response Generation - LLM + RAG
+  // ---------------------------------------------------------------------------
 
   private async generateAssistantResponse(
     message: ChannelMessage
   ): Promise<string> {
-    // Retrieve relevant context from RAG
+    // Step 1: Retrieve relevant context from knowledge base and org docs
     const ragContext = await retrieveRAGContext(
       this.env,
       message.message,
@@ -168,46 +192,52 @@ export class TenantDO extends DurableObject<Env> {
       }
     );
 
-    // Build the conversation messages
+    // Step 2: Get recent conversation history for context
     const conversationHistory = await this.getRecentMessages(
       message.conversationId
     );
+
+    // Step 3: Build the system prompt with RAG context
     const systemPrompt = this.buildSystemPrompt(
       formatRAGContext(ragContext),
       message.userRole
     );
 
+    // Step 4: Assemble messages for the LLM
     const messages = [
       { role: "system", content: systemPrompt },
       ...conversationHistory,
     ];
 
-    // Call the LLM
-    const llmResponse = await this.callLLM(
-      messages,
-      this.getClioTools(message.userRole)
-    );
+    // Step 5: Get available tools based on user role
+    const tools = this.getClioTools(message.userRole);
 
-    // Handle tool calls if present, otherwise return the response
+    // Step 6: Call the LLM
+    const llmResponse = await this.callLLM(messages, tools);
+
+    // Step 7: If the LLM wants to use tools, handle them
     if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
       return this.handleToolCalls(message, llmResponse.toolCalls);
     }
 
+    // Otherwise return the text response
     return llmResponse.content;
   }
 
   private buildSystemPrompt(ragContext: string, userRole: string): string {
-    // Format cached schemas for the prompt
+    // Format cached Clio schema for the prompt
     const schemaEntries = [...this.schemaCache].map(
       ([objectType, schema]) =>
         `### ${objectType}\n${JSON.stringify(schema, null, 2)}`
     );
 
+    // Different instructions based on user role
     const roleNote =
       userRole === "admin"
         ? "This user is an Admin and can perform create/update/delete operations with confirmation."
         : "This user is a Member with read-only access to Clio.";
 
+    // Build the full system prompt
     return `You are Docket, a case management assistant for legal teams using Clio.
 
 **Tone:** Helpful, competent, deferential. You assist—you don't lead.
@@ -219,7 +249,10 @@ ${roleNote}
 ${ragContext || "No relevant context found."}
 
 **Clio Schema Reference:**
-${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Clio first."}
+${
+  schemaEntries.join("\n\n") ||
+  "Schema not yet loaded. User needs to connect Clio first."
+}
 
 **Instructions:**
 - Use Knowledge Base and firm context for case management questions
@@ -230,25 +263,27 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
 - If Clio is not connected, guide user to connect at docket.com/settings`;
   }
 
-  // ===========================================================================
-  // LLM Integration
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // LLM Communication
+  // ---------------------------------------------------------------------------
 
   private async callLLM(
     messages: Array<{ role: string; content: string }>,
-    tools?: object[]
+    tools?: object[],
+    isRetry = false
   ): Promise<LLMResponse> {
     try {
+      // Call Workers AI
       const response = await (this.env.AI.run as Function)(
         "@cf/meta/llama-3.1-8b-instruct",
         {
           messages,
-          tools: tools?.length ? tools : undefined,
+          tools: tools && tools.length > 0 ? tools : undefined,
           max_tokens: 2000,
         }
       );
 
-      // Handle string response (no tool calls)
+      // Handle simple string response
       if (typeof response === "string") {
         return { content: response };
       }
@@ -263,20 +298,46 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
       };
 
       // Parse tool calls if present
-      const toolCalls = result.tool_calls?.map((tc) => ({
-        name: tc.name,
-        arguments:
-          typeof tc.arguments === "string"
-            ? JSON.parse(tc.arguments)
-            : tc.arguments,
-      })) as ToolCall[] | undefined;
+      let toolCalls: ToolCall[] | undefined;
+      if (result.tool_calls && result.tool_calls.length > 0) {
+        toolCalls = result.tool_calls.map((tc) => ({
+          name: tc.name,
+          arguments:
+            typeof tc.arguments === "string"
+              ? JSON.parse(tc.arguments)
+              : tc.arguments,
+        }));
+      }
 
       return {
         content: result.response || "",
         toolCalls,
       };
     } catch (error) {
-      console.error(`[TenantDO:${this.orgId}] LLM error:`, error);
+      // Handle retryable errors (rate limit, server errors)
+      const errorCode = (error as { code?: number }).code;
+
+      if (!isRetry && (errorCode === 3040 || errorCode === 3043)) {
+        // Wait 1 second and retry once
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return this.callLLM(messages, tools, true);
+      }
+
+      // Handle non-retryable errors with user-friendly messages
+      if (errorCode === 3036) {
+        return {
+          content: "I've reached my daily limit. Please try again tomorrow.",
+        };
+      }
+
+      if (errorCode === 5007) {
+        return {
+          content:
+            "I'm experiencing a configuration issue. Please contact support.",
+        };
+      }
+
+      // Generic fallback
       return {
         content:
           "I'm having trouble processing your request right now. Please try again in a moment.",
@@ -284,8 +345,13 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Clio Tool Definitions
+  // ---------------------------------------------------------------------------
+
   private getClioTools(userRole: string): object[] {
     const canModify = userRole === "admin";
+
     const modifyNote = canModify
       ? "Create/update/delete operations will require user confirmation."
       : "As a Member, only read operations are permitted.";
@@ -336,9 +402,9 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
     ];
   }
 
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
   // Tool Call Handling
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
 
   private async handleToolCalls(
     message: ChannelMessage,
@@ -355,7 +421,7 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
 
       const args = toolCall.arguments;
 
-      // Permission check for non-read operations
+      // Permission check: members can only read
       if (args.operation !== "read" && message.userRole !== "admin") {
         results.push(
           `You don't have permission to ${args.operation} ${args.objectType}s. Only Admins can make changes.`
@@ -363,14 +429,14 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
         continue;
       }
 
-      // Handle read operations immediately
+      // Read operations execute immediately
       if (args.operation === "read") {
         const readResult = await this.executeClioRead(message.userId, args);
         results.push(readResult);
         continue;
       }
 
-      // For CUD operations, create a pending confirmation
+      // CUD operations need confirmation
       await this.createPendingConfirmation(
         message.conversationId,
         message.userId,
@@ -381,12 +447,7 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
 
       const operationDescription = this.describeOperation(args);
       results.push(
-        `I'd like to ${operationDescription}.\n\n` +
-          `**Please confirm:**\n` +
-          `- Reply 'yes' to proceed\n` +
-          `- Reply 'no' to cancel\n` +
-          `- Or describe any changes you'd like\n\n` +
-          `*This request expires in 5 minutes.*`
+        `I'd like to ${operationDescription}.\n\n**Please confirm:**\n- Reply 'yes' to proceed\n- Reply 'no' to cancel\n- Or describe any changes you'd like\n\n*This request expires in 5 minutes.*`
       );
     }
 
@@ -404,16 +465,16 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
     const verb = verbMap[args.operation] || args.operation;
     const objectName = args.objectType.toLowerCase();
 
-    // If we have data, show a preview
+    // Include data preview if available
     if (args.data) {
-      const dataPreview = Object.entries(args.data)
-        .slice(0, 3)
+      const dataEntries = Object.entries(args.data).slice(0, 3);
+      const preview = dataEntries
         .map(([key, value]) => `${key}: "${value}"`)
         .join(", ");
-      return `${verb} ${objectName} with ${dataPreview}`;
+      return `${verb} ${objectName} with ${preview}`;
     }
 
-    // For operations with an ID
+    // Include ID if specified
     if (args.id) {
       return `${verb} ${objectName} ${args.id}`;
     }
@@ -421,9 +482,9 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
     return `${verb} ${objectName}`;
   }
 
-  // ===========================================================================
-  // Confirmation Handling
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // Confirmation Flow
+  // ---------------------------------------------------------------------------
 
   private async handleConfirmationResponse(
     message: ChannelMessage,
@@ -437,20 +498,22 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
 
     switch (classification.intent) {
       case "approve":
+        // User confirmed - execute the operation
         return this.executeConfirmedOperation(message.userId, confirmation);
 
       case "reject":
+        // User cancelled
         return "Got it, I've cancelled that operation.";
 
       case "modify":
-        // Re-process with modified request
+        // User wants to change something - re-process their modified request
         return this.generateAssistantResponse({
           ...message,
           message: classification.modifiedRequest || message.message,
         });
 
       case "unrelated":
-        // Restore the confirmation and handle as new message
+        // User asked something else - restore the confirmation and answer their question
         this.restorePendingConfirmation(
           message.conversationId,
           message.userId,
@@ -459,7 +522,7 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
         return this.generateAssistantResponse(message);
 
       default:
-        // Unclear response - restore confirmation and ask again
+        // Unclear response - restore confirmation and ask for clarification
         this.restorePendingConfirmation(
           message.conversationId,
           message.userId,
@@ -473,7 +536,10 @@ ${schemaEntries.join("\n\n") || "Schema not yet loaded. User needs to connect Cl
     userMessage: string,
     confirmation: PendingConfirmation
   ): Promise<{ intent: string; modifiedRequest?: string }> {
-    const prompt = `A user was asked to confirm: ${confirmation.action} a ${confirmation.objectType} with: ${JSON.stringify(confirmation.params)}
+    // Ask the LLM to classify the user's intent
+    const prompt = `A user was asked to confirm: ${confirmation.action} a ${
+      confirmation.objectType
+    } with: ${JSON.stringify(confirmation.params)}
 The user responded: "${userMessage}"
 Classify as ONE of: approve, reject, modify, unrelated
 Respond with JSON: {"intent": "...", "modifiedRequest": "..."}
@@ -485,12 +551,13 @@ Only include modifiedRequest if intent is "modify".`;
         { prompt, max_tokens: 100 }
       );
 
+      // Extract the response text
       const text =
         typeof response === "string"
           ? response
           : (response as { response: string }).response;
 
-      // Extract JSON from response
+      // Parse JSON from the response
       const jsonMatch = text.match(/\{[^}]+\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
@@ -499,6 +566,7 @@ Only include modifiedRequest if intent is "modify".`;
       console.error(`[TenantDO:${this.orgId}] Classification error:`, error);
     }
 
+    // Default to unclear if we can't parse the response
     return { intent: "unclear" };
   }
 
@@ -507,6 +575,7 @@ Only include modifiedRequest if intent is "modify".`;
     confirmation: PendingConfirmation
   ): Promise<string> {
     try {
+      // Execute the Clio operation
       const result = await this.executeClioCUD(
         userId,
         confirmation.action,
@@ -523,8 +592,12 @@ Only include modifiedRequest if intent is "modify".`;
         result: "success",
       });
 
-      const successMessage = `Done! I've ${confirmation.action}d the ${confirmation.objectType}.`;
-      return result.details ? `${successMessage}\n\n${result.details}` : successMessage;
+      // Build success message
+      const baseMessage = `Done! I've ${confirmation.action}d the ${confirmation.objectType}.`;
+      if (result.details) {
+        return `${baseMessage}\n\n${result.details}`;
+      }
+      return baseMessage;
     } catch (error) {
       // Log failed operation
       await this.appendAuditLog({
@@ -540,17 +613,13 @@ Only include modifiedRequest if intent is "modify".`;
     }
   }
 
-  // ===========================================================================
-  // Clio Operations (Placeholders)
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // Clio API Operations (Placeholders)
+  // ---------------------------------------------------------------------------
 
   private async executeClioRead(
     userId: string,
-    args: {
-      objectType: string;
-      id?: string;
-      filters?: Record<string, unknown>;
-    }
+    args: { objectType: string; id?: string; filters?: Record<string, unknown> }
   ): Promise<string> {
     // Check if user has connected Clio
     const hasToken = await this.hasClioToken(userId);
@@ -558,7 +627,7 @@ Only include modifiedRequest if intent is "modify".`;
       return "You haven't connected your Clio account yet. Please connect at docket.com/settings to enable Clio queries.";
     }
 
-    // Placeholder for actual Clio API call
+    // Build description of what we would query
     let description = `Would query ${args.objectType}`;
     if (args.id) {
       description += ` with ID ${args.id}`;
@@ -567,6 +636,7 @@ Only include modifiedRequest if intent is "modify".`;
       description += ` with filters ${JSON.stringify(args.filters)}`;
     }
 
+    // TODO: Implement actual Clio API call
     return `[Clio read placeholder] ${description}`;
   }
 
@@ -576,7 +646,7 @@ Only include modifiedRequest if intent is "modify".`;
     objectType: string,
     data: Record<string, unknown>
   ): Promise<{ success: boolean; details?: string }> {
-    // Placeholder for actual Clio API call
+    // TODO: Implement actual Clio API call
     console.log(`[Clio ${action}]`, { userId, objectType, data });
 
     return {
@@ -590,14 +660,16 @@ Only include modifiedRequest if intent is "modify".`;
     return token !== undefined;
   }
 
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
   // Conversation & Message Storage
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
 
-  private async ensureConversationExists(message: ChannelMessage): Promise<void> {
+  private async ensureConversationExists(
+    message: ChannelMessage
+  ): Promise<void> {
     const now = Date.now();
 
-    // Try to update existing conversation
+    // Try to update existing conversation's timestamp
     const updateResult = this.sql.exec(
       "UPDATE conversations SET updated_at = ? WHERE id = ?",
       now,
@@ -621,14 +693,17 @@ Only include modifiedRequest if intent is "modify".`;
     conversationId: string,
     msg: { role: string; content: string; userId: string | null }
   ): Promise<void> {
+    const messageId = crypto.randomUUID();
+    const now = Date.now();
+
     this.sql.exec(
       `INSERT INTO messages (id, conversation_id, role, content, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-      crypto.randomUUID(),
+      messageId,
       conversationId,
       msg.role,
       msg.content,
       msg.userId,
-      Date.now()
+      now
     );
   }
 
@@ -651,23 +726,21 @@ Only include modifiedRequest if intent is "modify".`;
     }));
   }
 
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
   // Pending Confirmation Management
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
 
   private async claimPendingConfirmation(
     conversationId: string,
     userId: string
   ): Promise<PendingConfirmation | null> {
-    const now = Date.now();
-
-    // Clean up expired confirmations
+    // First, clean up any expired confirmations
     this.sql.exec(
       "DELETE FROM pending_confirmations WHERE expires_at < ?",
-      now
+      Date.now()
     );
 
-    // Try to claim a pending confirmation for this user
+    // Try to claim (delete and return) a pending confirmation for this user
     const row = this.sql
       .exec(
         `DELETE FROM pending_confirmations WHERE conversation_id = ? AND user_id = ? RETURNING id, action, object_type, params, expires_at`,
@@ -685,7 +758,7 @@ Only include modifiedRequest if intent is "modify".`;
     try {
       params = JSON.parse(row.params as string);
     } catch {
-      // Ignore parse errors, use empty object
+      // If parsing fails, use empty object
     }
 
     return {
@@ -706,7 +779,7 @@ Only include modifiedRequest if intent is "modify".`;
   ): Promise<string> {
     const id = crypto.randomUUID();
     const now = Date.now();
-    const expiresAt = now + 5 * 60 * 1000; // 5 minutes
+    const expiresAt = now + 5 * 60 * 1000; // 5 minutes from now
 
     this.sql.exec(
       `INSERT INTO pending_confirmations (id, conversation_id, user_id, action, object_type, params, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -728,6 +801,7 @@ Only include modifiedRequest if intent is "modify".`;
     userId: string,
     confirmation: PendingConfirmation
   ): void {
+    // Put the confirmation back (user asked unrelated question)
     this.sql.exec(
       `INSERT INTO pending_confirmations (id, conversation_id, user_id, action, object_type, params, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       confirmation.id,
@@ -741,16 +815,18 @@ Only include modifiedRequest if intent is "modify".`;
     );
   }
 
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
   // Audit Logging
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
 
   private async handleAudit(request: Request): Promise<Response> {
     if (request.method !== "POST") {
       return Response.json({ error: "Method not allowed" }, { status: 405 });
     }
 
-    const result = AuditEntryInputSchema.safeParse(await request.json());
+    const body = await request.json();
+    const result = AuditEntryInputSchema.safeParse(body);
+
     if (!result.success) {
       return Response.json(
         { error: "Invalid audit entry", details: result.error.issues },
@@ -766,24 +842,31 @@ Only include modifiedRequest if intent is "modify".`;
     const now = new Date();
     const id = crypto.randomUUID();
 
-    // Build the R2 path: orgs/{orgId}/audit/{year}/{month}/{day}/{timestamp}-{id}.json
+    // Build path: orgs/{orgId}/audit/{year}/{month}/{day}/{timestamp}-{id}.json
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
     const day = String(now.getDate()).padStart(2, "0");
-    const path = `orgs/${this.ctx.id}/audit/${year}/${month}/${day}/${now.getTime()}-${id}.json`;
+    const timestamp = now.getTime();
 
+    const path = `orgs/${this.ctx.id}/audit/${year}/${month}/${day}/${timestamp}-${id}.json`;
+
+    // Write to R2
     await this.env.R2.put(
       path,
-      JSON.stringify({ id, created_at: now.toISOString(), ...entry }),
+      JSON.stringify({
+        id,
+        created_at: now.toISOString(),
+        ...entry,
+      }),
       { httpMetadata: { contentType: "application/json" } }
     );
 
     return { id };
   }
 
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
   // Schema Management
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
 
   private async handleRefreshSchema(request: Request): Promise<Response> {
     if (request.method !== "POST") {
@@ -810,26 +893,159 @@ Only include modifiedRequest if intent is "modify".`;
         const schema = JSON.parse(row.schema as string);
         this.schemaCache.set(row.object_type as string, schema);
       } catch {
-        console.error(
-          `[TenantDO:${this.orgId}] Invalid schema JSON for ${row.object_type}`
-        );
+        // Skip invalid entries
       }
     }
   }
 
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // User & Org Management Endpoints
+  // ---------------------------------------------------------------------------
+
+  private async handleRemoveUser(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const body = await request.json();
+    const userId = (body as { userId?: string }).userId;
+
+    if (!userId || typeof userId !== "string") {
+      return Response.json(
+        { error: "Missing required field: userId" },
+        { status: 400 }
+      );
+    }
+
+    // Delete any pending confirmations for this user
+    const result = this.sql.exec(
+      "DELETE FROM pending_confirmations WHERE user_id = ?",
+      userId
+    );
+
+    return Response.json({
+      success: true,
+      userId,
+      expiredConfirmations: result.rowsWritten,
+    });
+  }
+
+  private async handleDeleteOrg(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    // Get counts before deletion for reporting
+    const conversationCount =
+      this.sql.exec("SELECT COUNT(*) as count FROM conversations").one()
+        ?.count ?? 0;
+    const messageCount =
+      this.sql.exec("SELECT COUNT(*) as count FROM messages").one()?.count ?? 0;
+    const confirmationCount =
+      this.sql.exec("SELECT COUNT(*) as count FROM pending_confirmations").one()
+        ?.count ?? 0;
+
+    // Delete all data
+    this.sql.exec("DELETE FROM messages");
+    this.sql.exec("DELETE FROM pending_confirmations");
+    this.sql.exec("DELETE FROM conversations");
+    this.sql.exec("DELETE FROM org_settings");
+    this.sql.exec("DELETE FROM clio_schema_cache");
+
+    // Delete all KV storage
+    const kvKeys = await this.ctx.storage.list();
+    let kvDeletedCount = 0;
+    for (const key of kvKeys.keys()) {
+      await this.ctx.storage.delete(key);
+      kvDeletedCount++;
+    }
+
+    // Clear in-memory cache
+    this.schemaCache.clear();
+
+    return Response.json({
+      success: true,
+      deleted: {
+        conversations: conversationCount as number,
+        messages: messageCount as number,
+        pendingConfirmations: confirmationCount as number,
+        kvEntries: kvDeletedCount,
+      },
+    });
+  }
+
+  private async handlePurgeUserData(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const body = await request.json();
+    const userId = (body as { userId?: string }).userId;
+
+    if (!userId || typeof userId !== "string") {
+      return Response.json(
+        { error: "Missing required field: userId" },
+        { status: 400 }
+      );
+    }
+
+    // Count data before deletion
+    const messageCount =
+      this.sql
+        .exec(
+          "SELECT COUNT(*) as count FROM messages WHERE user_id = ?",
+          userId
+        )
+        .one()?.count ?? 0;
+
+    const confirmationCount =
+      this.sql
+        .exec(
+          "SELECT COUNT(*) as count FROM pending_confirmations WHERE user_id = ?",
+          userId
+        )
+        .one()?.count ?? 0;
+
+    // Delete user's messages and confirmations
+    this.sql.exec("DELETE FROM messages WHERE user_id = ?", userId);
+    this.sql.exec(
+      "DELETE FROM pending_confirmations WHERE user_id = ?",
+      userId
+    );
+
+    // Delete Clio token if exists
+    const clioTokenKey = `clio_token:${userId}`;
+    const hadClioToken =
+      (await this.ctx.storage.get(clioTokenKey)) !== undefined;
+    if (hadClioToken) {
+      await this.ctx.storage.delete(clioTokenKey);
+    }
+
+    return Response.json({
+      success: true,
+      purged: {
+        messages: messageCount as number,
+        pendingConfirmations: confirmationCount as number,
+        clioToken: hadClioToken,
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Database Migrations
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
 
   private async runMigrations(): Promise<void> {
+    // Check current schema version
     const versionResult = this.sql.exec("PRAGMA user_version").one();
     const currentVersion = versionResult.user_version as number;
 
+    // Already migrated
     if (currentVersion >= 1) {
-      return; // Already migrated
+      return;
     }
 
-    // Run initial schema creation
+    // Run initial migration
     this.sql.exec(`
       -- Conversations table
       CREATE TABLE IF NOT EXISTS conversations (
@@ -873,7 +1089,7 @@ Only include modifiedRequest if intent is "modify".`;
         updated_at INTEGER NOT NULL
       );
 
-      -- Clio schema cache
+      -- Cached Clio schema
       CREATE TABLE IF NOT EXISTS clio_schema_cache (
         object_type TEXT PRIMARY KEY,
         schema TEXT NOT NULL,
@@ -881,19 +1097,20 @@ Only include modifiedRequest if intent is "modify".`;
         fetched_at INTEGER NOT NULL
       );
 
+      -- Set version
       PRAGMA user_version = 1;
     `);
   }
 
-  // ===========================================================================
-  // Alarm Handler (Background Cleanup)
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // Background Alarm - Archival & Cleanup
+  // ---------------------------------------------------------------------------
 
   async alarm(): Promise<void> {
     const now = Date.now();
     const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
 
-    // Archive old conversations
+    // Find stale conversations (not updated in 30 days and not archived)
     const staleConversations = this.sql
       .exec(
         `SELECT id FROM conversations WHERE updated_at < ? AND archived_at IS NULL`,
@@ -901,6 +1118,7 @@ Only include modifiedRequest if intent is "modify".`;
       )
       .toArray();
 
+    // Archive each stale conversation
     for (const row of staleConversations) {
       await this.archiveConversation(row.id as string);
     }
@@ -911,12 +1129,12 @@ Only include modifiedRequest if intent is "modify".`;
       now
     );
 
-    // Schedule next alarm (daily)
+    // Schedule next alarm for tomorrow
     await this.ctx.storage.setAlarm(now + 24 * 60 * 60 * 1000);
   }
 
   private async archiveConversation(conversationId: string): Promise<void> {
-    // Get the conversation
+    // Get conversation metadata
     const conversation = this.sql
       .exec("SELECT * FROM conversations WHERE id = ?", conversationId)
       .one();
@@ -925,7 +1143,7 @@ Only include modifiedRequest if intent is "modify".`;
       return;
     }
 
-    // Get all messages
+    // Get all messages for this conversation
     const messages = this.sql
       .exec(
         `SELECT id, role, content, user_id, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at`,
@@ -933,14 +1151,16 @@ Only include modifiedRequest if intent is "modify".`;
       )
       .toArray();
 
-    // Write to R2
+    // Write archive to R2
+    const archiveData = {
+      conversation,
+      messages,
+      archivedAt: new Date().toISOString(),
+    };
+
     await this.env.R2.put(
       `orgs/${this.orgId}/conversations/${conversationId}.json`,
-      JSON.stringify({
-        conversation,
-        messages,
-        archivedAt: new Date().toISOString(),
-      }),
+      JSON.stringify(archiveData),
       { httpMetadata: { contentType: "application/json" } }
     );
 
@@ -960,13 +1180,14 @@ Only include modifiedRequest if intent is "modify".`;
   private async ensureAlarmIsSet(): Promise<void> {
     const existingAlarm = await this.ctx.storage.getAlarm();
     if (!existingAlarm) {
+      // Set alarm for 24 hours from now
       await this.ctx.storage.setAlarm(Date.now() + 24 * 60 * 60 * 1000);
     }
   }
 }
 
 // =============================================================================
-// User Lookup Helpers
+// Channel User Lookup
 // =============================================================================
 
 interface ChannelUserInfo {
@@ -978,12 +1199,16 @@ interface ChannelUserInfo {
   firmSize: string | null;
 }
 
+/**
+ * Looks up a Docket user from their channel identity (e.g., Teams AAD ID).
+ * Returns user info including their org membership.
+ */
 async function lookupChannelUser(
   env: Env,
   channelType: string,
   channelUserId: string
 ): Promise<ChannelUserInfo | null> {
-  // Look up the channel link
+  // Find the user link and their org membership
   const link = await env.DB.prepare(
     `SELECT cul.user_id, om.org_id, om.role
      FROM channel_user_links cul
@@ -998,7 +1223,7 @@ async function lookupChannelUser(
     return null;
   }
 
-  // Get org settings
+  // Get org settings for RAG filtering
   const org = await env.DB.prepare(
     `SELECT jurisdictions, practice_types, firm_size FROM org WHERE id = ?`
   )
@@ -1013,20 +1238,20 @@ async function lookupChannelUser(
     return null;
   }
 
-  // Parse JSON arrays safely
+  // Parse JSON arrays
   let jurisdictions: string[] = [];
   let practiceTypes: string[] = [];
 
   try {
     jurisdictions = JSON.parse(org.jurisdictions || "[]");
   } catch {
-    // Ignore parse errors
+    // Use empty array on parse failure
   }
 
   try {
     practiceTypes = JSON.parse(org.practice_types || "[]");
   } catch {
-    // Ignore parse errors
+    // Use empty array on parse failure
   }
 
   return {
@@ -1039,6 +1264,9 @@ async function lookupChannelUser(
   };
 }
 
+/**
+ * Looks up which org owns a workspace (e.g., Teams tenant).
+ */
 async function lookupWorkspaceOrg(
   env: Env,
   channelType: string,
@@ -1054,17 +1282,20 @@ async function lookupWorkspaceOrg(
 }
 
 // =============================================================================
-// Durable Object Routing
+// Message Routing
 // =============================================================================
 
+/**
+ * Routes a message to the appropriate TenantDO based on orgId.
+ */
 async function routeMessageToDO(
   env: Env,
   message: ChannelMessage
 ): Promise<Response> {
   const doId = env.TENANT.idFromName(message.orgId);
-  const stub = env.TENANT.get(doId);
+  const doStub = env.TENANT.get(doId);
 
-  return stub.fetch(
+  return doStub.fetch(
     new Request("https://do/process-message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1074,7 +1305,7 @@ async function routeMessageToDO(
 }
 
 // =============================================================================
-// Teams Adapter
+// Teams Channel Adapter
 // =============================================================================
 
 interface TeamsActivity {
@@ -1093,17 +1324,40 @@ async function handleTeamsMessage(
   request: Request,
   env: Env
 ): Promise<Response> {
+  // Only accept POST
   if (request.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const activity = (await request.json()) as TeamsActivity;
+  // Parse the activity
+  let activity: TeamsActivity;
+  try {
+    activity = (await request.json()) as TeamsActivity;
+  } catch {
+    // Invalid JSON - acknowledge silently
+    return new Response(null, { status: 200 });
+  }
 
-  // Only process message activities with text
+  // Process the message
+  try {
+    return await handleTeamsMessageInner(activity, env);
+  } catch (error) {
+    console.error("handleTeamsMessage error:", error);
+    // Always return 200 to Teams to avoid retries
+    return new Response(null, { status: 200 });
+  }
+}
+
+async function handleTeamsMessageInner(
+  activity: TeamsActivity,
+  env: Env
+): Promise<Response> {
+  // Only handle message activities with text
   if (activity.type !== "message" || !activity.text) {
     return new Response(null, { status: 200 });
   }
 
+  // Extract required IDs
   const aadObjectId = activity.from?.aadObjectId;
   const conversationId = activity.conversation?.id;
 
@@ -1111,11 +1365,11 @@ async function handleTeamsMessage(
     return new Response(null, { status: 200 });
   }
 
-  // Look up the user
+  // Look up the user in Docket
   const user = await lookupChannelUser(env, "teams", aadObjectId);
 
   if (!user) {
-    // Send onboarding message
+    // Unknown user - send onboarding message
     await sendTeamsReply(activity, {
       text: "Welcome to Docket! Please link your account at docket.com to get started.",
     });
@@ -1134,26 +1388,20 @@ async function handleTeamsMessage(
     scope = "teams";
   }
 
-  // For non-personal messages, validate workspace binding
+  // Determine org ID based on scope
   let orgId = user.orgId;
 
   if (scope !== "personal") {
+    // For non-personal chats, verify workspace binding
     const tenantId = activity.channelData?.tenant?.id;
-
     if (!tenantId) {
-      console.error("Group chat missing tenant ID");
       return new Response(null, { status: 200 });
     }
 
     const workspaceOrgId = await lookupWorkspaceOrg(env, "teams", tenantId);
 
-    if (!workspaceOrgId) {
-      console.error("Workspace not bound to any org", { tenantId });
-      return new Response(null, { status: 200 });
-    }
-
-    if (workspaceOrgId !== user.orgId) {
-      console.error("User org mismatch with workspace org");
+    // Workspace must be bound to user's org
+    if (!workspaceOrgId || workspaceOrgId !== user.orgId) {
       return new Response(null, { status: 200 });
     }
 
@@ -1178,11 +1426,11 @@ async function handleTeamsMessage(
     },
   };
 
-  // Route to DO and get response
+  // Route to the TenantDO
   const doResponse = await routeMessageToDO(env, channelMessage);
   const result = (await doResponse.json()) as { response: string };
 
-  // Send reply back to Teams
+  // Send the response back to Teams
   await sendTeamsReply(activity, {
     text: result.response,
     replyToId: activity.id,
@@ -1195,34 +1443,26 @@ async function sendTeamsReply(
   activity: TeamsActivity,
   reply: { text: string; replyToId?: string }
 ): Promise<void> {
+  // Need service URL and conversation ID to reply
   if (!activity.serviceUrl || !activity.conversation?.id) {
-    console.error("Teams reply blocked: missing serviceUrl or conversation.id");
     return;
   }
 
-  try {
-    const response = await fetch(
-      `${activity.serviceUrl}/v3/conversations/${activity.conversation.id}/activities`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "message",
-          text: reply.text,
-          from: activity.recipient,
-          recipient: activity.from,
-          conversation: activity.conversation,
-          replyToId: reply.replyToId,
-        }),
-      }
-    );
+  const replyUrl = `${activity.serviceUrl}/v3/conversations/${activity.conversation.id}/activities`;
 
-    if (!response.ok) {
-      console.error("Teams reply failed", {
-        status: response.status,
-        body: await response.text(),
-      });
-    }
+  try {
+    await fetch(replyUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "message",
+        text: reply.text,
+        from: activity.recipient,
+        recipient: activity.from,
+        conversation: activity.conversation,
+        replyToId: reply.replyToId,
+      }),
+    });
   } catch (error) {
     console.error("Teams reply error:", error);
   }
@@ -1237,6 +1477,8 @@ async function handleClioCallback(
   env: Env
 ): Promise<Response> {
   const url = new URL(request.url);
+
+  // Get OAuth params
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
 
@@ -1248,10 +1490,7 @@ async function handleClioCallback(
   }
 
   if (!state) {
-    return Response.json(
-      { error: "Missing state parameter" },
-      { status: 400 }
-    );
+    return Response.json({ error: "Missing state parameter" }, { status: 400 });
   }
 
   // Exchange code for tokens
@@ -1279,6 +1518,7 @@ async function handleClioCallback(
     expires_in: number;
   };
 
+  // TODO: Store tokens securely
   return Response.json({
     success: true,
     token_type: tokens.token_type,
@@ -1287,14 +1527,14 @@ async function handleClioCallback(
 }
 
 // =============================================================================
-// Main Worker Export
+// Main Worker Entry Point
 // =============================================================================
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Auth routes
+    // Auth routes - handled by Better Auth
     if (url.pathname.startsWith("/api/auth")) {
       try {
         return await getAuth(env).handler(request);
@@ -1303,7 +1543,7 @@ export default {
       }
     }
 
-    // Teams webhook
+    // Teams webhook - incoming messages from Microsoft Teams
     if (url.pathname === "/api/messages") {
       return handleTeamsMessage(request, env);
     }
@@ -1313,6 +1553,7 @@ export default {
       return handleClioCallback(request, env);
     }
 
+    // Not found
     return Response.json({ error: "Not found" }, { status: 404 });
   },
 };

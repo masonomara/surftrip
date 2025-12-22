@@ -183,20 +183,20 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 
 **Checklist:**
 
-- [ ] Workers AI binding configured
-- [ ] LLM inference (`@cf/meta/llama-3.1-8b-instruct`)
-- [ ] Embedding generation (`@cf/baai/bge-base-en-v1.5`, 768 dimensions)
-- [ ] RAG retrieval (parallel Vectorize queries for KB + Org Context)
-- [ ] System prompt construction (KB context, Org Context, Clio Schema, last 15 messages)
-- [ ] Context window management (~10K tokens of 128K)
-- [ ] Single `clioQuery` tool (structured params, DO builds validated Clio calls)
-- [ ] CUD confirmation flow (pending_confirmations, 5-min expiry)
-- [ ] Confirmation classification (approve/reject/modify/unrelated)
-- [ ] Error code handling (3040, 3043 → retry once; 3036 → fail; 5007 → log)
-- [ ] Graceful degradation (RAG failure → empty context, continue)
-- [ ] Unit tests passing
-- [ ] Integration tests passing
-- [ ] Demo endpoint deployed
+- [x] Workers AI binding configured
+- [x] LLM inference (`@cf/meta/llama-3.1-8b-instruct`)
+- [x] Embedding generation (`@cf/baai/bge-base-en-v1.5`, 768 dimensions)
+- [x] RAG retrieval (parallel Vectorize queries for KB + Org Context)
+- [x] System prompt construction (KB context, Org Context, Clio Schema, last 15 messages)
+- [x] Context window management (~10K tokens of 128K)
+- [x] Single `clioQuery` tool (structured params, DO builds validated Clio calls)
+- [x] CUD confirmation flow (pending_confirmations, 5-min expiry)
+- [x] Confirmation classification (approve/reject/modify/unrelated)
+- [x] Error code handling (3040, 3043 → retry once; 3036 → fail; 5007 → log)
+- [x] Graceful degradation (RAG failure → empty context, continue)
+- [x] Unit tests passing
+- [x] Integration tests passing (RAG integration; DO SQLite tests blocked by vitest-pool-workers)
+- [x] Demo endpoint deployed
 
 ## Phase 8: Clio Integration
 

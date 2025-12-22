@@ -68,7 +68,9 @@ dist
 /docs/99*
 CLAUDE.md
 /devTools
-AuthKey_Y34VLSKMZM.p8
 migrations/meta/
 /kb
 worker-configuration.d.ts
+/.config
+/.claude
+/.vscode

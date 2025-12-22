@@ -1,3 +1,14 @@
+/**
+ * RAG (Retrieval-Augmented Generation) Service
+ *
+ * Retrieves relevant context from two sources:
+ * 1. Knowledge Base (KB) - shared best practices, legal procedures, Clio guides
+ * 2. Org Context - firm-specific documents uploaded by the organization
+ *
+ * The retrieved context is included in the LLM's system prompt to ground
+ * responses in relevant, accurate information.
+ */
+
 import { Env } from "../index";
 import { KB_CONFIG } from "../config/kb";
 
@@ -5,28 +16,32 @@ import { KB_CONFIG } from "../config/kb";
 // Types
 // =============================================================================
 
+/** Organization settings that affect which KB content is relevant */
 interface OrgSettings {
   jurisdictions: string[];
   practiceTypes: string[];
   firmSize: string | null;
 }
 
+/** A chunk of content with its source attribution */
 interface ChunkWithSource {
   content: string;
   source: string;
 }
 
+/** The combined RAG context from both sources */
 interface RAGContext {
   kbChunks: ChunkWithSource[];
   orgChunks: ChunkWithSource[];
 }
 
+/** A vector search match with score */
 interface VectorMatch {
   id: string;
   score: number;
 }
 
-// Vectorize has a limit on filter values
+// Vectorize has a limit on how many values can be in a $in filter
 const MAX_FILTER_VALUES = 50;
 
 // =============================================================================
@@ -35,7 +50,11 @@ const MAX_FILTER_VALUES = 50;
 
 /**
  * Retrieves relevant context from both the Knowledge Base and org-specific documents.
- * This is the main function called by the message handler.
+ *
+ * Process:
+ * 1. Generate embedding for the user's query
+ * 2. Query KB and org chunks in parallel using the embedding
+ * 3. Apply token budget to ensure context fits in the prompt
  */
 export async function retrieveRAGContext(
   env: Env,
@@ -57,6 +76,7 @@ export async function retrieveRAGContext(
     return applyTokenBudget({ kbChunks, orgChunks });
   } catch (error) {
     console.error("[RAG] Retrieval error:", error);
+    // Return empty context on error - LLM will still work, just without context
     return { kbChunks: [], orgChunks: [] };
   }
 }
@@ -67,17 +87,21 @@ export async function retrieveRAGContext(
 export function formatRAGContext(context: RAGContext): string {
   const sections: string[] = [];
 
+  // Format Knowledge Base section
   if (context.kbChunks.length > 0) {
     const kbContent = context.kbChunks
       .map((chunk) => `${chunk.content}\n*Source: ${chunk.source}*`)
       .join("\n\n");
+
     sections.push(`## Knowledge Base\n\n${kbContent}`);
   }
 
+  // Format Firm Context section
   if (context.orgChunks.length > 0) {
     const orgContent = context.orgChunks
       .map((chunk) => `${chunk.content}\n*Source: ${chunk.source}*`)
       .join("\n\n");
+
     sections.push(`## Firm Context\n\n${orgContent}`);
   }
 
@@ -88,6 +112,9 @@ export function formatRAGContext(context: RAGContext): string {
 // Embedding Generation
 // =============================================================================
 
+/**
+ * Generates a vector embedding for a query using Workers AI.
+ */
 async function generateQueryEmbedding(
   env: Env,
   query: string
@@ -105,7 +132,11 @@ async function generateQueryEmbedding(
 
 /**
  * Retrieves relevant chunks from the shared Knowledge Base.
- * Uses multiple filter queries to find content matching the org's context.
+ *
+ * Uses multiple filter queries to find content matching the org's context:
+ * - Always includes general best practices
+ * - Always includes federal rules (applies to all US firms)
+ * - Optionally filters by jurisdiction, practice type, and firm size
  */
 async function retrieveKBChunks(
   env: Env,
@@ -123,8 +154,9 @@ async function retrieveKBChunks(
   // Merge results, keeping the highest score for each chunk
   const bestScores = mergeVectorResults(allResults);
 
-  // Get the top 5 chunks by score
+  // Get the top N chunks by score
   const topChunkIds = getTopChunkIds(bestScores, 5);
+
   if (topChunkIds.length === 0) {
     return [];
   }
@@ -135,21 +167,26 @@ async function retrieveKBChunks(
 
 /**
  * Builds the set of Vectorize filters based on org settings.
- * We always include general and federal content, plus any org-specific filters.
+ *
+ * We run multiple parallel queries with different filters to ensure
+ * we get relevant content from multiple dimensions (general, jurisdiction-specific, etc).
  */
 function buildKBFilters(
   orgSettings: OrgSettings
 ): VectorizeVectorMetadataFilter[] {
   const filters: VectorizeVectorMetadataFilter[] = [
-    // Always include general best practices
+    // Always include general best practices (Clio usage, case management basics)
     { type: "kb", category: "general" },
-    // Always include federal rules (applies to all US firms)
+
+    // Always include federal rules (applies to all US-based firms)
     { type: "kb", jurisdiction: "federal" },
   ];
 
   // Add jurisdiction-specific filter if org has jurisdictions set
   if (orgSettings.jurisdictions.length > 0) {
+    // Limit to avoid hitting Vectorize's filter value limit
     const jurisdictions = orgSettings.jurisdictions.slice(0, MAX_FILTER_VALUES);
+
     filters.push({
       type: "kb",
       jurisdiction: { $in: jurisdictions },
@@ -159,6 +196,7 @@ function buildKBFilters(
   // Add practice type filter if org has practice types set
   if (orgSettings.practiceTypes.length > 0) {
     const practiceTypes = orgSettings.practiceTypes.slice(0, MAX_FILTER_VALUES);
+
     filters.push({
       type: "kb",
       practice_type: { $in: practiceTypes },
@@ -198,6 +236,9 @@ async function queryVectorize(
 
 /**
  * Merges multiple result sets, keeping the highest score for each chunk ID.
+ *
+ * When the same chunk matches multiple filters (e.g., it's both "general" and
+ * relevant to "CA" jurisdiction), we keep the best score.
  */
 function mergeVectorResults(resultSets: VectorMatch[][]): Map<string, number> {
   const bestScores = new Map<string, number>();
@@ -205,6 +246,7 @@ function mergeVectorResults(resultSets: VectorMatch[][]): Map<string, number> {
   for (const results of resultSets) {
     for (const match of results) {
       const currentBest = bestScores.get(match.id);
+
       if (currentBest === undefined || match.score > currentBest) {
         bestScores.set(match.id, match.score);
       }
@@ -218,7 +260,12 @@ function mergeVectorResults(resultSets: VectorMatch[][]): Map<string, number> {
  * Returns the top N chunk IDs sorted by score (descending).
  */
 function getTopChunkIds(scores: Map<string, number>, limit: number): string[] {
-  const sortedEntries = [...scores.entries()].sort((a, b) => b[1] - a[1]);
+  // Convert to array and sort by score descending
+  const sortedEntries = [...scores.entries()].sort(
+    (a, b) => b[1] - a[1] // b - a = descending
+  );
+
+  // Take the top N and return just the IDs
   return sortedEntries.slice(0, limit).map(([id]) => id);
 }
 
@@ -229,7 +276,7 @@ async function fetchKBChunksFromDB(
   env: Env,
   chunkIds: string[]
 ): Promise<ChunkWithSource[]> {
-  // Build parameterized query
+  // Build parameterized query with placeholders
   const placeholders = chunkIds.map(() => "?").join(",");
   const query = `SELECT id, content, source FROM kb_chunks WHERE id IN (${placeholders})`;
 
@@ -238,10 +285,14 @@ async function fetchKBChunksFromDB(
     .all<{ id: string; content: string; source: string }>();
 
   // Create a lookup map for efficient ordering
-  const chunkById = new Map(result.results.map((chunk) => [chunk.id, chunk]));
+  const chunkById = new Map<string, { content: string; source: string }>();
+  for (const chunk of result.results) {
+    chunkById.set(chunk.id, chunk);
+  }
 
   // Return chunks in the same order as chunkIds (by relevance score)
   const orderedChunks: ChunkWithSource[] = [];
+
   for (const id of chunkIds) {
     const chunk = chunkById.get(id);
     if (chunk) {
@@ -261,7 +312,9 @@ async function fetchKBChunksFromDB(
 
 /**
  * Retrieves org-specific context chunks.
- * These are documents uploaded by the firm (policies, procedures, etc).
+ *
+ * These are documents uploaded by the firm (policies, procedures, billing rates, etc).
+ * The org_id filter ensures we only return content for this specific organization.
  */
 async function retrieveOrgChunks(
   env: Env,
@@ -272,7 +325,10 @@ async function retrieveOrgChunks(
   const results = await env.VECTORIZE.query(queryVector, {
     topK: 5,
     returnMetadata: "all",
-    filter: { type: "org", org_id: orgId },
+    filter: {
+      type: "org",
+      org_id: orgId,
+    },
   });
 
   if (results.matches.length === 0) {
@@ -297,9 +353,12 @@ async function retrieveOrgChunks(
 
 /**
  * Trims context to fit within the token budget.
- * Prioritizes KB chunks, then adds org chunks with remaining budget.
+ *
+ * Prioritizes KB chunks (general knowledge), then adds org chunks with remaining budget.
+ * This ensures we always have foundational knowledge even if org context is large.
  */
 function applyTokenBudget(context: RAGContext): RAGContext {
+  // Calculate max characters from token budget
   const maxChars = KB_CONFIG.TOKEN_BUDGET * KB_CONFIG.CHARS_PER_TOKEN;
   let remainingChars = maxChars;
 
@@ -308,9 +367,10 @@ function applyTokenBudget(context: RAGContext): RAGContext {
     orgChunks: [],
   };
 
-  // Add KB chunks first (higher priority)
+  // Add KB chunks first (higher priority - general knowledge)
   for (const chunk of context.kbChunks) {
     const chunkSize = estimateChunkSize(chunk);
+
     if (chunkSize <= remainingChars) {
       result.kbChunks.push(chunk);
       remainingChars -= chunkSize;
@@ -320,6 +380,7 @@ function applyTokenBudget(context: RAGContext): RAGContext {
   // Add org chunks with remaining budget
   for (const chunk of context.orgChunks) {
     const chunkSize = estimateChunkSize(chunk);
+
     if (chunkSize <= remainingChars) {
       result.orgChunks.push(chunk);
       remainingChars -= chunkSize;
@@ -331,9 +392,9 @@ function applyTokenBudget(context: RAGContext): RAGContext {
 
 /**
  * Estimates the character size of a chunk for budget calculations.
- * Adds padding for formatting overhead.
+ * Adds padding for markdown formatting overhead.
  */
 function estimateChunkSize(chunk: ChunkWithSource): number {
-  const FORMATTING_OVERHEAD = 20; // For markdown formatting
+  const FORMATTING_OVERHEAD = 20; // For "*Source: ...*" and newlines
   return chunk.content.length + chunk.source.length + FORMATTING_OVERHEAD;
 }

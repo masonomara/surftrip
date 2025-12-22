@@ -1,21 +1,16 @@
 /**
- * End-to-End Demo Flow Tests
+ * E2E Demo Flow Tests
  *
- * These tests verify the complete message flow from Teams webhook to response.
- * They require a running worker (either local or deployed).
+ * These tests verify the end-to-end behavior of the Docket API
+ * by making real HTTP requests to a running worker.
  *
- * To run locally: npm run dev (in one terminal), then npm run test:e2e
- * To run against deployed: WORKER_URL=https://your-worker.workers.dev npm run test:e2e
+ * Run with: npm run test:e2e
+ * Requires: Worker running at WORKER_URL (default: http://localhost:8787)
  */
 
 import { describe, it, expect } from "vitest";
 
-// =============================================================================
-// Test Configuration
-// =============================================================================
-
-const hasWorkerUrl =
-  typeof process !== "undefined" && process.env?.WORKER_URL;
+// Base URL for the worker - can be overridden via environment variable
 const BASE_URL = process.env?.WORKER_URL || "http://localhost:8787";
 
 // =============================================================================
@@ -23,22 +18,27 @@ const BASE_URL = process.env?.WORKER_URL || "http://localhost:8787";
 // =============================================================================
 
 /**
- * Creates a valid Teams activity message for testing.
+ * Creates a mock Teams activity payload.
+ * Merges default values with any overrides provided.
  */
 function createTeamsActivity(overrides: Record<string, unknown> = {}): string {
-  return JSON.stringify({
+  const defaultActivity = {
     type: "message",
     text: "Test message",
     from: { aadObjectId: "test-user-aad-id" },
     conversation: { id: "test-conv-id", conversationType: "personal" },
     recipient: { id: "bot-id" },
     serviceUrl: "https://test.botframework.com/",
+  };
+
+  return JSON.stringify({
+    ...defaultActivity,
     ...overrides,
   });
 }
 
 /**
- * Sends a POST request to the Teams webhook endpoint.
+ * Sends a message to the Teams webhook endpoint.
  */
 async function sendTeamsMessage(body: string): Promise<Response> {
   return fetch(`${BASE_URL}/api/messages`, {
@@ -49,46 +49,45 @@ async function sendTeamsMessage(body: string): Promise<Response> {
 }
 
 // =============================================================================
-// E2E Tests
+// E2E Demo Flow Tests
 // =============================================================================
 
-describe.skipIf(!hasWorkerUrl)("E2E Demo Flow", () => {
+describe("E2E Demo Flow", () => {
   describe("User Onboarding", () => {
     it("handles messages from unlinked users gracefully", async () => {
-      // Arrange: A user that hasn't linked their account
-      const unlinkedUserMessage = createTeamsActivity({
-        from: { aadObjectId: "unlinked-user-" + Date.now() },
-      });
+      // A user who hasn't linked their account yet should get a welcome message
+      const response = await sendTeamsMessage(
+        createTeamsActivity({
+          from: { aadObjectId: `unlinked-user-${Date.now()}` },
+        })
+      );
 
-      // Act
-      const response = await sendTeamsMessage(unlinkedUserMessage);
-
-      // Assert: Should succeed (200) even for unlinked users
-      // The bot will send an onboarding message in the background
+      // Should return 200 (Teams expects success regardless of business logic)
       expect(response.status).toBe(200);
     });
   });
 
   describe("Conversation Continuity", () => {
     it("maintains context across multiple messages in a conversation", async () => {
-      // Arrange: Use a unique conversation ID
       const conversationId = `multi-turn-${Date.now()}`;
 
-      // Act: Send first message
-      const firstMessage = createTeamsActivity({
-        text: "Hello, this is my first message",
-        conversation: { id: conversationId, conversationType: "personal" },
-      });
-      const firstResponse = await sendTeamsMessage(firstMessage);
+      // Send first message
+      const firstResponse = await sendTeamsMessage(
+        createTeamsActivity({
+          text: "Hello, this is my first message",
+          conversation: { id: conversationId, conversationType: "personal" },
+        })
+      );
 
-      // Act: Send follow-up message in same conversation
-      const followUpMessage = createTeamsActivity({
-        text: "This is a follow-up message",
-        conversation: { id: conversationId, conversationType: "personal" },
-      });
-      const secondResponse = await sendTeamsMessage(followUpMessage);
+      // Send follow-up message in same conversation
+      const secondResponse = await sendTeamsMessage(
+        createTeamsActivity({
+          text: "This is a follow-up message",
+          conversation: { id: conversationId, conversationType: "personal" },
+        })
+      );
 
-      // Assert: Both messages should be processed successfully
+      // Both should succeed
       expect(firstResponse.status).toBe(200);
       expect(secondResponse.status).toBe(200);
     });
@@ -96,120 +95,100 @@ describe.skipIf(!hasWorkerUrl)("E2E Demo Flow", () => {
 
   describe("Conversation Scopes", () => {
     it("processes personal (DM) messages", async () => {
-      // Arrange
-      const personalMessage = createTeamsActivity({
-        conversation: {
-          id: `personal-${Date.now()}`,
-          conversationType: "personal",
-        },
-      });
+      const response = await sendTeamsMessage(
+        createTeamsActivity({
+          conversation: {
+            id: `personal-${Date.now()}`,
+            conversationType: "personal",
+          },
+        })
+      );
 
-      // Act
-      const response = await sendTeamsMessage(personalMessage);
-
-      // Assert
       expect(response.status).toBe(200);
     });
 
     it("processes group chat messages", async () => {
-      // Arrange
-      const groupChatMessage = createTeamsActivity({
-        conversation: {
-          id: `groupchat-${Date.now()}`,
-          conversationType: "groupChat",
-        },
-      });
+      const response = await sendTeamsMessage(
+        createTeamsActivity({
+          conversation: {
+            id: `groupchat-${Date.now()}`,
+            conversationType: "groupChat",
+          },
+        })
+      );
 
-      // Act
-      const response = await sendTeamsMessage(groupChatMessage);
-
-      // Assert
       expect(response.status).toBe(200);
     });
 
     it("processes channel messages", async () => {
-      // Arrange
-      const channelMessage = createTeamsActivity({
-        conversation: {
-          id: `channel-${Date.now()}`,
-          conversationType: "channel",
-        },
-      });
+      const response = await sendTeamsMessage(
+        createTeamsActivity({
+          conversation: {
+            id: `channel-${Date.now()}`,
+            conversationType: "channel",
+          },
+        })
+      );
 
-      // Act
-      const response = await sendTeamsMessage(channelMessage);
-
-      // Assert
       expect(response.status).toBe(200);
     });
   });
 
   describe("Error Handling", () => {
     it("handles malformed JSON gracefully", async () => {
-      // Arrange: Invalid JSON
-      const invalidJson = "this is not valid JSON {{{";
-
-      // Act
       const response = await fetch(`${BASE_URL}/api/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: invalidJson,
+        body: "this is not valid JSON {{{",
       });
 
-      // Assert: Should not crash - response status varies by error handling
+      // Should still return a response (not crash)
       expect(response.status).toBeDefined();
     });
 
     it("handles messages with missing required fields", async () => {
-      // Arrange: Activity missing text and from fields
-      const incompleteMessage = JSON.stringify({
-        type: "message",
-        // Missing: text, from, conversation
-      });
+      // Send a message activity with no text or user ID
+      const response = await sendTeamsMessage(
+        JSON.stringify({ type: "message" })
+      );
 
-      // Act
-      const response = await sendTeamsMessage(incompleteMessage);
-
-      // Assert: Should return 200 (bot ignores non-processable activities)
+      // Should return 200 (graceful handling)
       expect(response.status).toBe(200);
     });
 
     it("ignores non-message activity types", async () => {
-      // Arrange: An event that's not a message
-      const nonMessageActivity = JSON.stringify({
-        type: "conversationUpdate", // Not a message
-        membersAdded: [{ id: "user-id" }],
-      });
+      // Teams sends various activity types (conversationUpdate, etc)
+      const response = await sendTeamsMessage(
+        JSON.stringify({
+          type: "conversationUpdate",
+          membersAdded: [{ id: "user-id" }],
+        })
+      );
 
-      // Act
-      const response = await sendTeamsMessage(nonMessageActivity);
-
-      // Assert: Should succeed by ignoring
+      // Should return 200 (acknowledged but no action taken)
       expect(response.status).toBe(200);
     });
   });
 });
 
 // =============================================================================
-// Performance Tests (Skipped by default)
+// Performance Tests
 // =============================================================================
 
-describe.skip("Performance", () => {
+describe("Performance", () => {
   it("responds within acceptable time limits", async () => {
-    // Arrange
-    const message = createTeamsActivity();
     const startTime = Date.now();
 
-    // Act
-    await sendTeamsMessage(message);
+    await sendTeamsMessage(createTeamsActivity());
+
     const elapsedTime = Date.now() - startTime;
 
-    // Assert: Should respond within 5 seconds
+    // Should respond within 5 seconds
     expect(elapsedTime).toBeLessThan(5000);
   });
 
   it("handles concurrent messages without errors", async () => {
-    // Arrange: Create 5 different conversations
+    // Create 5 concurrent messages from different users/conversations
     const messages = Array.from({ length: 5 }, (_, index) =>
       createTeamsActivity({
         from: { aadObjectId: `concurrent-user-${index}` },
@@ -220,12 +199,10 @@ describe.skip("Performance", () => {
       })
     );
 
-    // Act: Send all messages concurrently
-    const responses = await Promise.all(
-      messages.map((msg) => sendTeamsMessage(msg))
-    );
+    // Send all messages in parallel
+    const responses = await Promise.all(messages.map(sendTeamsMessage));
 
-    // Assert: All should succeed
+    // All should succeed
     for (const response of responses) {
       expect(response.status).toBe(200);
     }

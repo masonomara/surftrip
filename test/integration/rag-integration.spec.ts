@@ -1,13 +1,11 @@
 /**
  * RAG Integration Tests
  *
- * These tests verify the complete RAG retrieval pipeline using real
- * Cloudflare services (D1, Vectorize, Workers AI) in test mode.
- *
- * NOTE: These tests require CLOUDFLARE_ACCOUNT_ID to be set and will
- * incur usage charges. They are skipped by default.
- *
- * To run: CLOUDFLARE_ACCOUNT_ID=xxx npm test -- test/integration/rag-integration.spec.ts
+ * Tests the complete RAG pipeline with real Workers AI and Vectorize bindings.
+ * These tests verify:
+ * - Knowledge Base retrieval with various filters
+ * - Organization context retrieval with tenant isolation
+ * - Context formatting and token budget enforcement
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -18,22 +16,27 @@ import {
 } from "../../src/services/rag-retrieval";
 
 // =============================================================================
-// Test Configuration
+// Configuration
 // =============================================================================
 
-// Skip if CLOUDFLARE_ACCOUNT_ID not set (avoids interactive prompt)
-const hasAccountId =
-  typeof process !== "undefined" && !!process.env?.CLOUDFLARE_ACCOUNT_ID;
+/** Flag to enable/disable integration tests (requires real AI bindings) */
+const integrationEnabled = !!(env as { INTEGRATION_TESTS_ENABLED?: boolean })
+  .INTEGRATION_TESTS_ENABLED;
 
-// Test identifiers - unique per test run
+/** Unique org ID for this test run */
 const testOrgId = `test-org-${Date.now()}`;
+
+/** Track vector IDs for cleanup */
 const testVectorIds: string[] = [];
+
+/** Another org ID to test tenant isolation */
 let otherOrgId: string;
 
 // =============================================================================
-// Test Data Definitions
+// Types
 // =============================================================================
 
+/** Knowledge Base chunk with metadata */
 interface KBChunk {
   id: string;
   content: string;
@@ -44,12 +47,20 @@ interface KBChunk {
   firm_size: string | null;
 }
 
+/** Organization context chunk */
 interface OrgChunk {
   id: string;
   content: string;
   source: string;
 }
 
+// =============================================================================
+// Test Data
+// =============================================================================
+
+/**
+ * Knowledge Base test chunks covering various filter combinations.
+ */
 const kbTestChunks: KBChunk[] = [
   {
     id: "kb_general_test_0",
@@ -107,6 +118,9 @@ const kbTestChunks: KBChunk[] = [
   },
 ];
 
+/**
+ * Organization context test chunks (firm-specific).
+ */
 const orgTestChunks: OrgChunk[] = [
   {
     id: `${testOrgId}_file1_0`,
@@ -121,9 +135,12 @@ const orgTestChunks: OrgChunk[] = [
 ];
 
 // =============================================================================
-// Setup Helpers
+// Test Helpers
 // =============================================================================
 
+/**
+ * Creates a test organization in D1.
+ */
 async function createTestOrg(orgId: string, name: string): Promise<void> {
   await env.DB.prepare(
     "INSERT OR IGNORE INTO org (id, name, created_at) VALUES (?, ?, datetime('now'))"
@@ -132,71 +149,77 @@ async function createTestOrg(orgId: string, name: string): Promise<void> {
     .run();
 }
 
+/**
+ * Inserts Knowledge Base chunks into D1.
+ */
 async function insertKBChunks(chunks: KBChunk[]): Promise<void> {
-  const insertStmt = env.DB.prepare(`
-    INSERT OR REPLACE INTO kb_chunks
-      (id, content, source, section, chunk_index, category, jurisdiction, practice_type, firm_size)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  const stmt = env.DB.prepare(
+    `INSERT OR REPLACE INTO kb_chunks
+     (id, content, source, section, chunk_index, category, jurisdiction, practice_type, firm_size)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
 
-  await env.DB.batch(
-    chunks.map((chunk) =>
-      insertStmt.bind(
-        chunk.id,
-        chunk.content,
-        chunk.source,
-        null, // section
-        0, // chunk_index
-        chunk.category,
-        chunk.jurisdiction,
-        chunk.practice_type,
-        chunk.firm_size
-      )
+  const bindings = chunks.map((chunk) =>
+    stmt.bind(
+      chunk.id,
+      chunk.content,
+      chunk.source,
+      null, // section
+      0, // chunk_index
+      chunk.category,
+      chunk.jurisdiction,
+      chunk.practice_type,
+      chunk.firm_size
     )
   );
+
+  await env.DB.batch(bindings);
 }
 
+/**
+ * Inserts organization context chunks into D1.
+ */
 async function insertOrgChunks(
   orgId: string,
   chunks: OrgChunk[]
 ): Promise<void> {
-  const insertStmt = env.DB.prepare(`
-    INSERT OR REPLACE INTO org_context_chunks
-      (id, org_id, file_id, content, source, chunk_index)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-
-  await env.DB.batch(
-    chunks.map((chunk, index) =>
-      insertStmt.bind(
-        chunk.id,
-        orgId,
-        "file1",
-        chunk.content,
-        chunk.source,
-        index
-      )
-    )
+  const stmt = env.DB.prepare(
+    `INSERT OR REPLACE INTO org_context_chunks
+     (id, org_id, file_id, content, source, chunk_index)
+     VALUES (?, ?, ?, ?, ?, ?)`
   );
+
+  const bindings = chunks.map((chunk, index) =>
+    stmt.bind(chunk.id, orgId, "file1", chunk.content, chunk.source, index)
+  );
+
+  await env.DB.batch(bindings);
 }
 
+/**
+ * Generates embeddings for a list of texts using Workers AI.
+ */
 async function generateEmbeddings(texts: string[]): Promise<number[][]> {
   const result = (await env.AI.run("@cf/baai/bge-base-en-v1.5", {
     text: texts,
   })) as { data: number[][] };
+
   return result.data;
 }
 
+/**
+ * Upserts KB chunk vectors into Vectorize.
+ */
 async function upsertKBVectors(chunks: KBChunk[]): Promise<void> {
-  const contents = chunks.map((c) => c.content);
-  const embeddings = await generateEmbeddings(contents);
+  const embeddings = await generateEmbeddings(chunks.map((c) => c.content));
 
-  const vectors = chunks.map((chunk, i) => ({
+  const vectors = chunks.map((chunk, index) => ({
     id: chunk.id,
-    values: embeddings[i],
+    values: embeddings[index],
     metadata: {
       type: "kb",
       source: chunk.source,
+      // Only include metadata fields that have values
       ...(chunk.category && { category: chunk.category }),
       ...(chunk.jurisdiction && { jurisdiction: chunk.jurisdiction }),
       ...(chunk.practice_type && { practice_type: chunk.practice_type }),
@@ -208,16 +231,18 @@ async function upsertKBVectors(chunks: KBChunk[]): Promise<void> {
   testVectorIds.push(...vectors.map((v) => v.id));
 }
 
+/**
+ * Upserts org context chunk vectors into Vectorize.
+ */
 async function upsertOrgVectors(
   orgId: string,
   chunks: OrgChunk[]
 ): Promise<void> {
-  const contents = chunks.map((c) => c.content);
-  const embeddings = await generateEmbeddings(contents);
+  const embeddings = await generateEmbeddings(chunks.map((c) => c.content));
 
-  const vectors = chunks.map((chunk, i) => ({
+  const vectors = chunks.map((chunk, index) => ({
     id: chunk.id,
-    values: embeddings[i],
+    values: embeddings[index],
     metadata: {
       type: "org",
       org_id: orgId,
@@ -229,29 +254,25 @@ async function upsertOrgVectors(
   testVectorIds.push(...vectors.map((v) => v.id));
 }
 
-// =============================================================================
-// Cleanup Helpers
-// =============================================================================
-
+/**
+ * Cleans up all test data from D1 and Vectorize.
+ */
 async function cleanupTestData(): Promise<void> {
-  // Clean up Vectorize
+  // Delete vectors
   if (testVectorIds.length > 0) {
     await env.VECTORIZE.deleteByIds(testVectorIds);
   }
 
-  // Clean up D1 KB chunks
+  // Delete D1 records
   await env.DB.prepare(
     "DELETE FROM kb_chunks WHERE id LIKE 'kb_%_test_%'"
   ).run();
-
-  // Clean up D1 org chunks
   await env.DB.prepare("DELETE FROM org_context_chunks WHERE org_id = ?")
     .bind(testOrgId)
     .run();
-
   await env.DB.prepare("DELETE FROM org WHERE id = ?").bind(testOrgId).run();
 
-  // Clean up other org if created
+  // Clean up the other org if created
   if (otherOrgId) {
     await env.DB.prepare("DELETE FROM org_context_chunks WHERE org_id = ?")
       .bind(otherOrgId)
@@ -261,41 +282,50 @@ async function cleanupTestData(): Promise<void> {
 }
 
 // =============================================================================
-// Tests
+// RAG Integration Tests
 // =============================================================================
 
-describe.skipIf(!hasAccountId)("RAG Integration", () => {
-  // Setup: Create test data in D1 and Vectorize
+describe.skipIf(!integrationEnabled)("RAG Integration", () => {
+  // ---------------------------------------------------------------------------
+  // Test Setup and Teardown
+  // ---------------------------------------------------------------------------
+
   beforeAll(async () => {
+    // Create test organization
     await createTestOrg(testOrgId, "Test Org");
+
+    // Insert KB and org chunks into D1
     await insertKBChunks(kbTestChunks);
     await insertOrgChunks(testOrgId, orgTestChunks);
+
+    // Upsert vectors into Vectorize
     await upsertKBVectors(kbTestChunks);
     await upsertOrgVectors(testOrgId, orgTestChunks);
 
-    // Create another org with confidential data that should NOT leak
+    // Create another org to test tenant isolation
     otherOrgId = `other-org-${Date.now()}`;
     await createTestOrg(otherOrgId, "Other Org");
 
-    const otherChunk: OrgChunk = {
+    const otherOrgChunk: OrgChunk = {
       id: `${otherOrgId}_file1_0`,
       content: "Other firm confidential info.",
       source: "other.md",
     };
 
-    await insertOrgChunks(otherOrgId, [otherChunk]);
-    await upsertOrgVectors(otherOrgId, [otherChunk]);
-  }, 30000); // 30s timeout for AI/Vectorize setup
+    await insertOrgChunks(otherOrgId, [otherOrgChunk]);
+    await upsertOrgVectors(otherOrgId, [otherOrgChunk]);
+  }, 30000);
 
   afterAll(async () => {
     await cleanupTestData();
   });
 
-  // ===========================================================================
-  // KB Retrieval Tests
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // Knowledge Base Retrieval
+  // ---------------------------------------------------------------------------
 
   describe("Knowledge Base Retrieval", () => {
+    /** Default org settings with no filters */
     const noFilters = {
       jurisdictions: [],
       practiceTypes: [],
@@ -303,7 +333,6 @@ describe.skipIf(!hasAccountId)("RAG Integration", () => {
     };
 
     it("retrieves KB content with multi-query strategy", async () => {
-      // Act
       const context = await retrieveRAGContext(
         env,
         "Clio workflows?",
@@ -311,31 +340,21 @@ describe.skipIf(!hasAccountId)("RAG Integration", () => {
         noFilters
       );
 
-      // Assert
       expect(context).toBeDefined();
       expect(Array.isArray(context.kbChunks)).toBe(true);
     });
 
     it("includes jurisdiction-specific content when filtered", async () => {
-      // Arrange
-      const californiaFilters = {
-        jurisdictions: ["CA"],
-        practiceTypes: [],
-        firmSize: null,
-      };
-
-      // Act
       const context = await retrieveRAGContext(
         env,
         "statute of limitations?",
         testOrgId,
-        californiaFilters
+        { jurisdictions: ["CA"], practiceTypes: [], firmSize: null }
       );
 
-      // Assert
       expect(Array.isArray(context.kbChunks)).toBe(true);
 
-      // If results returned, should include CA content
+      // Should include California-specific content
       if (context.kbChunks.length > 0) {
         const hasCAContent = context.kbChunks.some(
           (chunk) =>
@@ -346,22 +365,14 @@ describe.skipIf(!hasAccountId)("RAG Integration", () => {
     });
 
     it("excludes unrelated jurisdiction content", async () => {
-      // Arrange: Filter for CA only
-      const californiaFilters = {
-        jurisdictions: ["CA"],
-        practiceTypes: [],
-        firmSize: null,
-      };
-
-      // Act
       const context = await retrieveRAGContext(
         env,
         "court procedures?",
         testOrgId,
-        californiaFilters
+        { jurisdictions: ["CA"], practiceTypes: [], firmSize: null }
       );
 
-      // Assert: Should NOT include NY content when filtering for CA
+      // Should NOT include New York content when filtering for CA only
       const hasNYContent = context.kbChunks.some(
         (chunk) =>
           chunk.content.includes("New York") || chunk.source.includes("ny")
@@ -370,51 +381,38 @@ describe.skipIf(!hasAccountId)("RAG Integration", () => {
     });
 
     it("filters by practice type", async () => {
-      // Arrange
-      const piFilters = {
-        jurisdictions: [],
-        practiceTypes: ["personal-injury"],
-        firmSize: null,
-      };
-
-      // Act
       const context = await retrieveRAGContext(
         env,
         "intake process?",
         testOrgId,
-        piFilters
+        {
+          jurisdictions: [],
+          practiceTypes: ["personal-injury"],
+          firmSize: null,
+        }
       );
 
-      // Assert
       expect(Array.isArray(context.kbChunks)).toBe(true);
     });
 
     it("filters by firm size", async () => {
-      // Arrange
-      const soloFilters = {
-        jurisdictions: [],
-        practiceTypes: [],
-        firmSize: "solo",
-      };
-
-      // Act
       const context = await retrieveRAGContext(
         env,
         "time management?",
         testOrgId,
-        soloFilters
+        { jurisdictions: [], practiceTypes: [], firmSize: "solo" }
       );
 
-      // Assert
       expect(Array.isArray(context.kbChunks)).toBe(true);
     });
   });
 
-  // ===========================================================================
-  // Org Context Retrieval Tests
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // Organization Context Retrieval
+  // ---------------------------------------------------------------------------
 
   describe("Organization Context Retrieval", () => {
+    /** Default org settings with no filters */
     const noFilters = {
       jurisdictions: [],
       practiceTypes: [],
@@ -422,7 +420,6 @@ describe.skipIf(!hasAccountId)("RAG Integration", () => {
     };
 
     it("retrieves org-specific content", async () => {
-      // Act
       const context = await retrieveRAGContext(
         env,
         "billing rates?",
@@ -430,12 +427,11 @@ describe.skipIf(!hasAccountId)("RAG Integration", () => {
         noFilters
       );
 
-      // Assert
       expect(Array.isArray(context.orgChunks)).toBe(true);
     });
 
     it("does not leak content from other organizations", async () => {
-      // Act: Query for content that exists in another org
+      // Query from testOrgId - should NOT see otherOrgId's content
       const context = await retrieveRAGContext(
         env,
         "confidential",
@@ -443,7 +439,7 @@ describe.skipIf(!hasAccountId)("RAG Integration", () => {
         noFilters
       );
 
-      // Assert: Should NOT return content from other org
+      // Should NOT include other org's content
       const hasOtherOrgContent = context.orgChunks.some((chunk) =>
         chunk.content.includes("Other firm")
       );
@@ -451,22 +447,18 @@ describe.skipIf(!hasAccountId)("RAG Integration", () => {
     });
   });
 
-  // ===========================================================================
-  // Formatting Tests
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // Context Formatting
+  // ---------------------------------------------------------------------------
 
   describe("Context Formatting", () => {
     it("formats both KB and Org sections", () => {
-      // Arrange
-      const context = {
+      const formatted = formatRAGContext({
         kbChunks: [{ content: "KB content here.", source: "kb-doc.md" }],
         orgChunks: [{ content: "Org content here.", source: "org-doc.md" }],
-      };
+      });
 
-      // Act
-      const formatted = formatRAGContext(context);
-
-      // Assert
+      // Should have both sections with proper formatting
       expect(formatted).toContain("## Knowledge Base");
       expect(formatted).toContain("*Source: kb-doc.md*");
       expect(formatted).toContain("## Firm Context");
@@ -474,55 +466,48 @@ describe.skipIf(!hasAccountId)("RAG Integration", () => {
     });
 
     it("omits empty sections", () => {
-      // Arrange: Only KB content, no org content
-      const kbOnlyContext = {
+      const formatted = formatRAGContext({
         kbChunks: [{ content: "KB only content.", source: "kb.md" }],
         orgChunks: [],
-      };
+      });
 
-      // Act
-      const formatted = formatRAGContext(kbOnlyContext);
-
-      // Assert
+      // Should have KB but not Firm Context
       expect(formatted).toContain("## Knowledge Base");
       expect(formatted).not.toContain("## Firm Context");
     });
 
     it("returns empty string when no context available", () => {
-      // Arrange
-      const emptyContext = { kbChunks: [], orgChunks: [] };
+      const formatted = formatRAGContext({
+        kbChunks: [],
+        orgChunks: [],
+      });
 
-      // Act
-      const formatted = formatRAGContext(emptyContext);
-
-      // Assert
       expect(formatted).toBe("");
     });
   });
 
-  // ===========================================================================
-  // Token Budget Tests
-  // ===========================================================================
+  // ---------------------------------------------------------------------------
+  // Token Budget Enforcement
+  // ---------------------------------------------------------------------------
 
   describe("Token Budget Enforcement", () => {
     it("limits total context to fit within token budget", async () => {
-      // Arrange: Query with all filters to maximize content
-      const allFilters = {
-        jurisdictions: ["CA"],
-        practiceTypes: ["personal-injury"],
-        firmSize: "solo",
-      };
-
-      // Act
+      // Query with all filters to get maximum context
       const context = await retrieveRAGContext(
         env,
         "everything about Clio and billing",
         testOrgId,
-        allFilters
+        {
+          jurisdictions: ["CA"],
+          practiceTypes: ["personal-injury"],
+          firmSize: "solo",
+        }
       );
+
       const formatted = formatRAGContext(context);
 
-      // Assert: Budget is 3000 tokens @ ~4 chars/token = 12000 chars max
+      // Token budget is 3000 tokens * ~4 chars/token = 12000 chars
+      // But we'll check against a reasonable limit (3000 tokens)
       const estimatedTokens = formatted.length / 4;
       expect(estimatedTokens).toBeLessThanOrEqual(3000);
     });
