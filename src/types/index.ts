@@ -1,7 +1,23 @@
-// Domain types for the Docket application
+import { z } from "zod";
+
+// =============================================================================
+// Basic Types & Enums
+// =============================================================================
 
 export type OrgRole = "admin" | "member";
-export type ChannelType = "teams" | "slack" | "mcp" | "chatgpt";
+export type ChannelType = "teams" | "slack" | "mcp" | "chatgpt" | "web";
+export type FirmSize = "solo" | "small" | "mid" | "large";
+export type ConversationScope =
+  | "personal"
+  | "groupChat"
+  | "teams"
+  | "dm"
+  | "channel"
+  | "api";
+
+// =============================================================================
+// Organization & Membership
+// =============================================================================
 
 export interface Organization {
   id: string;
@@ -11,9 +27,9 @@ export interface Organization {
 }
 
 export interface OrgSettings {
-  jurisdiction: string | null;
-  practiceType: string | null;
-  firmSize: string | null;
+  jurisdictions: string[];
+  practiceTypes: string[];
+  firmSize: FirmSize | null;
 }
 
 export interface OrgMembership {
@@ -24,6 +40,34 @@ export interface OrgMembership {
   isOwner: boolean;
   createdAt: number;
 }
+
+/**
+ * Raw database row for org_members table.
+ * Use orgMemberRowToEntity() to convert to OrgMembership.
+ */
+export interface OrgMemberRow {
+  id: string;
+  user_id: string;
+  org_id: string;
+  role: OrgRole;
+  is_owner: number; // SQLite stores booleans as 0/1
+  created_at: number;
+}
+
+export function orgMemberRowToEntity(row: OrgMemberRow): OrgMembership {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    orgId: row.org_id,
+    role: row.role,
+    isOwner: row.is_owner === 1,
+    createdAt: row.created_at,
+  };
+}
+
+// =============================================================================
+// Invitations
+// =============================================================================
 
 export interface Invitation {
   id: string;
@@ -36,11 +80,19 @@ export interface Invitation {
   acceptedAt: number | null;
 }
 
+// =============================================================================
+// Channel Links
+// =============================================================================
+
 export interface ChannelLink {
   channelType: ChannelType;
   channelUserId: string;
   userId: string;
 }
+
+// =============================================================================
+// Audit Logging
+// =============================================================================
 
 export interface AuditEntry {
   id: string;
@@ -53,27 +105,94 @@ export interface AuditEntry {
   createdAt: string;
 }
 
-// Database row type - matches the actual D1 column names
-export interface OrgMemberRow {
-  id: string;
-  user_id: string;
-  org_id: string;
-  role: OrgRole;
-  is_owner: number; // SQLite stores booleans as 0/1
-  created_at: number;
+// =============================================================================
+// Channel Messages
+// =============================================================================
+
+export interface ChannelMetadata {
+  threadId?: string;
+  teamsChannelId?: string;
+  slackChannelId?: string;
+}
+
+export interface ChannelMessage {
+  channel: ChannelType;
+  orgId: string;
+  userId: string;
+  userRole: OrgRole;
+  conversationId: string;
+  conversationScope: ConversationScope;
+  message: string;
+  jurisdictions: string[];
+  practiceTypes: string[];
+  firmSize: FirmSize | null;
+  metadata?: ChannelMetadata;
 }
 
 /**
- * Converts a database row to the application entity format.
- * Handles the snake_case -> camelCase and integer -> boolean conversions.
+ * Zod schema for validating incoming channel messages.
+ * Used at the API boundary to ensure messages have all required fields.
  */
-export function orgMemberRowToEntity(row: OrgMemberRow): OrgMembership {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    orgId: row.org_id,
-    role: row.role,
-    isOwner: row.is_owner === 1,
-    createdAt: row.created_at,
+export const ChannelMessageSchema = z.object({
+  channel: z.enum(["teams", "slack", "mcp", "chatgpt", "web"]),
+  orgId: z.string().min(1),
+  userId: z.string().min(1),
+  userRole: z.enum(["admin", "member"]),
+  conversationId: z.string().min(1),
+  conversationScope: z.enum([
+    "personal",
+    "groupChat",
+    "teams",
+    "dm",
+    "channel",
+    "api",
+  ]),
+  message: z.string().min(1),
+  jurisdictions: z.array(z.string()),
+  practiceTypes: z.array(z.string()),
+  firmSize: z.enum(["solo", "small", "mid", "large"]).nullable(),
+  metadata: z
+    .object({
+      threadId: z.string().optional(),
+      teamsChannelId: z.string().optional(),
+      slackChannelId: z.string().optional(),
+    })
+    .optional(),
+});
+
+// =============================================================================
+// Pending Confirmations (for CUD operations)
+// =============================================================================
+
+export interface PendingConfirmation {
+  id: string;
+  action: "create" | "update" | "delete";
+  objectType: string;
+  params: Record<string, unknown>;
+  expiresAt: number;
+}
+
+// =============================================================================
+// LLM Types
+// =============================================================================
+
+export interface LLMMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
+export interface ToolCall {
+  name: string;
+  arguments: {
+    operation: "read" | "create" | "update" | "delete";
+    objectType: string;
+    id?: string;
+    filters?: Record<string, unknown>;
+    data?: Record<string, unknown>;
   };
+}
+
+export interface LLMResponse {
+  content: string;
+  toolCalls?: ToolCall[];
 }

@@ -17,17 +17,16 @@ These items are explicitly in Phase 6 checklist or create significant technical 
 
 ---
 
-### C9. Race Condition in Confirmation Flow
+### ~~C9. Race Condition in Confirmation Flow~~ ✓ FIXED
 
 **Problem:** Concurrent messages could clear pending confirmation.
 
-**Why Now:** Phase 6 implements pending_confirmations table. Fix the race before building on it.
+**Solution:** Implemented atomic `claimConfirmation(id)` using `DELETE ... RETURNING`. Three changes:
+1. `claimPendingConfirmation()` at line 331 atomically claims on first read
+2. `executeConfirmedOperation()` at line 836 checks claim before executing Clio
+3. `handleConfirmationResponse()` reject/modify cases at lines 760-772 check claim
 
-| Location | Issue |
-| --- | --- |
-| `src/index.ts:256-267` | Message stored before confirmation check |
-
-**Action:** Use transaction or lock for atomicity.
+Only one concurrent request can successfully claim a confirmation.
 
 ---
 

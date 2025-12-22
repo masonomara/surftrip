@@ -36,6 +36,20 @@ describe("Routes", () => {
 
       expect(response.status).toBe(405);
     });
+
+    it("ignores non-message activity types", async () => {
+      const response = await fetchWorker("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "conversationUpdate",
+          from: { aadObjectId: "test-aad-id" },
+          conversation: { id: "test-conv-id" },
+        }),
+      });
+
+      expect(response.status).toBe(200);
+    });
   });
 
   describe("/callback (Clio OAuth)", () => {
