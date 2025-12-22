@@ -34,12 +34,21 @@ KB filtering uses org settings (jurisdictions[], practiceTypes[], firmSize) pass
 
 ## Org Context Upload Flow
 
+**Supported File Types:**
+
+| Category | Types |
+|----------|-------|
+| Documents | PDF, DOCX, ODT |
+| Spreadsheets | XLSX, ODS, Numbers, CSV |
+| Presentations | PPTX |
+| Text | Markdown, Plain Text, HTML, XML |
+
 **Upload:**
 
 1. Admin uploads file on Docket website
-2. Validate: MIME type + extension (PDF, DOCX, MD only), size limit (25MB), sanitize filename
+2. Validate: MIME type + extension, magic bytes verification, size limit (25MB), sanitize filename (255 char max, no double extensions)
 3. Stores raw file in R2: `/orgs/{org_id}/docs/{file_id}` (file_id is UUID)
-4. Parse to text (PDF: `unpdf`, DOCX: `mammoth`, MD: direct) - wrap in try/catch, log failures
+4. Parse to text via Workers AI `toMarkdown()` (plain text/markdown passed through directly)
 5. Chunk text (~500 chars, chunk*id format: `{org_id}*{file*id}*{chunk_index}`)
 6. Store chunks in D1 `org_context_chunks`
 7. Generate embeddings (~100 chunks per batch)

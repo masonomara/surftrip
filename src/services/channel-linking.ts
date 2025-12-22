@@ -73,9 +73,11 @@ export async function findUserByEmail(
   db: D1Database,
   email: string
 ): Promise<string | null> {
+  const normalizedEmail = email.trim().toLowerCase();
+
   const result = await db
     .prepare(`SELECT id FROM user WHERE email = ?`)
-    .bind(email)
+    .bind(normalizedEmail)
     .first<{ id: string }>();
 
   return result?.id ?? null;
@@ -96,14 +98,11 @@ export async function getUserChannelLinks(
     WHERE user_id = ?
   `;
 
-  const result = await db
-    .prepare(query)
-    .bind(userId)
-    .all<{
-      channel_type: ChannelType;
-      channel_user_id: string;
-      created_at: number;
-    }>();
+  const result = await db.prepare(query).bind(userId).all<{
+    channel_type: ChannelType;
+    channel_user_id: string;
+    created_at: number;
+  }>();
 
   return result.results.map((row) => ({
     channelType: row.channel_type,

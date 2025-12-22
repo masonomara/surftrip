@@ -67,7 +67,7 @@ describe("validateFile", () => {
 
   describe("file type validation", () => {
     it("rejects unsupported MIME types", () => {
-      const result = validateFile("script.js", "application/javascript", 1000);
+      const result = validateFile("image.png", "image/png", 1000);
 
       expect(result.valid).toBe(false);
       expect(result.error).toContain("Unsupported");
@@ -150,6 +150,69 @@ describe("validateFile", () => {
 
     it("strips other control chars and still validates", () => {
       const result = validateFile("doc\x1fument.pdf", "application/pdf", 100);
+
+      expect(result.valid).toBe(true);
+    });
+  });
+
+  describe("filename length validation", () => {
+    it("rejects filenames over 255 characters", () => {
+      const longName = "a".repeat(252) + ".pdf";
+      const result = validateFile(longName, "application/pdf", 100);
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("255");
+    });
+
+    it("accepts filenames at exactly 255 characters", () => {
+      const maxName = "a".repeat(251) + ".pdf";
+      const result = validateFile(maxName, "application/pdf", 100);
+
+      expect(result.valid).toBe(true);
+    });
+  });
+
+  describe("double extension protection", () => {
+    it("rejects double extensions with document type first", () => {
+      const result = validateFile("invoice.pdf.html", "text/html", 100);
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("double extensions");
+    });
+
+    it("rejects dangerous extensions anywhere in filename", () => {
+      const result = validateFile("script.exe.pdf", "application/pdf", 100);
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("dangerous extension");
+    });
+
+    it("accepts legitimate multi-part filenames", () => {
+      const result = validateFile("report.2024.final.pdf", "application/pdf", 100);
+
+      expect(result.valid).toBe(true);
+    });
+  });
+
+  describe("magic bytes validation", () => {
+    it("rejects PDF with wrong magic bytes", () => {
+      const fakeContent = new TextEncoder().encode("not a pdf file").buffer;
+      const result = validateFile("fake.pdf", "application/pdf", 100, fakeContent);
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("does not match");
+    });
+
+    it("accepts PDF with correct magic bytes", () => {
+      const pdfContent = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]).buffer;
+      const result = validateFile("real.pdf", "application/pdf", 100, pdfContent);
+
+      expect(result.valid).toBe(true);
+    });
+
+    it("validates text files as UTF-8", () => {
+      const validText = new TextEncoder().encode("Hello world").buffer;
+      const result = validateFile("notes.txt", "text/plain", 100, validText);
 
       expect(result.valid).toBe(true);
     });

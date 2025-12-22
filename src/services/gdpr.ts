@@ -2,8 +2,10 @@
  * GDPR Data Deletion Service
  *
  * Handles the "right to be forgotten" - complete deletion of a user's data
- * across all storage locations (D1, DOs, R2 audit logs).
+ * across all storage locations (D1, DOs, R2 audit logs, Vectorize).
  */
+
+import { KB_CONFIG } from "../config/kb";
 
 // =============================================================================
 // Types
@@ -27,6 +29,7 @@ export interface GdprDeleteResult {
     channelLinks: number;
     orgMemberships: number;
   };
+  deletedVectorizeChunks: number;
   purgedFromDOs: DOPurgeResult[];
   anonymizedAuditLogs: number;
   errors: string[];
@@ -163,6 +166,51 @@ export async function anonymizeAuditLogs(
 }
 
 // =============================================================================
+// Vectorize Deletion
+// =============================================================================
+
+/**
+ * Deletes user's org context embeddings from Vectorize.
+ * GDPR Article 17 requires complete removal of user data, including embeddings.
+ */
+async function deleteUserChunksFromVectorize(
+  db: D1Database,
+  vectorize: VectorizeIndex,
+  userId: string
+): Promise<number> {
+  // Find all chunk IDs uploaded by this user
+  const chunks = await db
+    .prepare(`SELECT id FROM org_context_chunks WHERE uploaded_by = ?`)
+    .bind(userId)
+    .all<{ id: string }>();
+
+  if (chunks.results.length === 0) {
+    return 0;
+  }
+
+  const chunkIds = chunks.results.map((row) => row.id);
+
+  // Delete from Vectorize in batches
+  for (let i = 0; i < chunkIds.length; i += KB_CONFIG.VECTORIZE_BATCH_SIZE) {
+    const batch = chunkIds.slice(i, i + KB_CONFIG.VECTORIZE_BATCH_SIZE);
+    await vectorize.deleteByIds(batch);
+  }
+
+  // Delete from D1 (the org_context_chunks records)
+  // Using batched delete to avoid hitting query limits
+  for (let i = 0; i < chunkIds.length; i += 100) {
+    const batch = chunkIds.slice(i, i + 100);
+    const placeholders = batch.map(() => "?").join(",");
+    await db
+      .prepare(`DELETE FROM org_context_chunks WHERE id IN (${placeholders})`)
+      .bind(...batch)
+      .run();
+  }
+
+  return chunkIds.length;
+}
+
+// =============================================================================
 // D1 Record Deletion
 // =============================================================================
 
@@ -222,12 +270,14 @@ async function deleteUserFromD1(
  * Process:
  * 1. Check for sole ownership (must transfer first)
  * 2. Purge user data from each org's Durable Object
- * 3. Delete user record from D1 (cascades to sessions, accounts, etc)
- * 4. Anonymize audit logs in R2
+ * 3. Delete user's org context chunks from Vectorize
+ * 4. Delete user record from D1 (cascades to sessions, accounts, etc)
+ * 5. Anonymize audit logs in R2
  */
 export async function deleteUserData(
   db: D1Database,
   r2: R2Bucket,
+  vectorize: VectorizeIndex,
   userId: string,
   tenant?: DurableObjectNamespace
 ): Promise<GdprDeleteResult | SoleOwnershipError> {
@@ -258,6 +308,7 @@ export async function deleteUserData(
         channelLinks: 0,
         orgMemberships: 0,
       },
+      deletedVectorizeChunks: 0,
       purgedFromDOs: [],
       anonymizedAuditLogs: 0,
       errors: ["User not found"],
@@ -313,7 +364,19 @@ export async function deleteUserData(
     }
   }
 
-  // Step 5: Delete user from D1
+  // Step 5: Delete user's org context chunks from Vectorize
+  let deletedVectorizeChunks = 0;
+  try {
+    deletedVectorizeChunks = await deleteUserChunksFromVectorize(
+      db,
+      vectorize,
+      userId
+    );
+  } catch (error) {
+    errors.push(`Vectorize deletion failed: ${error}`);
+  }
+
+  // Step 6: Delete user from D1
   let deletedRecords;
   try {
     deletedRecords = await deleteUserFromD1(db, userId);
@@ -327,13 +390,14 @@ export async function deleteUserData(
         channelLinks: 0,
         orgMemberships: 0,
       },
+      deletedVectorizeChunks,
       purgedFromDOs,
       anonymizedAuditLogs: 0,
       errors: [`D1 deletion failed: ${error}`],
     };
   }
 
-  // Step 6: Anonymize audit logs
+  // Step 7: Anonymize audit logs
   let anonymizedCount = 0;
   try {
     anonymizedCount = await anonymizeAuditLogs(r2, userId);
@@ -348,6 +412,7 @@ export async function deleteUserData(
       user: true,
       ...deletedRecords,
     },
+    deletedVectorizeChunks,
     purgedFromDOs,
     anonymizedAuditLogs: anonymizedCount,
     errors,

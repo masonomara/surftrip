@@ -195,23 +195,29 @@ export async function transferOwnership(
     };
   }
 
-  // Perform the transfer atomically
+  // D1 batch() is atomic: all statements succeed or all rollback on failure
   try {
-    await db.batch([
-      // Remove ownership from current owner (they stay as admin)
+    const results = await db.batch([
       db
         .prepare(
           `UPDATE org_members SET is_owner = 0 WHERE user_id = ? AND org_id = ?`
         )
         .bind(fromUserId, orgId),
-
-      // Grant ownership to new owner
       db
         .prepare(
           `UPDATE org_members SET is_owner = 1 WHERE user_id = ? AND org_id = ?`
         )
         .bind(toUserId, orgId),
     ]);
+
+    // Verify both updates affected exactly one row each
+    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+      return {
+        success: false,
+        error: "db_error",
+        message: "Ownership transfer failed: unexpected row count.",
+      };
+    }
 
     return { success: true };
   } catch (error) {

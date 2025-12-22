@@ -18,7 +18,7 @@ export const KB_CONFIG = {
   CHARS_PER_TOKEN: 4, // Rough estimate for budget calculations
 
   // Retrieval settings
-  KB_TOP_K: 3, // Number of KB chunks to retrieve per filter
+  KB_TOP_K: 5, // Number of KB chunks to retrieve per filter
   ORG_TOP_K: 5, // Number of org context chunks to retrieve
 
   // Upload limits

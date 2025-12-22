@@ -13,6 +13,8 @@ import { KB_CONFIG } from "../config/kb";
 import { R2Paths } from "../storage/r2-paths";
 import { chunkText, generateEmbeddings } from "./kb-builder";
 
+const MAX_FILENAME_LENGTH = 255;
+
 // Map of allowed MIME types to their expected file extensions
 const ALLOWED_FILE_TYPES: Map<string, string> = new Map([
   ["application/pdf", ".pdf"],
@@ -39,6 +41,55 @@ const ALLOWED_FILE_TYPES: Map<string, string> = new Map([
   ["text/xml", ".xml"],
 ]);
 
+// Magic bytes for MIME type verification
+const MAGIC_BYTES: Map<string, Uint8Array> = new Map([
+  ["application/pdf", new Uint8Array([0x25, 0x50, 0x44, 0x46])], // %PDF
+  // OOXML and ODF formats are ZIP-based
+  [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+  ],
+  [
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+  ],
+  [
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+  ],
+  [
+    "application/vnd.oasis.opendocument.text",
+    new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+  ],
+  [
+    "application/vnd.oasis.opendocument.spreadsheet",
+    new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+  ],
+  ["application/vnd.apple.numbers", new Uint8Array([0x50, 0x4b, 0x03, 0x04])],
+]);
+
+// Dangerous extensions that should never appear in filenames
+const DANGEROUS_EXTENSIONS = new Set([
+  ".exe",
+  ".dll",
+  ".bat",
+  ".cmd",
+  ".ps1",
+  ".sh",
+  ".php",
+  ".jsp",
+  ".asp",
+  ".aspx",
+  ".cgi",
+  ".pl",
+  ".py",
+  ".rb",
+  ".js",
+  ".vbs",
+  ".wsf",
+  ".scr",
+]);
+
 /**
  * Clean and validate a filename for security issues.
  */
@@ -46,8 +97,20 @@ function sanitizeFilename(filename: string): { safe: string; error?: string } {
   // Normalize unicode and strip control characters
   const cleaned = filename.normalize("NFC").replace(/[\x00-\x1f\x7f]/g, "");
 
+  // Check filename length
+  if (cleaned.length > MAX_FILENAME_LENGTH) {
+    return {
+      safe: "",
+      error: `Filename exceeds ${MAX_FILENAME_LENGTH} characters`,
+    };
+  }
+
   // Check for path traversal attempts
-  if (cleaned.includes("..") || cleaned.includes("/") || cleaned.includes("\\")) {
+  if (
+    cleaned.includes("..") ||
+    cleaned.includes("/") ||
+    cleaned.includes("\\")
+  ) {
     return { safe: "", error: "Invalid filename: path traversal detected" };
   }
 
@@ -63,7 +126,58 @@ function sanitizeFilename(filename: string): { safe: string; error?: string } {
     return { safe: "", error: "Invalid filename: hidden files not allowed" };
   }
 
+  // Reject double extensions (e.g., file.pdf.exe, file.txt.php)
+  const parts = cleaned.toLowerCase().split(".");
+  if (parts.length > 2) {
+    // Check non-final extensions for document types (indicates double extension attack)
+    const allowedExtensions = new Set(ALLOWED_FILE_TYPES.values());
+    for (let i = 1; i < parts.length - 1; i++) {
+      const ext = "." + parts[i];
+      if (allowedExtensions.has(ext)) {
+        return {
+          safe: "",
+          error: "Invalid filename: double extensions not allowed",
+        };
+      }
+    }
+  }
+  // Check if any dangerous extension appears anywhere in filename
+  for (const ext of DANGEROUS_EXTENSIONS) {
+    if (cleaned.toLowerCase().includes(ext)) {
+      return {
+        safe: "",
+        error: "Invalid filename: dangerous extension detected",
+      };
+    }
+  }
+
   return { safe: cleaned };
+}
+
+/**
+ * Verify file content matches claimed MIME type via magic bytes.
+ */
+function verifyMagicBytes(content: ArrayBuffer, mimeType: string): boolean {
+  const expected = MAGIC_BYTES.get(mimeType);
+  if (!expected) {
+    // Text formats don't have magic bytes - verify they're valid UTF-8
+    if (mimeType.startsWith("text/") || mimeType === "application/xml") {
+      try {
+        const decoder = new TextDecoder("utf-8", {
+          fatal: true,
+          ignoreBOM: false,
+        });
+        decoder.decode(content.slice(0, 1024));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  const header = new Uint8Array(content.slice(0, expected.length));
+  return expected.every((byte, i) => header[i] === byte);
 }
 
 /**
@@ -72,7 +186,8 @@ function sanitizeFilename(filename: string): { safe: string; error?: string } {
 export function validateFile(
   filename: string,
   mimeType: string,
-  size: number
+  size: number,
+  content?: ArrayBuffer
 ): { valid: boolean; error?: string } {
   // Check filename is safe
   const { safe, error } = sanitizeFilename(filename);
@@ -94,7 +209,15 @@ export function validateFile(
   // Verify extension matches MIME type
   const actualExt = safe.toLowerCase().slice(safe.lastIndexOf("."));
   if (actualExt !== expectedExt) {
-    return { valid: false, error: `Extension mismatch: expected ${expectedExt}` };
+    return {
+      valid: false,
+      error: `Extension mismatch: expected ${expectedExt}`,
+    };
+  }
+
+  // Verify MIME type via magic bytes if content provided
+  if (content && !verifyMagicBytes(content, mimeType)) {
+    return { valid: false, error: "File content does not match declared type" };
   }
 
   return { valid: true };
@@ -155,7 +278,12 @@ export async function uploadOrgContext(
   userId?: string
 ): Promise<UploadResult> {
   // Validate the file first
-  const validation = validateFile(filename, mimeType, content.byteLength);
+  const validation = validateFile(
+    filename,
+    mimeType,
+    content.byteLength,
+    content
+  );
   if (!validation.valid) {
     return { success: false, error: validation.error };
   }

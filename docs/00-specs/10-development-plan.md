@@ -2,7 +2,11 @@
 
 Each phase needs to have simple unit, integration (if applicable), and end-to-end testing, as well as a verbose component/example that demonstrates what was accomplished in each phase for shareholder demonstration.
 
+**Overall Progress:** Phases 2-7 complete (100%). Phase 8 next.
+
 ## Phase 1: Validate Plan
+
+**Completion:** 20% (interviews deferred)
 
 **Checklist:**
 
@@ -13,6 +17,8 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 - [ ] Interview notes archived in `/docs/01-user-interviews`
 
 ## Phase 2: Accounts & Project Init
+
+**Completion:** 100%
 
 **Checklist:**
 
@@ -46,6 +52,8 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 
 ## Phase 3: Storage Layer
 
+**Completion:** 100%
+
 **Checklist:**
 
 - [x] All migration files created
@@ -78,6 +86,10 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 - `test/storage.spec.ts`
 
 ## Phase 4: Auth Foundation
+
+**Completion:** 100%
+
+**Skipped Tests:** SSO Providers (2 tests) — requires external OAuth setup
 
 **Checklist:**
 
@@ -119,6 +131,8 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 
 ## Phase 5: Knowledge Base
 
+**Completion:** 100%
+
 **Checklist:**
 
 - [x] KB folder structure created (`/kb/federal/`, `/kb/jurisdictions/`, `/kb/practice-types/`, `/kb/firm-sizes/`)
@@ -147,6 +161,10 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 **Note:** Shared KB content (Clio workflows, deadline calculations, billing guidance) requires legal expert review. Use placeholder content if unavailable.
 
 ## Phase 6: Core Worker + Durable Object
+
+**Completion:** 100%
+
+**Skipped Tests:** TenantDO (19 tests), Message Flow E2E (7 tests) — DO SQLite blocked by vitest-pool-workers SQLITE_AUTH limitation
 
 **Checklist:**
 
@@ -181,6 +199,10 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 
 ## Phase 7: Workers AI + RAG
 
+**Completion:** 100%
+
+**Skipped Tests:** RAG Integration (11 tests) — requires INTEGRATION_TESTS_ENABLED flag for live Vectorize/AI calls
+
 **Checklist:**
 
 - [x] Workers AI binding configured
@@ -199,6 +221,8 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 - [x] Demo endpoint deployed
 
 ## Phase 8: Clio Integration
+
+**Completion:** 0% — Next phase
 
 **Checklist:**
 

@@ -42,7 +42,7 @@ interface VectorMatch {
 }
 
 // Vectorize has a limit on how many values can be in a $in filter
-const MAX_FILTER_VALUES = 50;
+const MAX_FILTER_VALUES = 5;
 
 // =============================================================================
 // Main Entry Point

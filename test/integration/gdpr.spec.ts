@@ -157,7 +157,12 @@ describe("GDPR Deletion", () => {
         .run();
 
       // Delete the user
-      const result = (await deleteUserData(env.DB, env.R2, userId)) as {
+      const result = (await deleteUserData(
+        env.DB,
+        env.R2,
+        env.VECTORIZE,
+        userId
+      )) as {
         success: boolean;
         deletedRecords: { user: boolean; sessions: number };
       };
@@ -185,6 +190,7 @@ describe("GDPR Deletion", () => {
       const result = (await deleteUserData(
         env.DB,
         env.R2,
+        env.VECTORIZE,
         userId
       )) as SoleOwnershipError;
 
@@ -202,6 +208,7 @@ describe("GDPR Deletion", () => {
       const result = (await deleteUserData(
         env.DB,
         env.R2,
+        env.VECTORIZE,
         crypto.randomUUID()
       )) as { success: boolean; errors: string[] };
 

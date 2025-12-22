@@ -297,20 +297,41 @@ ${
         }>;
       };
 
+      // Validate response structure
+      if (!result || typeof result !== "object") {
+        return {
+          content: "I couldn't process that response. Please try again.",
+        };
+      }
+
       // Parse tool calls if present
       let toolCalls: ToolCall[] | undefined;
-      if (result.tool_calls && result.tool_calls.length > 0) {
-        toolCalls = result.tool_calls.map((tc) => ({
-          name: tc.name,
-          arguments:
-            typeof tc.arguments === "string"
-              ? JSON.parse(tc.arguments)
-              : tc.arguments,
-        }));
+      if (
+        result.tool_calls &&
+        Array.isArray(result.tool_calls) &&
+        result.tool_calls.length > 0
+      ) {
+        toolCalls = [];
+        for (const tc of result.tool_calls) {
+          if (!tc.name) continue;
+          try {
+            const args =
+              typeof tc.arguments === "string"
+                ? JSON.parse(tc.arguments)
+                : tc.arguments ?? {};
+            toolCalls.push({ name: tc.name, arguments: args });
+          } catch {
+            // Skip malformed tool call, log for debugging
+            console.error(
+              `[TenantDO:${this.orgId}] Failed to parse tool arguments for ${tc.name}`
+            );
+          }
+        }
+        if (toolCalls.length === 0) toolCalls = undefined;
       }
 
       return {
-        content: result.response || "",
+        content: typeof result.response === "string" ? result.response : "",
         toolCalls,
       };
     } catch (error) {
@@ -551,23 +572,63 @@ Only include modifiedRequest if intent is "modify".`;
         { prompt, max_tokens: 100 }
       );
 
-      // Extract the response text
+      // Extract the response text safely
       const text =
         typeof response === "string"
           ? response
-          : (response as { response: string }).response;
+          : response &&
+            typeof response === "object" &&
+            typeof (response as Record<string, unknown>).response === "string"
+          ? ((response as Record<string, unknown>).response as string)
+          : "";
 
-      // Parse JSON from the response
-      const jsonMatch = text.match(/\{[^}]+\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+      if (!text) {
+        return { intent: "unclear" };
       }
+
+      // Parse JSON from response - find balanced braces
+      const startIdx = text.indexOf("{");
+      if (startIdx === -1) {
+        return { intent: "unclear" };
+      }
+
+      let depth = 0;
+      let endIdx = -1;
+      for (let i = startIdx; i < text.length; i++) {
+        if (text[i] === "{") depth++;
+        else if (text[i] === "}") depth--;
+        if (depth === 0) {
+          endIdx = i;
+          break;
+        }
+      }
+
+      if (endIdx === -1) {
+        return { intent: "unclear" };
+      }
+
+      const jsonStr = text.slice(startIdx, endIdx + 1);
+      const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+
+      // Validate parsed result
+      const validIntents = ["approve", "reject", "modify", "unrelated"];
+      const intent =
+        typeof parsed.intent === "string" &&
+        validIntents.includes(parsed.intent)
+          ? parsed.intent
+          : "unclear";
+
+      return {
+        intent,
+        modifiedRequest:
+          intent === "modify" && typeof parsed.modifiedRequest === "string"
+            ? parsed.modifiedRequest
+            : undefined,
+      };
     } catch (error) {
       console.error(`[TenantDO:${this.orgId}] Classification error:`, error);
+      return { intent: "unclear" };
     }
-
-    // Default to unclear if we can't parse the response
-    return { intent: "unclear" };
   }
 
   private async executeConfirmedOperation(
@@ -734,20 +795,23 @@ Only include modifiedRequest if intent is "modify".`;
     conversationId: string,
     userId: string
   ): Promise<PendingConfirmation | null> {
-    // First, clean up any expired confirmations
-    this.sql.exec(
-      "DELETE FROM pending_confirmations WHERE expires_at < ?",
-      Date.now()
-    );
+    // Wrap cleanup and claim in a transaction for atomicity
+    const row = this.ctx.storage.transactionSync(() => {
+      // Clean up any expired confirmations
+      this.sql.exec(
+        "DELETE FROM pending_confirmations WHERE expires_at < ?",
+        Date.now()
+      );
 
-    // Try to claim (delete and return) a pending confirmation for this user
-    const row = this.sql
-      .exec(
-        `DELETE FROM pending_confirmations WHERE conversation_id = ? AND user_id = ? RETURNING id, action, object_type, params, expires_at`,
-        conversationId,
-        userId
-      )
-      .one();
+      // Try to claim (delete and return) a pending confirmation for this user
+      return this.sql
+        .exec(
+          `DELETE FROM pending_confirmations WHERE conversation_id = ? AND user_id = ? RETURNING id, action, object_type, params, expires_at`,
+          conversationId,
+          userId
+        )
+        .one();
+    });
 
     if (!row) {
       return null;
@@ -1108,6 +1172,10 @@ Only include modifiedRequest if intent is "modify".`;
 
   async alarm(): Promise<void> {
     const now = Date.now();
+
+    // Schedule next alarm for tomorrow
+    await this.ctx.storage.setAlarm(now + 24 * 60 * 60 * 1000);
+
     const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
 
     // Find stale conversations (not updated in 30 days and not archived)
@@ -1128,9 +1196,6 @@ Only include modifiedRequest if intent is "modify".`;
       "DELETE FROM pending_confirmations WHERE expires_at < ?",
       now
     );
-
-    // Schedule next alarm for tomorrow
-    await this.ctx.storage.setAlarm(now + 24 * 60 * 60 * 1000);
   }
 
   private async archiveConversation(conversationId: string): Promise<void> {
@@ -1158,11 +1223,18 @@ Only include modifiedRequest if intent is "modify".`;
       archivedAt: new Date().toISOString(),
     };
 
-    await this.env.R2.put(
-      `orgs/${this.orgId}/conversations/${conversationId}.json`,
+    const archiveKey = `orgs/${this.orgId}/conversations/${conversationId}.json`;
+    const result = await this.env.R2.put(
+      archiveKey,
       JSON.stringify(archiveData),
-      { httpMetadata: { contentType: "application/json" } }
+      {
+        httpMetadata: { contentType: "application/json" },
+      }
     );
+
+    if (!result) {
+      throw new Error(`Failed to archive conversation ${conversationId} to R2`);
+    }
 
     // Mark as archived and delete messages
     this.sql.exec(
