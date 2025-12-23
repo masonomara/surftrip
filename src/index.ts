@@ -1,3 +1,15 @@
+// =============================================================================
+// Docket Worker - Main Entry Point
+// =============================================================================
+//
+// This is the main Cloudflare Worker for the Docket case management assistant.
+// It handles:
+// - Incoming messages from Teams/Slack
+// - OAuth flow for Clio integration
+// - Demo page for testing Clio integration
+//
+// All per-organization state is stored in TenantDO (Durable Object).
+
 import { DurableObject } from "cloudflare:workers";
 import { getAuth } from "./lib/auth";
 import { AuditEntryInputSchema, type AuditEntryInput } from "./types/requests";
@@ -9,61 +21,60 @@ import {
   type ToolCall,
 } from "./types";
 import { retrieveRAGContext, formatRAGContext } from "./services/rag-retrieval";
+import {
+  fetchAllSchemas,
+  CLIO_SCHEMA_VERSION,
+  schemaNeedsRefresh,
+} from "./services/clio-schema";
+import {
+  generateCodeVerifier,
+  generateCodeChallenge,
+  generateState,
+  verifyState,
+  buildAuthorizationUrl,
+  exchangeCodeForTokens,
+  storeClioTokens,
+  getClioTokens,
+  deleteClioTokens,
+  tokenNeedsRefresh,
+  refreshAccessToken,
+  type ClioTokens,
+} from "./services/clio-oauth";
+import {
+  executeClioCall,
+  buildReadQuery,
+  buildCreateBody,
+  buildUpdateBody,
+  buildDeleteEndpoint,
+  formatClioResponse,
+} from "./services/clio-api";
+import { renderClioDemo, type DemoState } from "./demo/clio-demo";
+import type { Env } from "./types/env";
+
+export type { Env };
 
 // =============================================================================
-// Environment Configuration
+// Tenant Durable Object
 // =============================================================================
+//
+// Each organization gets its own TenantDO instance, providing:
+// - Complete data isolation between organizations
+// - Per-org conversation history
+// - Per-org Clio token storage
+// - Per-org schema cache
 
-export interface Env {
-  // Storage
-  DB: D1Database;
-  TENANT: DurableObjectNamespace;
-  R2: R2Bucket;
-
-  // AI Services
-  AI: Ai;
-  VECTORIZE: VectorizeIndex;
-
-  // Clio OAuth
-  CLIO_CLIENT_ID: string;
-  CLIO_CLIENT_SECRET: string;
-
-  // Better Auth
-  BETTER_AUTH_SECRET: string;
-  BETTER_AUTH_URL: string;
-
-  // Apple Sign In
-  APPLE_CLIENT_ID: string;
-  APPLE_CLIENT_SECRET: string;
-  APPLE_APP_BUNDLE_IDENTIFIER: string;
-
-  // Google Sign In
-  GOOGLE_CLIENT_ID: string;
-  GOOGLE_CLIENT_SECRET: string;
-
-  // Runtime
-  ENVIRONMENT?: string;
-}
-
-// =============================================================================
-// TenantDO - Per-Organization Durable Object
-// =============================================================================
-
-/**
- * Each organization gets its own TenantDO instance.
- * This provides tenant isolation for conversations, messages, and Clio operations.
- */
 export class TenantDO extends DurableObject<Env> {
   private sql: SqlStorage;
   private orgId: string;
   private schemaCache: Map<string, object> = new Map();
+  private schemaVersion: number | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
     this.orgId = ctx.id.toString();
 
-    // Initialize the DO - runs migrations, loads cache, sets up alarms
+    // Initialize on first access (runs once)
     ctx.blockConcurrencyWhile(async () => {
       await this.runMigrations();
       await this.loadSchemaCache();
@@ -71,32 +82,50 @@ export class TenantDO extends DurableObject<Env> {
     });
   }
 
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
   // Request Router
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
     try {
       switch (url.pathname) {
+        // Core functionality
         case "/process-message":
           return this.handleProcessMessage(request);
-
         case "/audit":
           return this.handleAudit(request);
 
+        // Schema management
         case "/refresh-schema":
           return this.handleRefreshSchema(request);
+        case "/provision-schema":
+          return this.handleProvisionSchema(request);
+        case "/force-schema-refresh":
+          return this.handleForceSchemaRefresh(request);
 
+        // User/org management
         case "/remove-user":
           return this.handleRemoveUser(request);
-
         case "/delete-org":
           return this.handleDeleteOrg(request);
-
         case "/purge-user-data":
           return this.handlePurgeUserData(request);
+
+        // Clio token management
+        case "/store-clio-token":
+          return this.handleStoreClioToken(request);
+
+        // Demo endpoints
+        case "/demo-status":
+          return this.handleDemoStatus(request);
+        case "/demo-disconnect":
+          return this.handleDemoDisconnect(request);
+        case "/demo-refresh-token":
+          return this.handleDemoRefreshToken(request);
+        case "/demo-test-api":
+          return this.handleDemoTestApi(request);
 
         default:
           return Response.json({ error: "Not found" }, { status: 404 });
@@ -107,17 +136,16 @@ export class TenantDO extends DurableObject<Env> {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Message Processing - Core Chat Flow
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // Message Processing
+  // ===========================================================================
 
   private async handleProcessMessage(request: Request): Promise<Response> {
-    // Only accept POST requests
     if (request.method !== "POST") {
       return Response.json({ error: "Method not allowed" }, { status: 405 });
     }
 
-    // Parse and validate the incoming message
+    // Validate message format
     const body = await request.json();
     const parseResult = ChannelMessageSchema.safeParse(body);
 
@@ -130,40 +158,33 @@ export class TenantDO extends DurableObject<Env> {
 
     const message = parseResult.data;
 
-    // Security check: message must be for this org's DO
+    // Verify organization matches
     if (message.orgId !== this.orgId) {
       return Response.json({ error: "Organization mismatch" }, { status: 403 });
     }
 
-    // Ensure conversation exists (creates if new)
+    // Ensure conversation exists in DB
     await this.ensureConversationExists(message);
 
-    // Check if there's a pending confirmation waiting for this user
+    // Check if there's a pending confirmation waiting for response
     const pendingConfirmation = await this.claimPendingConfirmation(
       message.conversationId,
       message.userId
     );
 
-    // Store the user's message
+    // Store user message
     await this.storeMessage(message.conversationId, {
       role: "user",
       content: message.message,
       userId: message.userId,
     });
 
-    // Generate response - either handle confirmation or generate new response
-    let response: string;
+    // Generate response (either handle confirmation or new query)
+    const response = pendingConfirmation
+      ? await this.handleConfirmationResponse(message, pendingConfirmation)
+      : await this.generateAssistantResponse(message);
 
-    if (pendingConfirmation) {
-      response = await this.handleConfirmationResponse(
-        message,
-        pendingConfirmation
-      );
-    } else {
-      response = await this.generateAssistantResponse(message);
-    }
-
-    // Store the assistant's response
+    // Store assistant response
     await this.storeMessage(message.conversationId, {
       role: "assistant",
       content: response,
@@ -173,14 +194,14 @@ export class TenantDO extends DurableObject<Env> {
     return Response.json({ response });
   }
 
-  // ---------------------------------------------------------------------------
-  // Response Generation - LLM + RAG
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // LLM Response Generation
+  // ===========================================================================
 
   private async generateAssistantResponse(
     message: ChannelMessage
   ): Promise<string> {
-    // Step 1: Retrieve relevant context from knowledge base and org docs
+    // Retrieve relevant context from knowledge base
     const ragContext = await retrieveRAGContext(
       this.env,
       message.message,
@@ -192,52 +213,54 @@ export class TenantDO extends DurableObject<Env> {
       }
     );
 
-    // Step 2: Get recent conversation history for context
+    // Get conversation history
     const conversationHistory = await this.getRecentMessages(
       message.conversationId
     );
 
-    // Step 3: Build the system prompt with RAG context
+    // Build system prompt with context
     const systemPrompt = this.buildSystemPrompt(
       formatRAGContext(ragContext),
       message.userRole
     );
 
-    // Step 4: Assemble messages for the LLM
+    // Prepare messages for LLM
     const messages = [
       { role: "system", content: systemPrompt },
       ...conversationHistory,
     ];
 
-    // Step 5: Get available tools based on user role
+    // Get available tools based on user role
     const tools = this.getClioTools(message.userRole);
 
-    // Step 6: Call the LLM
+    // Call LLM
     const llmResponse = await this.callLLM(messages, tools);
 
-    // Step 7: If the LLM wants to use tools, handle them
+    // Handle tool calls if any
     if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
       return this.handleToolCalls(message, llmResponse.toolCalls);
     }
 
-    // Otherwise return the text response
     return llmResponse.content;
   }
 
   private buildSystemPrompt(ragContext: string, userRole: string): string {
-    // Format cached Clio schema for the prompt
+    // Format cached schemas for LLM context
     const schemaEntries = [...this.schemaCache].map(
       ([objectType, schema]) =>
         `### ${objectType}\n${JSON.stringify(schema, null, 2)}`
     );
 
-    // Different instructions based on user role
     const roleNote =
       userRole === "admin"
         ? "This user is an Admin and can perform create/update/delete operations with confirmation."
         : "This user is a Member with read-only access to Clio.";
 
-    // Build the full system prompt
+    const schemaSection =
+      schemaEntries.length > 0
+        ? schemaEntries.join("\n\n")
+        : "Schema not yet loaded. User needs to connect Clio first.";
+
     return `You are Docket, a case management assistant for legal teams using Clio.
 
 **Tone:** Helpful, competent, deferential. You assist—you don't lead.
@@ -249,10 +272,7 @@ ${roleNote}
 ${ragContext || "No relevant context found."}
 
 **Clio Schema Reference:**
-${
-  schemaEntries.join("\n\n") ||
-  "Schema not yet loaded. User needs to connect Clio first."
-}
+${schemaSection}
 
 **Instructions:**
 - Use Knowledge Base and firm context for case management questions
@@ -263,17 +283,12 @@ ${
 - If Clio is not connected, guide user to connect at docket.com/settings`;
   }
 
-  // ---------------------------------------------------------------------------
-  // LLM Communication
-  // ---------------------------------------------------------------------------
-
   private async callLLM(
     messages: Array<{ role: string; content: string }>,
     tools?: object[],
     isRetry = false
   ): Promise<LLMResponse> {
     try {
-      // Call Workers AI
       const response = await (this.env.AI.run as Function)(
         "@cf/meta/llama-3.1-8b-instruct",
         {
@@ -283,12 +298,12 @@ ${
         }
       );
 
-      // Handle simple string response
+      // Handle string response
       if (typeof response === "string") {
         return { content: response };
       }
 
-      // Handle structured response
+      // Handle object response
       const result = response as {
         response?: string;
         tool_calls?: Array<{
@@ -297,7 +312,6 @@ ${
         }>;
       };
 
-      // Validate response structure
       if (!result || typeof result !== "object") {
         return {
           content: "I couldn't process that response. Please try again.",
@@ -306,28 +320,30 @@ ${
 
       // Parse tool calls if present
       let toolCalls: ToolCall[] | undefined;
-      if (
-        result.tool_calls &&
-        Array.isArray(result.tool_calls) &&
-        result.tool_calls.length > 0
-      ) {
+
+      if (result.tool_calls && result.tool_calls.length > 0) {
         toolCalls = [];
+
         for (const tc of result.tool_calls) {
           if (!tc.name) continue;
+
           try {
             const args =
               typeof tc.arguments === "string"
                 ? JSON.parse(tc.arguments)
                 : tc.arguments ?? {};
+
             toolCalls.push({ name: tc.name, arguments: args });
           } catch {
-            // Skip malformed tool call, log for debugging
             console.error(
               `[TenantDO:${this.orgId}] Failed to parse tool arguments for ${tc.name}`
             );
           }
         }
-        if (toolCalls.length === 0) toolCalls = undefined;
+
+        if (toolCalls.length === 0) {
+          toolCalls = undefined;
+        }
       }
 
       return {
@@ -335,16 +351,15 @@ ${
         toolCalls,
       };
     } catch (error) {
-      // Handle retryable errors (rate limit, server errors)
       const errorCode = (error as { code?: number }).code;
 
+      // Retry on transient errors
       if (!isRetry && (errorCode === 3040 || errorCode === 3043)) {
-        // Wait 1 second and retry once
         await new Promise((resolve) => setTimeout(resolve, 1000));
         return this.callLLM(messages, tools, true);
       }
 
-      // Handle non-retryable errors with user-friendly messages
+      // Handle specific error codes
       if (errorCode === 3036) {
         return {
           content: "I've reached my daily limit. Please try again tomorrow.",
@@ -358,7 +373,6 @@ ${
         };
       }
 
-      // Generic fallback
       return {
         content:
           "I'm having trouble processing your request right now. Please try again in a moment.",
@@ -366,13 +380,12 @@ ${
     }
   }
 
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
   // Clio Tool Definitions
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
 
   private getClioTools(userRole: string): object[] {
     const canModify = userRole === "admin";
-
     const modifyNote = canModify
       ? "Create/update/delete operations will require user confirmation."
       : "As a Member, only read operations are permitted.";
@@ -423,9 +436,9 @@ ${
     ];
   }
 
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
   // Tool Call Handling
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
 
   private async handleToolCalls(
     message: ChannelMessage,
@@ -442,7 +455,7 @@ ${
 
       const args = toolCall.arguments;
 
-      // Permission check: members can only read
+      // Check permissions for write operations
       if (args.operation !== "read" && message.userRole !== "admin") {
         results.push(
           `You don't have permission to ${args.operation} ${args.objectType}s. Only Admins can make changes.`
@@ -450,14 +463,14 @@ ${
         continue;
       }
 
-      // Read operations execute immediately
+      // Handle read operations immediately
       if (args.operation === "read") {
         const readResult = await this.executeClioRead(message.userId, args);
         results.push(readResult);
         continue;
       }
 
-      // CUD operations need confirmation
+      // For write operations, create a pending confirmation
       await this.createPendingConfirmation(
         message.conversationId,
         message.userId,
@@ -468,7 +481,12 @@ ${
 
       const operationDescription = this.describeOperation(args);
       results.push(
-        `I'd like to ${operationDescription}.\n\n**Please confirm:**\n- Reply 'yes' to proceed\n- Reply 'no' to cancel\n- Or describe any changes you'd like\n\n*This request expires in 5 minutes.*`
+        `I'd like to ${operationDescription}.\n\n` +
+          `**Please confirm:**\n` +
+          `- Reply 'yes' to proceed\n` +
+          `- Reply 'no' to cancel\n` +
+          `- Or describe any changes you'd like\n\n` +
+          `*This request expires in 5 minutes.*`
       );
     }
 
@@ -486,7 +504,7 @@ ${
     const verb = verbMap[args.operation] || args.operation;
     const objectName = args.objectType.toLowerCase();
 
-    // Include data preview if available
+    // Include preview of data if available
     if (args.data) {
       const dataEntries = Object.entries(args.data).slice(0, 3);
       const preview = dataEntries
@@ -495,7 +513,6 @@ ${
       return `${verb} ${objectName} with ${preview}`;
     }
 
-    // Include ID if specified
     if (args.id) {
       return `${verb} ${objectName} ${args.id}`;
     }
@@ -503,15 +520,15 @@ ${
     return `${verb} ${objectName}`;
   }
 
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
   // Confirmation Flow
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
 
   private async handleConfirmationResponse(
     message: ChannelMessage,
     confirmation: PendingConfirmation
   ): Promise<string> {
-    // Classify the user's response
+    // Use LLM to classify the user's response
     const classification = await this.classifyConfirmationResponse(
       message.message,
       confirmation
@@ -519,22 +536,20 @@ ${
 
     switch (classification.intent) {
       case "approve":
-        // User confirmed - execute the operation
         return this.executeConfirmedOperation(message.userId, confirmation);
 
       case "reject":
-        // User cancelled
         return "Got it, I've cancelled that operation.";
 
       case "modify":
-        // User wants to change something - re-process their modified request
+        // User wants to modify - regenerate response with their changes
         return this.generateAssistantResponse({
           ...message,
           message: classification.modifiedRequest || message.message,
         });
 
       case "unrelated":
-        // User asked something else - restore the confirmation and answer their question
+        // User asked something else - restore confirmation and handle new query
         this.restorePendingConfirmation(
           message.conversationId,
           message.userId,
@@ -557,7 +572,6 @@ ${
     userMessage: string,
     confirmation: PendingConfirmation
   ): Promise<{ intent: string; modifiedRequest?: string }> {
-    // Ask the LLM to classify the user's intent
     const prompt = `A user was asked to confirm: ${confirmation.action} a ${
       confirmation.objectType
     } with: ${JSON.stringify(confirmation.params)}
@@ -572,31 +586,27 @@ Only include modifiedRequest if intent is "modify".`;
         { prompt, max_tokens: 100 }
       );
 
-      // Extract the response text safely
       const text =
-        typeof response === "string"
-          ? response
-          : response &&
-            typeof response === "object" &&
-            typeof (response as Record<string, unknown>).response === "string"
-          ? ((response as Record<string, unknown>).response as string)
-          : "";
+        typeof response === "string" ? response : response?.response ?? "";
 
       if (!text) {
         return { intent: "unclear" };
       }
 
-      // Parse JSON from response - find balanced braces
+      // Extract JSON from response
       const startIdx = text.indexOf("{");
       if (startIdx === -1) {
         return { intent: "unclear" };
       }
 
+      // Find matching closing brace
       let depth = 0;
       let endIdx = -1;
+
       for (let i = startIdx; i < text.length; i++) {
         if (text[i] === "{") depth++;
         else if (text[i] === "}") depth--;
+
         if (depth === 0) {
           endIdx = i;
           break;
@@ -607,10 +617,12 @@ Only include modifiedRequest if intent is "modify".`;
         return { intent: "unclear" };
       }
 
-      const jsonStr = text.slice(startIdx, endIdx + 1);
-      const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+      // Parse and validate
+      const parsed = JSON.parse(text.slice(startIdx, endIdx + 1)) as Record<
+        string,
+        unknown
+      >;
 
-      // Validate parsed result
       const validIntents = ["approve", "reject", "modify", "unrelated"];
       const intent =
         typeof parsed.intent === "string" &&
@@ -636,7 +648,6 @@ Only include modifiedRequest if intent is "modify".`;
     confirmation: PendingConfirmation
   ): Promise<string> {
     try {
-      // Execute the Clio operation
       const result = await this.executeClioCUD(
         userId,
         confirmation.action,
@@ -644,7 +655,7 @@ Only include modifiedRequest if intent is "modify".`;
         confirmation.params
       );
 
-      // Log successful operation
+      // Log success
       await this.appendAuditLog({
         user_id: userId,
         action: confirmation.action,
@@ -653,14 +664,13 @@ Only include modifiedRequest if intent is "modify".`;
         result: "success",
       });
 
-      // Build success message
-      const baseMessage = `Done! I've ${confirmation.action}d the ${confirmation.objectType}.`;
       if (result.details) {
-        return `${baseMessage}\n\n${result.details}`;
+        return `Done! I've ${confirmation.action}d the ${confirmation.objectType}.\n\n${result.details}`;
       }
-      return baseMessage;
+
+      return `Done! I've ${confirmation.action}d the ${confirmation.objectType}.`;
     } catch (error) {
-      // Log failed operation
+      // Log failure
       await this.appendAuditLog({
         user_id: userId,
         action: confirmation.action,
@@ -674,31 +684,62 @@ Only include modifiedRequest if intent is "modify".`;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Clio API Operations (Placeholders)
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // Clio API Operations
+  // ===========================================================================
 
   private async executeClioRead(
     userId: string,
     args: { objectType: string; id?: string; filters?: Record<string, unknown> }
   ): Promise<string> {
-    // Check if user has connected Clio
-    const hasToken = await this.hasClioToken(userId);
-    if (!hasToken) {
+    // Get valid access token
+    const accessToken = await this.getValidClioToken(userId);
+
+    if (!accessToken) {
       return "You haven't connected your Clio account yet. Please connect at docket.com/settings to enable Clio queries.";
     }
 
-    // Build description of what we would query
-    let description = `Would query ${args.objectType}`;
-    if (args.id) {
-      description += ` with ID ${args.id}`;
-    }
-    if (args.filters) {
-      description += ` with filters ${JSON.stringify(args.filters)}`;
+    // Refresh schema if needed
+    if (schemaNeedsRefresh(this.schemaVersion)) {
+      await this.refreshSchemaWithToken(accessToken);
     }
 
-    // TODO: Implement actual Clio API call
-    return `[Clio read placeholder] ${description}`;
+    try {
+      const endpoint = buildReadQuery(args.objectType, args.id, args.filters);
+      const result = await executeClioCall("GET", endpoint, accessToken);
+
+      // Handle 401 - try to refresh token
+      if (!result.success && result.error?.status === 401) {
+        const refreshedToken = await this.handleClioUnauthorized(userId);
+
+        if (refreshedToken) {
+          const retryResult = await executeClioCall(
+            "GET",
+            endpoint,
+            refreshedToken
+          );
+
+          if (retryResult.success) {
+            return formatClioResponse(args.objectType, retryResult.data);
+          }
+
+          return (
+            retryResult.error?.message || "Failed to fetch data from Clio."
+          );
+        }
+
+        return "Your Clio connection has expired. Please reconnect at docket.com/settings.";
+      }
+
+      if (!result.success) {
+        return result.error?.message || "Failed to fetch data from Clio.";
+      }
+
+      return formatClioResponse(args.objectType, result.data);
+    } catch (error) {
+      console.error("[Clio read error]", error);
+      return "An error occurred while fetching data from Clio. Please try again.";
+    }
   }
 
   private async executeClioCUD(
@@ -707,37 +748,546 @@ Only include modifiedRequest if intent is "modify".`;
     objectType: string,
     data: Record<string, unknown>
   ): Promise<{ success: boolean; details?: string }> {
-    // TODO: Implement actual Clio API call
-    console.log(`[Clio ${action}]`, { userId, objectType, data });
+    const accessToken = await this.getValidClioToken(userId);
 
-    return {
-      success: true,
-      details: `[Placeholder] ${action} ${objectType} would execute here`,
+    if (!accessToken) {
+      return {
+        success: false,
+        details:
+          "Clio account not connected. Please reconnect at docket.com/settings.",
+      };
+    }
+
+    try {
+      let method: "POST" | "PATCH" | "DELETE";
+      let endpoint: string;
+      let body: Record<string, unknown> | undefined;
+
+      // Build request based on action
+      switch (action) {
+        case "create": {
+          method = "POST";
+          const createReq = buildCreateBody(objectType, data);
+          endpoint = createReq.endpoint;
+          body = createReq.body;
+          break;
+        }
+
+        case "update": {
+          method = "PATCH";
+          const id = data.id as string;
+
+          if (!id) {
+            return { success: false, details: "Missing record ID for update." };
+          }
+
+          const updateData = { ...data };
+          delete updateData.id;
+
+          const updateReq = buildUpdateBody(objectType, id, updateData);
+          endpoint = updateReq.endpoint;
+          body = updateReq.body;
+          break;
+        }
+
+        case "delete": {
+          method = "DELETE";
+          const deleteId = data.id as string;
+
+          if (!deleteId) {
+            return { success: false, details: "Missing record ID for delete." };
+          }
+
+          endpoint = buildDeleteEndpoint(objectType, deleteId);
+          break;
+        }
+
+        default:
+          return { success: false, details: `Unknown action: ${action}` };
+      }
+
+      // Execute request
+      const result = await executeClioCall(method, endpoint, accessToken, body);
+
+      // Handle 401 - try to refresh token
+      if (!result.success && result.error?.status === 401) {
+        const refreshedToken = await this.handleClioUnauthorized(userId);
+
+        if (refreshedToken) {
+          const retryResult = await executeClioCall(
+            method,
+            endpoint,
+            refreshedToken,
+            body
+          );
+
+          if (retryResult.success) {
+            return {
+              success: true,
+              details: `Successfully ${action}d ${objectType}.`,
+            };
+          }
+
+          return {
+            success: false,
+            details:
+              retryResult.error?.message ||
+              `Failed to ${action} ${objectType}.`,
+          };
+        }
+
+        return {
+          success: false,
+          details:
+            "Clio connection expired. Please reconnect at docket.com/settings.",
+        };
+      }
+
+      if (!result.success) {
+        return {
+          success: false,
+          details:
+            result.error?.message || `Failed to ${action} ${objectType}.`,
+        };
+      }
+
+      return {
+        success: true,
+        details: `Successfully ${action}d ${objectType}.`,
+      };
+    } catch (error) {
+      console.error(`[Clio ${action} error]`, error);
+      return {
+        success: false,
+        details: `An error occurred while trying to ${action} the ${objectType}.`,
+      };
+    }
+  }
+
+  // ===========================================================================
+  // Clio Token Management
+  // ===========================================================================
+
+  private async handleStoreClioToken(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const { userId, tokens } = (await request.json()) as {
+      userId: string;
+      tokens: ClioTokens;
     };
+
+    if (!userId || !tokens) {
+      return Response.json(
+        { error: "Missing userId or tokens" },
+        { status: 400 }
+      );
+    }
+
+    await storeClioTokens(
+      this.ctx.storage,
+      userId,
+      tokens,
+      this.env.ENCRYPTION_KEY
+    );
+
+    await this.appendAuditLog({
+      user_id: userId,
+      action: "clio_connect",
+      object_type: "oauth",
+      params: {},
+      result: "success",
+    });
+
+    return Response.json({ success: true });
   }
 
-  private async hasClioToken(userId: string): Promise<boolean> {
-    const token = await this.ctx.storage.get(`clio_token:${userId}`);
-    return token !== undefined;
+  private async getValidClioToken(userId: string): Promise<string | null> {
+    const tokens = await getClioTokens(this.ctx.storage, userId, this.env);
+
+    if (!tokens) {
+      return null;
+    }
+
+    // Proactively refresh if token expires soon
+    if (tokenNeedsRefresh(tokens)) {
+      try {
+        const newTokens = await refreshAccessToken({
+          refreshToken: tokens.refresh_token,
+          clientId: this.env.CLIO_CLIENT_ID,
+          clientSecret: this.env.CLIO_CLIENT_SECRET,
+        });
+
+        await storeClioTokens(
+          this.ctx.storage,
+          userId,
+          newTokens,
+          this.env.ENCRYPTION_KEY
+        );
+
+        return newTokens.access_token;
+      } catch (error) {
+        console.error(`[TenantDO:${this.orgId}] Token refresh failed:`, error);
+        await deleteClioTokens(this.ctx.storage, userId);
+        return null;
+      }
+    }
+
+    return tokens.access_token;
   }
 
-  // ---------------------------------------------------------------------------
-  // Conversation & Message Storage
-  // ---------------------------------------------------------------------------
+  private async handleClioUnauthorized(userId: string): Promise<string | null> {
+    const tokens = await getClioTokens(this.ctx.storage, userId, this.env);
+
+    if (!tokens?.refresh_token) {
+      return null;
+    }
+
+    try {
+      const newTokens = await refreshAccessToken({
+        refreshToken: tokens.refresh_token,
+        clientId: this.env.CLIO_CLIENT_ID,
+        clientSecret: this.env.CLIO_CLIENT_SECRET,
+      });
+
+      await storeClioTokens(
+        this.ctx.storage,
+        userId,
+        newTokens,
+        this.env.ENCRYPTION_KEY
+      );
+
+      return newTokens.access_token;
+    } catch {
+      await deleteClioTokens(this.ctx.storage, userId);
+      return null;
+    }
+  }
+
+  // ===========================================================================
+  // Schema Management
+  // ===========================================================================
+
+  private async handleProvisionSchema(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const { userId } = (await request.json()) as { userId: string };
+    const accessToken = await this.getValidClioToken(userId);
+
+    if (!accessToken) {
+      return Response.json({ error: "No valid Clio token" }, { status: 401 });
+    }
+
+    const schemas = await fetchAllSchemas(accessToken);
+    const now = Date.now();
+
+    // Cache schemas in SQLite
+    for (const [objectType, schema] of schemas) {
+      this.sql.exec(
+        `INSERT OR REPLACE INTO clio_schema_cache (object_type, schema, fetched_at) VALUES (?, ?, ?)`,
+        objectType,
+        JSON.stringify(schema),
+        now
+      );
+      this.schemaCache.set(objectType, schema);
+    }
+
+    // Update version
+    this.sql.exec(
+      `INSERT OR REPLACE INTO org_settings (key, value, updated_at) VALUES ('clio_schema_version', ?, ?)`,
+      String(CLIO_SCHEMA_VERSION),
+      now
+    );
+    this.schemaVersion = CLIO_SCHEMA_VERSION;
+
+    await this.appendAuditLog({
+      user_id: userId,
+      action: "schema_provision",
+      object_type: "clio_schema",
+      params: { objectCount: schemas.size },
+      result: "success",
+    });
+
+    return Response.json({
+      success: true,
+      count: schemas.size,
+      schemas: Array.from(schemas.keys()),
+    });
+  }
+
+  private async handleRefreshSchema(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const { userId } = (await request.json()) as { userId: string };
+
+    if (!userId) {
+      return Response.json(
+        { error: "Missing required field: userId" },
+        { status: 400 }
+      );
+    }
+
+    const accessToken = await this.getValidClioToken(userId);
+
+    if (!accessToken) {
+      return Response.json({ error: "No valid Clio token" }, { status: 401 });
+    }
+
+    const schemas = await fetchAllSchemas(accessToken);
+    const now = Date.now();
+
+    for (const [objectType, schema] of schemas) {
+      this.sql.exec(
+        `INSERT OR REPLACE INTO clio_schema_cache (object_type, schema, fetched_at) VALUES (?, ?, ?)`,
+        objectType,
+        JSON.stringify(schema),
+        now
+      );
+      this.schemaCache.set(objectType, schema);
+    }
+
+    this.sql.exec(
+      `INSERT OR REPLACE INTO org_settings (key, value, updated_at) VALUES ('clio_schema_version', ?, ?)`,
+      String(CLIO_SCHEMA_VERSION),
+      now
+    );
+    this.schemaVersion = CLIO_SCHEMA_VERSION;
+
+    await this.appendAuditLog({
+      user_id: userId,
+      action: "schema_refresh",
+      object_type: "clio_schema",
+      params: { objectCount: schemas.size },
+      result: "success",
+    });
+
+    return Response.json({
+      success: true,
+      count: schemas.size,
+      schemas: Array.from(schemas.keys()),
+    });
+  }
+
+  private async handleForceSchemaRefresh(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const now = Date.now();
+    const previousVersion = this.schemaVersion;
+
+    // Clear all cached schemas
+    this.sql.exec("DELETE FROM clio_schema_cache");
+    this.schemaCache.clear();
+
+    // Reset version to force refresh
+    this.sql.exec(
+      `INSERT OR REPLACE INTO org_settings (key, value, updated_at) VALUES ('clio_schema_version', '0', ?)`,
+      now
+    );
+    this.schemaVersion = 0;
+
+    await this.appendAuditLog({
+      user_id: "system",
+      action: "schema_force_refresh",
+      object_type: "clio_schema",
+      params: { previousVersion, targetVersion: CLIO_SCHEMA_VERSION },
+      result: "success",
+    });
+
+    return Response.json({
+      success: true,
+      message: "Schema cache invalidated. Will refresh on next Clio API call.",
+      previousVersion,
+      targetVersion: CLIO_SCHEMA_VERSION,
+    });
+  }
+
+  private async refreshSchemaWithToken(accessToken: string): Promise<void> {
+    try {
+      const schemas = await fetchAllSchemas(accessToken);
+      const now = Date.now();
+
+      for (const [objectType, schema] of schemas) {
+        this.sql.exec(
+          `INSERT OR REPLACE INTO clio_schema_cache (object_type, schema, fetched_at) VALUES (?, ?, ?)`,
+          objectType,
+          JSON.stringify(schema),
+          now
+        );
+        this.schemaCache.set(objectType, schema);
+      }
+
+      this.sql.exec(
+        `INSERT OR REPLACE INTO org_settings (key, value, updated_at) VALUES ('clio_schema_version', ?, ?)`,
+        String(CLIO_SCHEMA_VERSION),
+        now
+      );
+      this.schemaVersion = CLIO_SCHEMA_VERSION;
+
+      console.log(
+        `[TenantDO:${this.orgId}] Auto-refreshed schema to version ${CLIO_SCHEMA_VERSION}`
+      );
+    } catch (error) {
+      console.error(
+        `[TenantDO:${this.orgId}] Schema auto-refresh failed:`,
+        error
+      );
+    }
+  }
+
+  private async loadSchemaCache(): Promise<void> {
+    this.schemaCache.clear();
+
+    // Load current version
+    const versionRow = this.sql
+      .exec("SELECT value FROM org_settings WHERE key = 'clio_schema_version'")
+      .one();
+
+    this.schemaVersion = versionRow ? Number(versionRow.value) : null;
+
+    // If version is outdated, skip loading (will refresh on first query)
+    if (schemaNeedsRefresh(this.schemaVersion)) {
+      console.log(
+        `[TenantDO:${this.orgId}] Schema version ${this.schemaVersion} stale (current: ${CLIO_SCHEMA_VERSION})`
+      );
+      return;
+    }
+
+    // Load schemas from SQLite into memory
+    const rows = this.sql
+      .exec("SELECT object_type, schema FROM clio_schema_cache")
+      .toArray();
+
+    for (const row of rows) {
+      try {
+        this.schemaCache.set(
+          row.object_type as string,
+          JSON.parse(row.schema as string)
+        );
+      } catch {
+        // Skip invalid JSON
+      }
+    }
+  }
+
+  // ===========================================================================
+  // Demo Endpoints
+  // ===========================================================================
+
+  private async handleDemoStatus(request: Request): Promise<Response> {
+    const { userId } = (await request.json()) as { userId: string };
+    const tokens = await getClioTokens(this.ctx.storage, userId, this.env);
+
+    return Response.json({
+      connected: tokens !== null,
+      schemas: Array.from(this.schemaCache.keys()),
+      tokenExpiresAt: tokens?.expires_at,
+    });
+  }
+
+  private async handleDemoDisconnect(request: Request): Promise<Response> {
+    const { userId } = (await request.json()) as { userId: string };
+
+    await deleteClioTokens(this.ctx.storage, userId);
+
+    await this.appendAuditLog({
+      user_id: userId,
+      action: "clio_disconnect",
+      object_type: "oauth",
+      params: {},
+      result: "success",
+    });
+
+    return Response.json({ success: true });
+  }
+
+  private async handleDemoRefreshToken(request: Request): Promise<Response> {
+    const { userId } = (await request.json()) as { userId: string };
+    const tokens = await getClioTokens(this.ctx.storage, userId, this.env);
+
+    if (!tokens) {
+      return Response.json({ success: false, error: "No token found" });
+    }
+
+    try {
+      const newTokens = await refreshAccessToken({
+        refreshToken: tokens.refresh_token,
+        clientId: this.env.CLIO_CLIENT_ID,
+        clientSecret: this.env.CLIO_CLIENT_SECRET,
+      });
+
+      await storeClioTokens(
+        this.ctx.storage,
+        userId,
+        newTokens,
+        this.env.ENCRYPTION_KEY
+      );
+
+      return Response.json({ success: true, expiresAt: newTokens.expires_at });
+    } catch (error) {
+      return Response.json({ success: false, error: String(error) });
+    }
+  }
+
+  private async handleDemoTestApi(request: Request): Promise<Response> {
+    const { userId, objectType, operation, id } = (await request.json()) as {
+      userId: string;
+      objectType: string;
+      operation: string;
+      id?: string;
+    };
+
+    const accessToken = await this.getValidClioToken(userId);
+
+    if (!accessToken) {
+      return Response.json({ error: "Not connected to Clio" }, { status: 401 });
+    }
+
+    try {
+      const endpoint = buildReadQuery(
+        objectType,
+        operation === "single" ? id : undefined,
+        operation === "list" ? { limit: 10 } : undefined
+      );
+
+      const result = await executeClioCall("GET", endpoint, accessToken);
+
+      if (!result.success) {
+        return Response.json({
+          error: result.error?.message || "API call failed",
+          status: result.error?.status,
+        });
+      }
+
+      return Response.json({ data: result.data });
+    } catch (error) {
+      return Response.json({ error: String(error) }, { status: 500 });
+    }
+  }
+
+  // ===========================================================================
+  // Conversation Storage
+  // ===========================================================================
 
   private async ensureConversationExists(
     message: ChannelMessage
   ): Promise<void> {
     const now = Date.now();
 
-    // Try to update existing conversation's timestamp
+    // Try to update existing conversation
     const updateResult = this.sql.exec(
       "UPDATE conversations SET updated_at = ? WHERE id = ?",
       now,
       message.conversationId
     );
 
-    // If no rows updated, create new conversation
+    // If no rows updated, insert new conversation
     if (updateResult.rowsWritten === 0) {
       this.sql.exec(
         `INSERT INTO conversations (id, channel_type, scope, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
@@ -754,17 +1304,14 @@ Only include modifiedRequest if intent is "modify".`;
     conversationId: string,
     msg: { role: string; content: string; userId: string | null }
   ): Promise<void> {
-    const messageId = crypto.randomUUID();
-    const now = Date.now();
-
     this.sql.exec(
       `INSERT INTO messages (id, conversation_id, role, content, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-      messageId,
+      crypto.randomUUID(),
       conversationId,
       msg.role,
       msg.content,
       msg.userId,
-      now
+      Date.now()
     );
   }
 
@@ -787,23 +1334,23 @@ Only include modifiedRequest if intent is "modify".`;
     }));
   }
 
-  // ---------------------------------------------------------------------------
-  // Pending Confirmation Management
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // Pending Confirmations
+  // ===========================================================================
 
   private async claimPendingConfirmation(
     conversationId: string,
     userId: string
   ): Promise<PendingConfirmation | null> {
-    // Wrap cleanup and claim in a transaction for atomicity
+    // Atomically delete expired and claim pending confirmation
     const row = this.ctx.storage.transactionSync(() => {
-      // Clean up any expired confirmations
+      // Clean up expired confirmations
       this.sql.exec(
         "DELETE FROM pending_confirmations WHERE expires_at < ?",
         Date.now()
       );
 
-      // Try to claim (delete and return) a pending confirmation for this user
+      // Claim and delete the pending confirmation
       return this.sql
         .exec(
           `DELETE FROM pending_confirmations WHERE conversation_id = ? AND user_id = ? RETURNING id, action, object_type, params, expires_at`,
@@ -817,12 +1364,12 @@ Only include modifiedRequest if intent is "modify".`;
       return null;
     }
 
-    // Parse the params JSON
+    // Parse params
     let params: Record<string, unknown> = {};
     try {
       params = JSON.parse(row.params as string);
     } catch {
-      // If parsing fails, use empty object
+      // Use empty object if parsing fails
     }
 
     return {
@@ -843,7 +1390,7 @@ Only include modifiedRequest if intent is "modify".`;
   ): Promise<string> {
     const id = crypto.randomUUID();
     const now = Date.now();
-    const expiresAt = now + 5 * 60 * 1000; // 5 minutes from now
+    const expiresAt = now + 5 * 60 * 1000; // 5 minutes
 
     this.sql.exec(
       `INSERT INTO pending_confirmations (id, conversation_id, user_id, action, object_type, params, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -865,7 +1412,6 @@ Only include modifiedRequest if intent is "modify".`;
     userId: string,
     confirmation: PendingConfirmation
   ): void {
-    // Put the confirmation back (user asked unrelated question)
     this.sql.exec(
       `INSERT INTO pending_confirmations (id, conversation_id, user_id, action, object_type, params, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       confirmation.id,
@@ -879,9 +1425,9 @@ Only include modifiedRequest if intent is "modify".`;
     );
   }
 
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
   // Audit Logging
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
 
   private async handleAudit(request: Request): Promise<Response> {
     if (request.method !== "POST") {
@@ -898,73 +1444,34 @@ Only include modifiedRequest if intent is "modify".`;
       );
     }
 
-    const auditResult = await this.appendAuditLog(result.data);
-    return Response.json(auditResult);
+    return Response.json(await this.appendAuditLog(result.data));
   }
 
   async appendAuditLog(entry: AuditEntryInput): Promise<{ id: string }> {
     const now = new Date();
     const id = crypto.randomUUID();
 
-    // Build path: orgs/{orgId}/audit/{year}/{month}/{day}/{timestamp}-{id}.json
+    // Build R2 path: orgs/{orgId}/audit/{year}/{month}/{day}/{timestamp}-{id}.json
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
     const day = String(now.getDate()).padStart(2, "0");
-    const timestamp = now.getTime();
 
-    const path = `orgs/${this.ctx.id}/audit/${year}/${month}/${day}/${timestamp}-${id}.json`;
+    const path = `orgs/${
+      this.ctx.id
+    }/audit/${year}/${month}/${day}/${now.getTime()}-${id}.json`;
 
-    // Write to R2
     await this.env.R2.put(
       path,
-      JSON.stringify({
-        id,
-        created_at: now.toISOString(),
-        ...entry,
-      }),
+      JSON.stringify({ id, created_at: now.toISOString(), ...entry }),
       { httpMetadata: { contentType: "application/json" } }
     );
 
     return { id };
   }
 
-  // ---------------------------------------------------------------------------
-  // Schema Management
-  // ---------------------------------------------------------------------------
-
-  private async handleRefreshSchema(request: Request): Promise<Response> {
-    if (request.method !== "POST") {
-      return Response.json({ error: "Method not allowed" }, { status: 405 });
-    }
-
-    await this.loadSchemaCache();
-
-    return Response.json({
-      success: true,
-      cachedTypes: Array.from(this.schemaCache.keys()),
-    });
-  }
-
-  private async loadSchemaCache(): Promise<void> {
-    this.schemaCache.clear();
-
-    const rows = this.sql
-      .exec("SELECT object_type, schema FROM clio_schema_cache")
-      .toArray();
-
-    for (const row of rows) {
-      try {
-        const schema = JSON.parse(row.schema as string);
-        this.schemaCache.set(row.object_type as string, schema);
-      } catch {
-        // Skip invalid entries
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // User & Org Management Endpoints
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // User/Org Management
+  // ===========================================================================
 
   private async handleRemoveUser(request: Request): Promise<Response> {
     if (request.method !== "POST") {
@@ -981,7 +1488,6 @@ Only include modifiedRequest if intent is "modify".`;
       );
     }
 
-    // Delete any pending confirmations for this user
     const result = this.sql.exec(
       "DELETE FROM pending_confirmations WHERE user_id = ?",
       userId
@@ -999,7 +1505,7 @@ Only include modifiedRequest if intent is "modify".`;
       return Response.json({ error: "Method not allowed" }, { status: 405 });
     }
 
-    // Get counts before deletion for reporting
+    // Count records before deletion
     const conversationCount =
       this.sql.exec("SELECT COUNT(*) as count FROM conversations").one()
         ?.count ?? 0;
@@ -1016,15 +1522,15 @@ Only include modifiedRequest if intent is "modify".`;
     this.sql.exec("DELETE FROM org_settings");
     this.sql.exec("DELETE FROM clio_schema_cache");
 
-    // Delete all KV storage
+    // Delete KV entries (tokens, etc.)
     const kvKeys = await this.ctx.storage.list();
     let kvDeletedCount = 0;
+
     for (const key of kvKeys.keys()) {
       await this.ctx.storage.delete(key);
       kvDeletedCount++;
     }
 
-    // Clear in-memory cache
     this.schemaCache.clear();
 
     return Response.json({
@@ -1053,7 +1559,7 @@ Only include modifiedRequest if intent is "modify".`;
       );
     }
 
-    // Count data before deletion
+    // Count records
     const messageCount =
       this.sql
         .exec(
@@ -1070,17 +1576,18 @@ Only include modifiedRequest if intent is "modify".`;
         )
         .one()?.count ?? 0;
 
-    // Delete user's messages and confirmations
+    // Delete user data
     this.sql.exec("DELETE FROM messages WHERE user_id = ?", userId);
     this.sql.exec(
       "DELETE FROM pending_confirmations WHERE user_id = ?",
       userId
     );
 
-    // Delete Clio token if exists
+    // Delete Clio token
     const clioTokenKey = `clio_token:${userId}`;
     const hadClioToken =
       (await this.ctx.storage.get(clioTokenKey)) !== undefined;
+
     if (hadClioToken) {
       await this.ctx.storage.delete(clioTokenKey);
     }
@@ -1095,23 +1602,20 @@ Only include modifiedRequest if intent is "modify".`;
     });
   }
 
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
   // Database Migrations
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
 
   private async runMigrations(): Promise<void> {
-    // Check current schema version
     const versionResult = this.sql.exec("PRAGMA user_version").one();
     const currentVersion = versionResult.user_version as number;
 
-    // Already migrated
     if (currentVersion >= 1) {
-      return;
+      return; // Already migrated
     }
 
-    // Run initial migration
+    // Create initial schema
     this.sql.exec(`
-      -- Conversations table
       CREATE TABLE IF NOT EXISTS conversations (
         id TEXT PRIMARY KEY,
         channel_type TEXT NOT NULL,
@@ -1120,9 +1624,9 @@ Only include modifiedRequest if intent is "modify".`;
         updated_at INTEGER NOT NULL,
         archived_at INTEGER
       );
+
       CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(updated_at);
 
-      -- Messages table
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY,
         conversation_id TEXT NOT NULL REFERENCES conversations(id),
@@ -1131,9 +1635,9 @@ Only include modifiedRequest if intent is "modify".`;
         user_id TEXT,
         created_at INTEGER NOT NULL
       );
+
       CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at);
 
-      -- Pending confirmations for CUD operations
       CREATE TABLE IF NOT EXISTS pending_confirmations (
         id TEXT PRIMARY KEY,
         conversation_id TEXT NOT NULL REFERENCES conversations(id),
@@ -1144,16 +1648,15 @@ Only include modifiedRequest if intent is "modify".`;
         created_at INTEGER NOT NULL,
         expires_at INTEGER NOT NULL
       );
+
       CREATE INDEX IF NOT EXISTS idx_pending_expires ON pending_confirmations(expires_at);
 
-      -- Org settings
       CREATE TABLE IF NOT EXISTS org_settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
 
-      -- Cached Clio schema
       CREATE TABLE IF NOT EXISTS clio_schema_cache (
         object_type TEXT PRIMARY KEY,
         schema TEXT NOT NULL,
@@ -1161,32 +1664,28 @@ Only include modifiedRequest if intent is "modify".`;
         fetched_at INTEGER NOT NULL
       );
 
-      -- Set version
       PRAGMA user_version = 1;
     `);
   }
 
-  // ---------------------------------------------------------------------------
-  // Background Alarm - Archival & Cleanup
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // Alarm Handler (Background Tasks)
+  // ===========================================================================
 
   async alarm(): Promise<void> {
     const now = Date.now();
 
-    // Schedule next alarm for tomorrow
+    // Schedule next alarm for 24 hours
     await this.ctx.storage.setAlarm(now + 24 * 60 * 60 * 1000);
 
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-
-    // Find stale conversations (not updated in 30 days and not archived)
+    // Archive stale conversations (>30 days old)
     const staleConversations = this.sql
       .exec(
         `SELECT id FROM conversations WHERE updated_at < ? AND archived_at IS NULL`,
-        thirtyDaysAgo
+        now - 30 * 24 * 60 * 60 * 1000
       )
       .toArray();
 
-    // Archive each stale conversation
     for (const row of staleConversations) {
       await this.archiveConversation(row.id as string);
     }
@@ -1199,7 +1698,6 @@ Only include modifiedRequest if intent is "modify".`;
   }
 
   private async archiveConversation(conversationId: string): Promise<void> {
-    // Get conversation metadata
     const conversation = this.sql
       .exec("SELECT * FROM conversations WHERE id = ?", conversationId)
       .one();
@@ -1208,7 +1706,7 @@ Only include modifiedRequest if intent is "modify".`;
       return;
     }
 
-    // Get all messages for this conversation
+    // Get all messages
     const messages = this.sql
       .exec(
         `SELECT id, role, content, user_id, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at`,
@@ -1216,20 +1714,18 @@ Only include modifiedRequest if intent is "modify".`;
       )
       .toArray();
 
-    // Write archive to R2
+    // Create archive object
     const archiveData = {
       conversation,
       messages,
       archivedAt: new Date().toISOString(),
     };
 
-    const archiveKey = `orgs/${this.orgId}/conversations/${conversationId}.json`;
+    // Store in R2
     const result = await this.env.R2.put(
-      archiveKey,
+      `orgs/${this.orgId}/conversations/${conversationId}.json`,
       JSON.stringify(archiveData),
-      {
-        httpMetadata: { contentType: "application/json" },
-      }
+      { httpMetadata: { contentType: "application/json" } }
     );
 
     if (!result) {
@@ -1250,16 +1746,60 @@ Only include modifiedRequest if intent is "modify".`;
   }
 
   private async ensureAlarmIsSet(): Promise<void> {
-    const existingAlarm = await this.ctx.storage.getAlarm();
-    if (!existingAlarm) {
-      // Set alarm for 24 hours from now
+    const currentAlarm = await this.ctx.storage.getAlarm();
+
+    if (!currentAlarm) {
       await this.ctx.storage.setAlarm(Date.now() + 24 * 60 * 60 * 1000);
     }
   }
 }
 
 // =============================================================================
-// Channel User Lookup
+// Worker Request Handler
+// =============================================================================
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+
+    // Auth routes
+    if (url.pathname.startsWith("/api/auth")) {
+      try {
+        return await getAuth(env).handler(request);
+      } catch (error) {
+        return Response.json({ error: String(error) }, { status: 500 });
+      }
+    }
+
+    // Teams message webhook
+    if (url.pathname === "/api/messages") {
+      return handleTeamsMessage(request, env);
+    }
+
+    // Clio OAuth routes
+    if (url.pathname === "/clio/connect") {
+      return handleClioConnect(request, env);
+    }
+
+    if (url.pathname === "/clio/callback") {
+      return handleClioCallback(request, env);
+    }
+
+    // Demo routes
+    if (url.pathname === "/demo/clio") {
+      return handleDemoPage(request, env);
+    }
+
+    if (url.pathname.startsWith("/demo/clio/")) {
+      return handleDemoApi(request, env);
+    }
+
+    return Response.json({ error: "Not found" }, { status: 404 });
+  },
+};
+
+// =============================================================================
+// Teams Integration
 // =============================================================================
 
 interface ChannelUserInfo {
@@ -1271,16 +1811,169 @@ interface ChannelUserInfo {
   firmSize: string | null;
 }
 
-/**
- * Looks up a Docket user from their channel identity (e.g., Teams AAD ID).
- * Returns user info including their org membership.
- */
+interface TeamsActivity {
+  type: string;
+  text?: string;
+  id?: string;
+  from?: { id: string; aadObjectId?: string };
+  recipient?: { id: string };
+  conversation?: { id: string; conversationType?: string };
+  channelId?: string;
+  serviceUrl?: string;
+  channelData?: { tenant?: { id: string } };
+}
+
+async function handleTeamsMessage(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  let activity: TeamsActivity;
+
+  try {
+    activity = (await request.json()) as TeamsActivity;
+  } catch {
+    return new Response(null, { status: 200 });
+  }
+
+  try {
+    return await handleTeamsMessageInner(activity, env);
+  } catch (error) {
+    console.error("handleTeamsMessage error:", error);
+    return new Response(null, { status: 200 });
+  }
+}
+
+async function handleTeamsMessageInner(
+  activity: TeamsActivity,
+  env: Env
+): Promise<Response> {
+  // Only handle message activities with text
+  if (activity.type !== "message" || !activity.text) {
+    return new Response(null, { status: 200 });
+  }
+
+  const aadObjectId = activity.from?.aadObjectId;
+  const conversationId = activity.conversation?.id;
+
+  if (!aadObjectId || !conversationId) {
+    return new Response(null, { status: 200 });
+  }
+
+  // Look up user by Teams ID
+  const user = await lookupChannelUser(env, "teams", aadObjectId);
+
+  if (!user) {
+    await sendTeamsReply(activity, {
+      text: "Welcome to Docket! Please link your account at docket.com to get started.",
+    });
+    return new Response(null, { status: 200 });
+  }
+
+  // Determine conversation scope
+  const conversationType = activity.conversation?.conversationType;
+  let scope: "personal" | "groupChat" | "teams";
+
+  if (conversationType === "personal") {
+    scope = "personal";
+  } else if (conversationType === "groupChat") {
+    scope = "groupChat";
+  } else {
+    scope = "teams";
+  }
+
+  // Verify org access for non-personal chats
+  let orgId = user.orgId;
+
+  if (scope !== "personal") {
+    const tenantId = activity.channelData?.tenant?.id;
+
+    if (!tenantId) {
+      return new Response(null, { status: 200 });
+    }
+
+    const workspaceOrgId = await lookupWorkspaceOrg(env, "teams", tenantId);
+
+    if (!workspaceOrgId || workspaceOrgId !== user.orgId) {
+      return new Response(null, { status: 200 });
+    }
+
+    orgId = workspaceOrgId;
+  }
+
+  // Build channel message
+  const channelMessage: ChannelMessage = {
+    channel: "teams",
+    orgId,
+    userId: user.userId,
+    userRole: user.role,
+    conversationId,
+    conversationScope: scope,
+    message: activity.text,
+    jurisdictions: user.jurisdictions,
+    practiceTypes: user.practiceTypes,
+    firmSize: user.firmSize as "solo" | "small" | "mid" | "large" | null,
+    metadata: {
+      threadId: activity.conversation?.id,
+      teamsChannelId: activity.channelId,
+    },
+  };
+
+  // Route to org's Durable Object
+  const doResponse = await routeMessageToDO(env, channelMessage);
+  const result = (await doResponse.json()) as { response: string };
+
+  // Send reply
+  await sendTeamsReply(activity, {
+    text: result.response,
+    replyToId: activity.id,
+  });
+
+  return new Response(null, { status: 200 });
+}
+
+async function sendTeamsReply(
+  activity: TeamsActivity,
+  reply: { text: string; replyToId?: string }
+): Promise<void> {
+  if (!activity.serviceUrl || !activity.conversation?.id) {
+    return;
+  }
+
+  try {
+    await fetch(
+      `${activity.serviceUrl}/v3/conversations/${activity.conversation.id}/activities`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "message",
+          text: reply.text,
+          from: activity.recipient,
+          recipient: activity.from,
+          conversation: activity.conversation,
+          replyToId: reply.replyToId,
+        }),
+      }
+    );
+  } catch (error) {
+    console.error("Teams reply error:", error);
+  }
+}
+
+// =============================================================================
+// Database Lookups
+// =============================================================================
+
 async function lookupChannelUser(
   env: Env,
   channelType: string,
   channelUserId: string
 ): Promise<ChannelUserInfo | null> {
-  // Find the user link and their org membership
+  // Look up user by channel-specific ID
   const link = await env.DB.prepare(
     `SELECT cul.user_id, om.org_id, om.role
      FROM channel_user_links cul
@@ -1295,7 +1988,7 @@ async function lookupChannelUser(
     return null;
   }
 
-  // Get org settings for RAG filtering
+  // Get org details
   const org = await env.DB.prepare(
     `SELECT jurisdictions, practice_types, firm_size FROM org WHERE id = ?`
   )
@@ -1317,13 +2010,13 @@ async function lookupChannelUser(
   try {
     jurisdictions = JSON.parse(org.jurisdictions || "[]");
   } catch {
-    // Use empty array on parse failure
+    // Use empty array
   }
 
   try {
     practiceTypes = JSON.parse(org.practice_types || "[]");
   } catch {
-    // Use empty array on parse failure
+    // Use empty array
   }
 
   return {
@@ -1336,9 +2029,6 @@ async function lookupChannelUser(
   };
 }
 
-/**
- * Looks up which org owns a workspace (e.g., Teams tenant).
- */
 async function lookupWorkspaceOrg(
   env: Env,
   channelType: string,
@@ -1353,13 +2043,6 @@ async function lookupWorkspaceOrg(
   return result?.org_id ?? null;
 }
 
-// =============================================================================
-// Message Routing
-// =============================================================================
-
-/**
- * Routes a message to the appropriate TenantDO based on orgId.
- */
 async function routeMessageToDO(
   env: Env,
   message: ChannelMessage
@@ -1377,255 +2060,243 @@ async function routeMessageToDO(
 }
 
 // =============================================================================
-// Teams Channel Adapter
+// Clio OAuth Handlers
 // =============================================================================
 
-interface TeamsActivity {
-  type: string;
-  text?: string;
-  id?: string;
-  from?: { id: string; aadObjectId?: string };
-  recipient?: { id: string };
-  conversation?: { id: string; conversationType?: string };
-  channelId?: string;
-  serviceUrl?: string;
-  channelData?: { tenant?: { id: string } };
-}
-
-async function handleTeamsMessage(
+async function handleClioConnect(
   request: Request,
   env: Env
 ): Promise<Response> {
-  // Only accept POST
-  if (request.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+  const url = new URL(request.url);
+  const isDemo = url.searchParams.get("demo") === "true";
+
+  // Get user/org from headers or use demo values
+  const userId = isDemo ? "demo-user" : request.headers.get("X-User-Id");
+  const orgId = isDemo ? "demo-org" : request.headers.get("X-Org-Id");
+
+  if (!userId || !orgId) {
+    return Response.redirect("/login?redirect=/settings/clio");
   }
 
-  // Parse the activity
-  let activity: TeamsActivity;
-  try {
-    activity = (await request.json()) as TeamsActivity;
-  } catch {
-    // Invalid JSON - acknowledge silently
-    return new Response(null, { status: 200 });
-  }
+  // Generate PKCE values
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-  // Process the message
-  try {
-    return await handleTeamsMessageInner(activity, env);
-  } catch (error) {
-    console.error("handleTeamsMessage error:", error);
-    // Always return 200 to Teams to avoid retries
-    return new Response(null, { status: 200 });
-  }
-}
-
-async function handleTeamsMessageInner(
-  activity: TeamsActivity,
-  env: Env
-): Promise<Response> {
-  // Only handle message activities with text
-  if (activity.type !== "message" || !activity.text) {
-    return new Response(null, { status: 200 });
-  }
-
-  // Extract required IDs
-  const aadObjectId = activity.from?.aadObjectId;
-  const conversationId = activity.conversation?.id;
-
-  if (!aadObjectId || !conversationId) {
-    return new Response(null, { status: 200 });
-  }
-
-  // Look up the user in Docket
-  const user = await lookupChannelUser(env, "teams", aadObjectId);
-
-  if (!user) {
-    // Unknown user - send onboarding message
-    await sendTeamsReply(activity, {
-      text: "Welcome to Docket! Please link your account at docket.com to get started.",
-    });
-    return new Response(null, { status: 200 });
-  }
-
-  // Determine conversation scope
-  const conversationType = activity.conversation?.conversationType;
-  let scope: "personal" | "groupChat" | "teams";
-
-  if (conversationType === "personal") {
-    scope = "personal";
-  } else if (conversationType === "groupChat") {
-    scope = "groupChat";
-  } else {
-    scope = "teams";
-  }
-
-  // Determine org ID based on scope
-  let orgId = user.orgId;
-
-  if (scope !== "personal") {
-    // For non-personal chats, verify workspace binding
-    const tenantId = activity.channelData?.tenant?.id;
-    if (!tenantId) {
-      return new Response(null, { status: 200 });
-    }
-
-    const workspaceOrgId = await lookupWorkspaceOrg(env, "teams", tenantId);
-
-    // Workspace must be bound to user's org
-    if (!workspaceOrgId || workspaceOrgId !== user.orgId) {
-      return new Response(null, { status: 200 });
-    }
-
-    orgId = workspaceOrgId;
-  }
-
-  // Build the channel message
-  const channelMessage: ChannelMessage = {
-    channel: "teams",
+  // Generate signed state containing user info and verifier
+  const state = await generateState(
+    userId,
     orgId,
-    userId: user.userId,
-    userRole: user.role,
-    conversationId,
-    conversationScope: scope,
-    message: activity.text,
-    jurisdictions: user.jurisdictions,
-    practiceTypes: user.practiceTypes,
-    firmSize: user.firmSize as "solo" | "small" | "mid" | "large" | null,
-    metadata: {
-      threadId: activity.conversation?.id,
-      teamsChannelId: activity.channelId,
-    },
-  };
+    codeVerifier,
+    env.CLIO_CLIENT_SECRET
+  );
 
-  // Route to the TenantDO
-  const doResponse = await routeMessageToDO(env, channelMessage);
-  const result = (await doResponse.json()) as { response: string };
+  // Build redirect URL
+  const redirectUri = new URL(request.url).origin + "/clio/callback";
 
-  // Send the response back to Teams
-  await sendTeamsReply(activity, {
-    text: result.response,
-    replyToId: activity.id,
+  const authUrl = buildAuthorizationUrl({
+    clientId: env.CLIO_CLIENT_ID,
+    redirectUri,
+    state,
+    codeChallenge,
   });
 
-  return new Response(null, { status: 200 });
+  return Response.redirect(authUrl, 302);
 }
-
-async function sendTeamsReply(
-  activity: TeamsActivity,
-  reply: { text: string; replyToId?: string }
-): Promise<void> {
-  // Need service URL and conversation ID to reply
-  if (!activity.serviceUrl || !activity.conversation?.id) {
-    return;
-  }
-
-  const replyUrl = `${activity.serviceUrl}/v3/conversations/${activity.conversation.id}/activities`;
-
-  try {
-    await fetch(replyUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "message",
-        text: reply.text,
-        from: activity.recipient,
-        recipient: activity.from,
-        conversation: activity.conversation,
-        replyToId: reply.replyToId,
-      }),
-    });
-  } catch (error) {
-    console.error("Teams reply error:", error);
-  }
-}
-
-// =============================================================================
-// Clio OAuth Callback
-// =============================================================================
 
 async function handleClioCallback(
   request: Request,
   env: Env
 ): Promise<Response> {
   const url = new URL(request.url);
-
-  // Get OAuth params
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
+  const error = url.searchParams.get("error");
 
-  if (!code) {
-    return Response.json(
-      { error: "Missing authorization code" },
-      { status: 400 }
+  // Handle user denial
+  if (error) {
+    return Response.redirect(`${url.origin}/settings/clio?error=denied`);
+  }
+
+  // Validate required params
+  if (!code || !state) {
+    return Response.redirect(
+      `${url.origin}/settings/clio?error=invalid_request`
     );
   }
 
-  if (!state) {
-    return Response.json({ error: "Missing state parameter" }, { status: 400 });
+  // Verify and decode state
+  const stateData = await verifyState(state, env.CLIO_CLIENT_SECRET);
+
+  if (!stateData) {
+    return Response.redirect(`${url.origin}/settings/clio?error=invalid_state`);
   }
 
-  // Exchange code for tokens
-  const tokenResponse = await fetch("https://app.clio.com/oauth/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
+  const { userId, orgId, verifier } = stateData;
+  const isDemo = userId === "demo-user" && orgId === "demo-org";
+  const redirectBase = isDemo ? "/demo/clio" : "/settings/clio";
+
+  try {
+    // Exchange code for tokens
+    const redirectUri = url.origin + "/clio/callback";
+
+    const tokens = await exchangeCodeForTokens({
       code,
-      redirect_uri: `${url.origin}/callback`,
-      client_id: env.CLIO_CLIENT_ID,
-      client_secret: env.CLIO_CLIENT_SECRET,
-    }),
-  });
+      codeVerifier: verifier,
+      clientId: env.CLIO_CLIENT_ID,
+      clientSecret: env.CLIO_CLIENT_SECRET,
+      redirectUri,
+    });
 
-  if (!tokenResponse.ok) {
-    return Response.json(
-      { error: "Token exchange failed", details: await tokenResponse.text() },
-      { status: 502 }
+    // Store tokens in org's Durable Object
+    const doId = env.TENANT.idFromName(orgId);
+    const doStub = env.TENANT.get(doId);
+
+    await doStub.fetch(
+      new Request("https://do/store-clio-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, tokens }),
+      })
+    );
+
+    // Provision schema cache
+    await doStub.fetch(
+      new Request("https://do/provision-schema", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      })
+    );
+
+    return Response.redirect(`${url.origin}${redirectBase}?success=connected`);
+  } catch (error) {
+    console.error("Clio callback error:", error);
+    return Response.redirect(
+      `${url.origin}${redirectBase}?error=exchange_failed`
     );
   }
-
-  const tokens = (await tokenResponse.json()) as {
-    token_type: string;
-    expires_in: number;
-  };
-
-  // TODO: Store tokens securely
-  return Response.json({
-    success: true,
-    token_type: tokens.token_type,
-    expires_in: tokens.expires_in,
-  });
 }
 
 // =============================================================================
-// Main Worker Entry Point
+// Demo Page Handlers
 // =============================================================================
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
+async function handleDemoPage(_request: Request, env: Env): Promise<Response> {
+  const demoUserId = "demo-user";
+  const demoOrgId = "demo-org";
 
-    // Auth routes - handled by Better Auth
-    if (url.pathname.startsWith("/api/auth")) {
-      try {
-        return await getAuth(env).handler(request);
-      } catch (error) {
-        return Response.json({ error: String(error) }, { status: 500 });
+  const doStub = env.TENANT.get(env.TENANT.idFromName(demoOrgId));
+
+  // Get current status
+  let connected = false;
+  let schemas: string[] = [];
+  let tokenExpiresAt: number | undefined;
+
+  try {
+    const statusRes = await doStub.fetch(
+      new Request("https://do/demo-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: demoUserId }),
+      })
+    );
+
+    const status = (await statusRes.json()) as {
+      connected: boolean;
+      schemas: string[];
+      tokenExpiresAt?: number;
+    };
+
+    connected = status.connected;
+    schemas = status.schemas || [];
+    tokenExpiresAt = status.tokenExpiresAt;
+  } catch {
+    // Use defaults
+  }
+
+  // Render page
+  const html = renderClioDemo({
+    connected,
+    schemas,
+    userId: demoUserId,
+    tokenExpiresAt,
+  } as DemoState);
+
+  return new Response(html, {
+    headers: { "Content-Type": "text/html" },
+  });
+}
+
+async function handleDemoApi(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const action = url.pathname.replace("/demo/clio/", "");
+
+  const demoUserId = "demo-user";
+  const demoOrgId = "demo-org";
+
+  const doStub = env.TENANT.get(env.TENANT.idFromName(demoOrgId));
+
+  try {
+    switch (action) {
+      case "disconnect": {
+        await doStub.fetch(
+          new Request("https://do/demo-disconnect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: demoUserId }),
+          })
+        );
+        return Response.json({ success: true });
       }
-    }
 
-    // Teams webhook - incoming messages from Microsoft Teams
-    if (url.pathname === "/api/messages") {
-      return handleTeamsMessage(request, env);
-    }
+      case "refresh-token": {
+        return doStub.fetch(
+          new Request("https://do/demo-refresh-token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: demoUserId }),
+          })
+        );
+      }
 
-    // Clio OAuth callback
-    if (url.pathname === "/callback") {
-      return handleClioCallback(request, env);
-    }
+      case "refresh-schema": {
+        const res = await doStub.fetch(
+          new Request("https://do/provision-schema", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: demoUserId }),
+          })
+        );
 
-    // Not found
-    return Response.json({ error: "Not found" }, { status: 404 });
-  },
-};
+        const data = (await res.json()) as {
+          success?: boolean;
+          count?: number;
+        };
+
+        return Response.json({ success: data.success, count: data.count });
+      }
+
+      case "test-api": {
+        const body = (await request.json()) as {
+          objectType: string;
+          operation: string;
+          id?: string;
+        };
+
+        return doStub.fetch(
+          new Request("https://do/demo-test-api", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: demoUserId, ...body }),
+          })
+        );
+      }
+
+      default:
+        return Response.json({ error: "Unknown demo action" }, { status: 404 });
+    }
+  } catch (error) {
+    console.error("Demo API error:", error);
+    return Response.json({ error: String(error) }, { status: 500 });
+  }
+}

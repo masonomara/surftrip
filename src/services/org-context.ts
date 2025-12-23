@@ -8,7 +8,7 @@
  * 3. Embedded and indexed in Vectorize
  */
 
-import { Env } from "../index";
+import { Env } from "../types/env";
 import { KB_CONFIG } from "../config/kb";
 import { R2Paths } from "../storage/r2-paths";
 import { chunkText, generateEmbeddings } from "./kb-builder";

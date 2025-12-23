@@ -9,7 +9,7 @@
  * 5. Storing chunks in D1 and vectors in Vectorize
  */
 
-import { Env } from "../index";
+import { Env } from "../types/env";
 import { KB_CONFIG } from "../config/kb";
 
 // ============================================================================

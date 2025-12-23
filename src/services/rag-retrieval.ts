@@ -9,7 +9,7 @@
  * responses in relevant, accurate information.
  */
 
-import { Env } from "../index";
+import { Env } from "../types/env";
 import { KB_CONFIG } from "../config/kb";
 
 // =============================================================================
