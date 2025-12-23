@@ -68,9 +68,12 @@ dist
 /docs/99*
 CLAUDE.md
 /devTools
-migrations/meta/
-/kb
-worker-configuration.d.ts
+**/migrations/meta/
+**/kb
+**/worker-configuration.d.ts
 /.config
 /.claude
 /.vscode
+
+.react-router/
+build/

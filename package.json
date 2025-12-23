@@ -2,29 +2,25 @@
   "name": "docket",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "predeploy": "npm run kb:manifest",
-    "deploy": "npm run predeploy && wrangler deploy",
-    "dev": "wrangler dev",
-    "start": "wrangler dev",
-    "test": "vitest",
-    "test:e2e": "vitest --config vitest.e2e.config.mts",
-    "test:all": "CLOUDFLARE_ACCOUNT_ID=$(grep CLOUDFLARE_ACCOUNT_ID .dev.vars | cut -d= -f2) vitest run && vitest run --config vitest.e2e.config.mts",
-    "cf-typegen": "wrangler types",
-    "kb:manifest": "npx tsx scripts/generate-kb-manifest.ts"
+    "dev": "npm run dev -w @docket/api",
+    "dev:api": "npm run dev -w @docket/api",
+    "dev:web": "npm run dev -w @docket/web",
+    "build": "npm run build -w @docket/api && npm run build -w @docket/web",
+    "build:api": "npm run build -w @docket/api",
+    "build:web": "npm run build -w @docket/web",
+    "deploy": "npm run deploy -w @docket/api && npm run deploy -w @docket/web",
+    "deploy:api": "npm run deploy -w @docket/api",
+    "deploy:web": "npm run deploy -w @docket/web",
+    "test": "npm run test -w @docket/api",
+    "test:e2e": "npm run test:e2e -w @docket/api",
+    "test:all": "npm run test:all -w @docket/api"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8.19",
-    "@types/node": "^25.0.3",
-    "typescript": "^5.5.2",
-    "vitest": "~3.2.0",
-    "wrangler": "^4.56.0"
-  },
-  "dependencies": {
-    "@microsoft/m365agentsplayground": "^0.2.20",
-    "better-auth": "^1.4.7",
-    "drizzle-orm": "^0.41.0",
-    "zod": "^4.2.1"
+    "typescript": "^5.5.2"
   }
 }

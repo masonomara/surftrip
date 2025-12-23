@@ -1,5 +1,5 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "../../node_modules/wrangler/config-schema.json",
   "account_id": "c3278867a149c1a3bbd5a876014fdfd1",
   "name": "docket",
   "main": "src/index.ts",

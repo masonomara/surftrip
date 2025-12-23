@@ -1,8 +1,8 @@
 # Docket
 
-An AI case management assistant for law firms and legal clinics using Clio. Users chat via Microsoft Teams, Slack, or MCP clients. The bot accesses a shared knowledge base, organization-specific context, and executes Clio operations.
+An AI case management assistant for law firms and legal clinics using Clio. Users chat via Microsoft Teams, Slack, or MCP clients. The bot accesses a shared Knowledge Base, organization-specific context, and executes Clio operations.
 
-**Status:** Phase 3 Complete — Starting Phase 4
+**Status:** Phase 8 Complete — Clio integration functional
 
 ## How It Works
 
@@ -87,20 +87,6 @@ flowchart TB
 - **Admin** — Full Clio access (with confirmation), settings, Org Context, invites
 - **Member** — Read-only Clio queries, no org management
 
-## Development Phases
-
-1. User interviews — validate plan with 3-4 people
-2. Accounts & project init — Cloudflare, Clio sandbox, M365 dev tenant
-3. Storage layer — D1 + Vectorize + R2
-4. Auth foundation — Better Auth, channel linking, invitations
-5. Knowledge Base — content + chunking + embeddings
-6. Core Worker + DO — routing, adapters, permissions
-7. Workers AI + RAG — LLM inference, vector retrieval
-8. Clio integration — OAuth, token storage, schema caching
-9. Website MVP — auth UI, org management, Org Context upload
-10. Teams adapter — Bot Framework, manifest, sandbox testing
-11. Production hardening, compliance, app store listing
-
 ## Documentation
 
 Specs live in `/docs/00-specs`. Phase work artifacts in `/docs/01-10`.
@@ -118,27 +104,7 @@ Specs live in `/docs/00-specs`. Phase work artifacts in `/docs/01-10`.
 
 ## Tech Stack
 
-Cloudflare Workers, Durable Objects (SQLite + KV), D1, Vectorize, R2, Workers AI (Llama 3.1 8B). Channels: Microsoft Teams, Slack, MCP.
-
-## Local Development
-
-```bash
-# Install dependencies
-npm install --legacy-peer-deps
-
-# Reset local D1 database (wipes all data, re-runs migrations)
-rm -rf .wrangler/state/v3/d1
-npx wrangler d1 migrations apply docket-db --local
-
-# Run tests
-npm test
-
-# Start local dev server
-npx wrangler dev
-
-# Apply migrations to production
-npx wrangler d1 migrations apply docket-db --remote
-```
+Cloudflare Workers, Durable Objects (SQLite + KV), D1, Vectorize, R2, Workers AI (Llama 3.1 8B), React Router 7, TypeScript, Zod, Drizzle ORM, Better Auth.
 
 ## Contributing
 
