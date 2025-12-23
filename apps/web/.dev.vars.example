@@ -1,1 +1,12 @@
-# Copy to .dev.vars (no secrets required)
+# =============================================================================
+# Web Development Environment Variables
+# Copy this file to .dev.vars
+# =============================================================================
+
+# Client-side API URL (used by Vite for browser requests)
+VITE_API_URL=http://localhost:8787
+
+# -----------------------------------------------------------------------------
+# Production values (for reference - set in Cloudflare dashboard)
+# -----------------------------------------------------------------------------
+# VITE_API_URL=https://api.docketadmin.com

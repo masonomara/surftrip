@@ -14,7 +14,7 @@ Docket is an AI assistant for law firms that use Clio (legal practice management
 
 ```
 apps/api/      Cloudflare Worker + Durable Object
-apps/web/      React Router 7 frontend on Cloudflare Pages
+apps/web/      React Router 7 frontend on Cloudflare Workers
 packages/shared/   Shared types and Zod schemas
 ```
 

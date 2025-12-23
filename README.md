@@ -50,6 +50,16 @@ npm run test:e2e  # End-to-end tests
 npm run test:all  # Both
 ```
 
+## Deployment
+
+```bash
+# Deploy API (api.docketadmin.com)
+cd apps/api && wrangler deploy
+
+# Deploy Web (docketadmin.com)
+cd apps/web && npm run build && wrangler deploy --env production
+```
+
 ## Database Migrations
 
 ```bash

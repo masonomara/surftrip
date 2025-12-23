@@ -14,15 +14,10 @@
     "esModuleInterop": true,
     "types": ["vite/client", "@cloudflare/workers-types"],
     "rootDirs": [".", "./.react-router/types"],
-    "baseUrl": ".",
     "paths": {
       "~/*": ["./app/*"]
     }
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    ".react-router/types/**/*"
-  ],
+  "include": ["**/*.ts", "**/*.tsx", ".react-router/types/**/*"],
   "exclude": ["node_modules", "build"]
 }
