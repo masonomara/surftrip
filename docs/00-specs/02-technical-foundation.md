@@ -64,6 +64,14 @@ Each organization has its own Cloudflare Durable Object (DO). The Knowledge Base
 - Per-user keys derived via HKDF-SHA256 with `user_id` as context/salt
 - Key version prefixed to ciphertext for rotation support, decrypt with old key, re-encrypt with new
 
+**Key Rotation Procedure:**
+
+1. Generate new key: `openssl rand -base64 32`
+2. Set old key: `wrangler secret put ENCRYPTION_KEY_OLD` (paste current value)
+3. Set new key: `wrangler secret put ENCRYPTION_KEY` (paste new value)
+4. Deploy. Data re-encrypts on access via `decryptAndRotate()`.
+5. After access period, delete: `wrangler secret delete ENCRYPTION_KEY_OLD`
+
 ## Data Deletion
 
 **User Leaves Org:** Messages stay (org owns for compliance). Delete: `org_members` entry, `channel_user_links` for that org, user's Clio OAuth token from DO KV, expire `pending_confirmations`. Auth sessions cleared (D1).
