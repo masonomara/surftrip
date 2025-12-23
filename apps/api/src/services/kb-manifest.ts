@@ -1,7 +1,4 @@
-/**
- * AUTO-GENERATED - Do not edit manually.
- * Run: npx tsx scripts/generate-kb-manifest.ts
- */
+// AUTO-GENERATED - Run: npx tsx scripts/generate-kb-manifest.ts
 
 import kb0 from "../../kb/firm-sizes/mid/driving-change-mid-firm.md";
 import kb1 from "../../kb/firm-sizes/mid/goal-setting-mid-firm.md";

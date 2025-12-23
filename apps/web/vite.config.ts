@@ -8,5 +8,8 @@ export default defineConfig(({ isSsrBuild }) => ({
   build: {
     rollupOptions: isSsrBuild ? { input: "./workers/app.ts" } : undefined,
   },
+  server: {
+    port: 5173,
+  },
   plugins: [cloudflareDevProxy(), reactRouter()],
 }));
