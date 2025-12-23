@@ -4,11 +4,7 @@ import { cloudflareDevProxy } from "@react-router/dev/vite/cloudflare";
 import { defineConfig } from "vite";
 
 export default defineConfig(({ isSsrBuild }) => ({
-  resolve: {
-    alias: {
-      "~": path.resolve(__dirname, "./app"),
-    },
-  },
+  resolve: { alias: { "~": path.resolve(__dirname, "./app") } },
   build: {
     rollupOptions: isSsrBuild ? { input: "./workers/app.ts" } : undefined,
   },

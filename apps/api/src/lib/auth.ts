@@ -5,26 +5,26 @@ import * as schema from "../db/schema";
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./encryption";
 
 const PBKDF2_ITERATIONS = 100000;
-const SALT_LENGTH = 16;
-const HASH_LENGTH = 256;
 
 /**
- * Hashes a password using PBKDF2 with a random salt.
- * Returns format: "base64salt:base64hash"
+ * Derives a cryptographic key from a password using PBKDF2.
+ * Returns a 256-bit key suitable for password verification.
  */
-async function hashPassword(password: string): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
-  const encoder = new TextEncoder();
+async function deriveKey(
+  password: string,
+  salt: Uint8Array
+): Promise<ArrayBuffer> {
+  const passwordBytes = new TextEncoder().encode(password);
 
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(password),
+    passwordBytes,
     "PBKDF2",
     false,
     ["deriveBits"]
   );
 
-  const hash = await crypto.subtle.deriveBits(
+  const derivedKey = await crypto.subtle.deriveBits(
     {
       name: "PBKDF2",
       salt,
@@ -32,8 +32,19 @@ async function hashPassword(password: string): Promise<string> {
       hash: "SHA-256",
     },
     keyMaterial,
-    HASH_LENGTH
+    256
   );
+
+  return derivedKey;
+}
+
+/**
+ * Hashes a password for storage.
+ * Returns a string in the format "salt:hash" where both are base64-encoded.
+ */
+async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const hash = await deriveKey(password, salt);
 
   const saltBase64 = arrayBufferToBase64(salt.buffer);
   const hashBase64 = arrayBufferToBase64(hash);
@@ -53,51 +64,29 @@ async function verifyPassword({
   hash: string;
 }): Promise<boolean> {
   const parts = hash.split(":");
-  if (parts.length !== 2) {
-    return false;
-  }
+  const saltBase64 = parts[0];
+  const storedHashBase64 = parts[1];
 
-  const [saltBase64, storedHashBase64] = parts;
   if (!saltBase64 || !storedHashBase64) {
     return false;
   }
 
   const salt = new Uint8Array(base64ToArrayBuffer(saltBase64));
-  const encoder = new TextEncoder();
-
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"]
-  );
-
-  const newHashBuffer = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: PBKDF2_ITERATIONS,
-      hash: "SHA-256",
-    },
-    keyMaterial,
-    HASH_LENGTH
-  );
-
-  const newHash = new Uint8Array(newHashBuffer);
   const storedHash = new Uint8Array(base64ToArrayBuffer(storedHashBase64));
+  const newHash = new Uint8Array(await deriveKey(password, salt));
 
-  // Constant-time comparison
+  // Hashes must be the same length
   if (storedHash.length !== newHash.length) {
     return false;
   }
 
-  let result = 0;
+  // Constant-time comparison to prevent timing attacks
+  let difference = 0;
   for (let i = 0; i < storedHash.length; i++) {
-    result |= storedHash[i] ^ newHash[i];
+    difference |= storedHash[i] ^ newHash[i];
   }
 
-  return result === 0;
+  return difference === 0;
 }
 
 export interface AuthEnv {
@@ -111,17 +100,16 @@ export interface AuthEnv {
   GOOGLE_CLIENT_SECRET: string;
 }
 
-/**
- * Creates and configures the Better Auth instance for this environment.
- */
 export function getAuth(env: AuthEnv) {
   const db = drizzle(env.DB, { schema });
 
+  const adapter = drizzleAdapter(db, {
+    provider: "sqlite",
+    schema,
+  });
+
   return betterAuth({
-    database: drizzleAdapter(db, {
-      provider: "sqlite",
-      schema,
-    }),
+    database: adapter,
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     emailAndPassword: {

@@ -1,21 +1,21 @@
 import { createAuthClient } from "better-auth/react";
 
-const getBaseURL = () => {
-  if (typeof window === "undefined") {
-    // SSR: return production URL (auth calls rehydrate on client)
+function getApiBaseUrl(): string {
+  const isServer = typeof window === "undefined";
+  if (isServer) {
     return "https://api.docketadmin.com";
   }
 
-  // Client-side: detect environment from hostname
-  if (window.location.hostname === "localhost") {
+  const isLocalhost = window.location.hostname === "localhost";
+  if (isLocalhost) {
     return "http://localhost:8787";
   }
 
   return "https://api.docketadmin.com";
-};
+}
 
 export const authClient = createAuthClient({
-  baseURL: getBaseURL(),
+  baseURL: getApiBaseUrl(),
 });
 
 export const { useSession, signIn, signUp, signOut } = authClient;
