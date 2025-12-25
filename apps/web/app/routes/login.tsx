@@ -2,26 +2,51 @@ import { useState } from "react";
 import { useSearchParams, Link } from "react-router";
 import type { MetaFunction } from "react-router";
 import { signIn } from "~/lib/auth-client";
-import styles from "~/styles/login.module.css";
+import styles from "~/styles/auth.module.css";
 
 export const meta: MetaFunction = () => [
   { title: "Log In | Docket" },
   { name: "description", content: "Log in to your Docket account" },
 ];
 
+/**
+ * Background image styles for the login page.
+ */
+const backgroundImageStyles: React.CSSProperties = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  zIndex: -1,
+};
+
+/**
+ * Hidden spacer image styles (used to balance button layouts).
+ */
+const hiddenSpacerStyles: React.CSSProperties = {
+  opacity: 0,
+};
+
+/**
+ * Login page component.
+ */
 export default function LoginPage() {
   const [searchParams] = useSearchParams();
   const redirectUrl = searchParams.get("redirect") || "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  /**
+   * Handles email/password form submission.
+   */
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
-    setLoading(true);
+    setErrorMessage(null);
+    setIsLoading(true);
 
     try {
       await signIn.email(
@@ -31,55 +56,46 @@ export default function LoginPage() {
             window.location.href = redirectUrl;
           },
           onError: (ctx) => {
-            const message = ctx.error.message || "Invalid email or password";
-            setError(message);
-            setLoading(false);
+            setErrorMessage(ctx.error.message || "Invalid email or password");
+            setIsLoading(false);
           },
         }
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-      setLoading(false);
+      const message = err instanceof Error ? err.message : "Login failed";
+      setErrorMessage(message);
+      setIsLoading(false);
     }
   }
 
-  function handleGoogleSignIn() {
+  /**
+   * Initiates OAuth sign-in with the specified provider.
+   */
+  function handleSocialSignIn(provider: "google" | "apple") {
     signIn.social({
-      provider: "google",
-      callbackURL: `${window.location.origin}${redirectUrl}`,
-    });
-  }
-
-  function handleAppleSignIn() {
-    signIn.social({
-      provider: "apple",
+      provider,
       callbackURL: `${window.location.origin}${redirectUrl}`,
     });
   }
 
   return (
     <main className={styles.page}>
+      {/* Background image */}
       <img
         src="/gradient-background.png"
-        alt="Docket"
+        alt=""
         height="100%"
         width="100%"
-        style={{
-          position: "absolute",
-          top: "0px",
-          left: "0px",
-          right: "0px",
-          bottom: "0px",
-          zIndex: "-1",
-        }}
+        style={backgroundImageStyles}
       />
 
       <div className={styles.container}>
         <h1 className={styles.title}>Welcome back</h1>
         <p className={styles.subtitle}>We're excited to work with you again.</p>
 
-        {error && <div className={styles.errorBox}>{error}</div>}
+        {errorMessage && <div className={styles.errorBox}>{errorMessage}</div>}
 
+        {/* Email/Password Form */}
         <form onSubmit={handleSubmit}>
           <div className={styles.fieldGroup}>
             <label htmlFor="email" className={styles.label}>
@@ -91,79 +107,95 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={loading}
+              disabled={isLoading}
               className={styles.input}
             />
           </div>
 
           <div className={styles.fieldGroupLast}>
-            <label htmlFor="password" className={styles.label}>
-              Password
-            </label>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <label htmlFor="password" className={styles.label}>
+                Password
+              </label>
+              <Link
+                to="/forgot-password"
+                className={styles.footerLink}
+                style={{ fontSize: "14px" }}
+              >
+                Forgot password?
+              </Link>
+            </div>
             <input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              disabled={loading}
+              disabled={isLoading}
               className={styles.input}
             />
           </div>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={isLoading}
             className={styles.submitButton}
           >
-            {loading ? "Logging in..." : "Log in"}
+            {isLoading ? "Logging in..." : "Log in"}
           </button>
         </form>
 
         <div className={styles.divider}>or</div>
 
+        {/* Social Sign-In Buttons */}
         <div className={styles.socialButtonContainer}>
           <button
             type="button"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
+            onClick={() => handleSocialSignIn("google")}
+            disabled={isLoading}
             className={styles.googleButton}
           >
             <img
               src="/google-icon-button.png"
-              alt="Docket"
+              alt=""
               height="18px"
               width="18px"
             />
             Continue with Google
             <img
               src="/google-icon-button.png"
-              alt="Docket"
+              alt=""
               height="18px"
               width="18px"
-              style={{ opacity: "0" }}
+              style={hiddenSpacerStyles}
             />
           </button>
 
           <button
             type="button"
-            onClick={handleAppleSignIn}
-            disabled={loading}
+            onClick={() => handleSocialSignIn("apple")}
+            disabled={isLoading}
             className={styles.appleButton}
           >
             <img
               src="/apple-icon-button.png"
-              alt="Docket"
+              alt=""
               height="18px"
               width="18px"
             />
             Continue with Apple
             <img
               src="/apple-icon-button.png"
-              alt="Docket"
+              alt=""
               height="18px"
               width="18px"
-              style={{ opacity: "0" }}
+              style={hiddenSpacerStyles}
             />
           </button>
         </div>

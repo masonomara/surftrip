@@ -2,7 +2,11 @@ import type { LinksFunction } from "react-router";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import globalStyles from "./styles/global.css?url";
 
+/**
+ * Links to load for every page.
+ */
 export const links: LinksFunction = () => [
+  // Google Fonts
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",
@@ -11,11 +15,26 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap",
   },
+  // Global styles
   { rel: "stylesheet", href: globalStyles },
 ];
 
+/**
+ * Styles for the header logo container.
+ */
+const headerStyles: React.CSSProperties = {
+  position: "absolute",
+  height: 72,
+  display: "flex",
+  alignItems: "space-between",
+  padding: "18px 24px 34px 24px",
+};
+
+/**
+ * Root layout component that wraps all pages.
+ */
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -26,18 +45,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        <div
-          style={{
-            position: "absolute",
-            height: "72px",
-            display: "flex",
-            alignItems: "space-between",
-            padding: "18px 24px 34px 24px",
-          }}
-        >
+        {/* Header with logo */}
+        <div style={headerStyles}>
           <img src="/docket-wordmark.png" alt="Docket" height="20px" />
         </div>
+
+        {/* Page content */}
         {children}
+
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -45,6 +60,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Root route component.
+ */
 export default function Root() {
   return <Outlet />;
 }

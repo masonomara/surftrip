@@ -253,6 +253,10 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 - [ ] Web app wrangler config (determine origin: same-domain vs subdomain vs Pages URL)
 - [ ] CORS policy matching web app origin + Better Auth `trustedOrigins`
 - [ ] Auth UI (Better Auth signup/login, Google/Apple SSO)
+- [ ] Email service (Resend: invitations, password reset, email verification)
+- [ ] Email verification flow (post-signup pending screen, verification callback, resend button)
+- [ ] Forgot password flow (request form, reset form with token)
+- [ ] Logout functionality
 - [ ] Invitation signup flow (check `invitations` table, link to org)
 - [ ] Org creation flow (type, practice areas, location, name, logo)
 - [ ] Creator becomes Owner (`is_owner: true`)

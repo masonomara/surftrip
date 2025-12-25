@@ -47,3 +47,9 @@ APPLE_TEAM_ID=
 APPLE_CLIENT_ID=
 APPLE_CLIENT_SECRET=
 APPLE_APP_BUNDLE_IDENTIFIER=
+
+# -----------------------------------------------------------------------------
+# Resend (required for email)
+# Get from: https://resend.com/api-keys
+# -----------------------------------------------------------------------------
+RESEND_API_KEY=

@@ -6,7 +6,6 @@
   display: flex;
   align-items: center;
 }
-
 .container {
   background: var(--foreground-1);
   border-radius: 16px;
@@ -17,10 +16,8 @@
   display: flex;
   flex-direction: column;
 }
-
 .title {
   color: var(--text-primary);
-  letter-spacing: 0px;
   font-size: 24px;
   line-height: 30px;
   text-align: center;
@@ -28,13 +25,11 @@
 }
 .subtitle {
   color: var(--text-secondary);
-  letter-spacing: 0px;
   text-align: center;
   font-size: 16px;
   line-height: 21px;
   margin-bottom: 19px;
 }
-
 .errorBox {
   padding: 0.75rem;
   background: #fee;
@@ -42,27 +37,28 @@
   border-radius: 4px;
   margin-bottom: 1rem;
 }
-
+.successBox {
+  padding: 0.75rem;
+  background: #efe;
+  color: #060;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  text-align: center;
+}
 .fieldGroup {
   margin-bottom: 20px;
 }
-
 .fieldGroupLast {
   margin-bottom: 1.5rem;
 }
-
 .label {
   display: block;
   color: var(--text-primary);
-
-  letter-spacing: 0px;
-
   font-size: 16px;
   line-height: 21px;
   font-weight: 500;
   margin-bottom: 8px;
 }
-
 .input {
   width: 100%;
   padding: 0.5rem;
@@ -71,22 +67,19 @@
   background: var(--foreground-3);
   color: var(--text-primary);
   height: 42px;
-  font-family: "Geist", system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-
 .divider {
   margin: 1.5rem 0;
   text-align: center;
   color: var(--text-secondary);
 }
-
 .socialButtonContainer {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
-
 .submitButton {
   width: 100%;
   padding: 0px 10px;
@@ -99,19 +92,16 @@
   font-weight: 600;
   font-size: 15px;
   line-height: 20px;
-  font-family: "Geist", system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-
 .submitButton:hover {
   background: var(--brand-selected);
 }
-
 .submitButton:disabled {
   background: var(--text-secondary);
   cursor: not-allowed;
 }
-
 .googleButton {
   width: 100%;
   padding: 0px 10px;
@@ -124,14 +114,13 @@
   font-weight: 600;
   font-size: 15px;
   line-height: 20px;
-  font-family: "Geist", system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
 }
-
 .appleButton {
   width: 100%;
   padding: 0px 10px;
@@ -144,14 +133,13 @@
   font-weight: 600;
   font-size: 15px;
   line-height: 20px;
-  font-family: "Geist", system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
 }
-
 .footer {
   margin-top: 2rem;
   text-align: center;
@@ -159,7 +147,6 @@
   font-size: 14px;
   line-height: 19px;
 }
-
 .footerLink {
   color: var(--brand);
   text-decoration: none !important;

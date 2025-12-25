@@ -409,12 +409,8 @@ Users connect their individual Clio accounts. This is handled by the API worker,
 
 **Create `apps/web/app/routes/org.clio.tsx`:**
 
-````typescript
-
-    // Redirect to API's Clio OAuth start endpoint
-
-    // Admin-only: refresh Clio schema cache
-
+- Redirect to API's Clio OAuth start endpoint
+- Admin-only: refresh Clio schema cache
 
 **How Clio OAuth works:**
 
@@ -669,7 +665,7 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
     </div>
   );
 }
-````
+```
 
 **What happens on upload:**
 

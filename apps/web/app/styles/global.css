@@ -3,14 +3,11 @@
   --foreground-1: #ffffff;
   --foreground-2: #fbfbfb;
   --foreground-3: #f3f3f4;
-
   --brand: #2768dd;
   --brand-background: #cfddf6;
   --brand-selected: #19489e;
-
   --border-default: #e2e2e4;
   --border-dark: #dfdfe1;
-
   --text-primary: #323339;
   --text-secondary: #62626b;
 }
@@ -22,12 +19,11 @@
   margin: 0;
   padding: 0;
 }
-
 html {
-  font-family: "Geist", system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.02em;
 }
-
 body {
   min-height: 100vh;
   background: var(--background);

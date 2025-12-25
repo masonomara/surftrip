@@ -1,0 +1,267 @@
+.page {
+  max-width: 560px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.container {
+  background: var(--foreground-1);
+  border-radius: 16px;
+  border: 1px solid var(--border-default);
+  padding: 32px;
+  width: 100%;
+}
+.progress {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  justify-content: center;
+}
+.progressStep {
+  width: 40px;
+  height: 4px;
+  background: var(--border-default);
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+.progressStep.active,
+.progressStep.completed {
+  background: var(--brand);
+}
+.title {
+  color: var(--text-primary);
+  font-size: 24px;
+  line-height: 30px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 21px;
+  text-align: center;
+  margin-bottom: 24px;
+}
+.errorBox {
+  padding: 0.75rem;
+  background: #fee;
+  color: #c00;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+.optionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.optionCard {
+  padding: 24px 16px;
+  background: var(--foreground-3);
+  border: 2px solid var(--border-default);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+.optionCard:hover {
+  border-color: var(--brand);
+}
+.optionCard.selected {
+  border-color: var(--brand);
+  background: var(--foreground-2);
+}
+.formFields {
+  margin-bottom: 24px;
+}
+.fieldGroup {
+  margin-bottom: 20px;
+}
+.label {
+  display: block;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 21px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border-dark);
+  border-radius: 8px;
+  background: var(--foreground-3);
+  color: var(--text-primary);
+  height: 42px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+.input::placeholder {
+  color: var(--text-secondary);
+}
+.sizeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.sizeCard {
+  padding: 16px;
+  background: var(--foreground-3);
+  border: 2px solid var(--border-default);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+.sizeCard:hover {
+  border-color: var(--brand);
+}
+.sizeCard.selected {
+  border-color: var(--brand);
+  background: var(--foreground-2);
+}
+.sizeLabel {
+  display: block;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.sizeDescription {
+  display: block;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.checkboxGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-bottom: 24px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.checkboxItem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 8px;
+  background: var(--foreground-3);
+  border: 2px solid var(--border-default);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+.checkboxItem:hover {
+  border-color: var(--brand);
+}
+.checkboxItem.selected {
+  border-color: var(--brand);
+  background: var(--foreground-2);
+}
+.checkboxInput {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.checkboxLabel {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.practiceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.practiceItem {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--foreground-3);
+  border: 2px solid var(--border-default);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+.practiceItem:hover {
+  border-color: var(--brand);
+}
+.practiceItem.selected {
+  border-color: var(--brand);
+  background: var(--foreground-2);
+}
+.practiceLabel {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.buttons {
+  display: flex;
+  gap: 12px;
+}
+.backButton {
+  flex: 1;
+  padding: 0 16px;
+  height: 40px;
+  background: var(--foreground-3);
+  color: var(--text-primary);
+  border: 1px solid var(--border-dark);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.2s;
+}
+.backButton:hover {
+  background: var(--foreground-2);
+}
+.continueButton,
+.submitButton {
+  flex: 2;
+  padding: 0 16px;
+  height: 40px;
+  background: var(--brand);
+  color: var(--foreground-1);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.2s;
+}
+.continueButton:hover,
+.submitButton:hover {
+  background: var(--brand-selected);
+}
+.continueButton:disabled,
+.submitButton:disabled {
+  background: var(--text-secondary);
+  cursor: not-allowed;
+}

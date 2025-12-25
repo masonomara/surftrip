@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "predeploy": "npm run kb:manifest",
-    "deploy": "npm run predeploy && wrangler deploy",
+    "deploy": "npm run predeploy && wrangler d1 migrations apply docket-db --remote && wrangler deploy",
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "test": "vitest",
@@ -19,6 +19,7 @@
     "@docket/shared": "*",
     "better-auth": "^1.4.7",
     "drizzle-orm": "^0.41.0",
+    "resend": "^6.6.0",
     "zod": "^4.2.1"
   },
   "devDependencies": {

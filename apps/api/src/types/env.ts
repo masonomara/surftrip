@@ -15,5 +15,7 @@ export interface Env {
   APPLE_APP_BUNDLE_IDENTIFIER: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  RESEND_API_KEY: string;
+  FROM_EMAIL?: string;
   ENVIRONMENT?: string;
 }
