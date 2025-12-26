@@ -1,15 +1,14 @@
 .page {
-  max-width: 400px;
+  max-width: 100%;
   margin: 0 auto;
   min-height: 100vh;
   height: 100%;
   display: flex;
   align-items: center;
+  justify-content: center;
+  background: var(--surface-1);
 }
 .container {
-  background: var(--container);
-  border-radius: 16px;
-  border: 1px solid var(--border-default);
   padding: 32px;
   max-width: 476px;
   width: 100%;
@@ -18,8 +17,8 @@
 }
 .title {
   color: var(--text-primary);
-  font-size: 24px;
-  line-height: 30px;
+  font-size: 38px;
+  line-height: 46px;
   text-align: center;
   margin-bottom: 8px;
 }
@@ -46,7 +45,7 @@
   text-align: center;
 }
 .fieldGroup {
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 .fieldGroupLast {
   margin-bottom: 1.5rem;
@@ -58,15 +57,28 @@
   line-height: 21px;
   font-weight: 500;
   margin-bottom: 8px;
+  display: none;
 }
 .input {
   width: 100%;
   padding: 0.5rem;
   border: 1px solid var(--border-dark);
   border-radius: 8px;
-  background: var(--surface-3);
-  color: var(--text-primary);
+  background: var(--container);
+
   height: 42px;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 21px;
+  letter-spacing: -0.02em;
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.input::placeholder {
+  color: var(--text-tertiary);
+  font-size: 16px;
+  line-height: 21px;
+  letter-spacing: -0.02em;
   font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -84,7 +96,7 @@
   width: 100%;
   padding: 0px 10px;
   height: 40px;
-  background: var(--brand);
+  background: var(--text-primary);
   color: var(--container);
   border: none;
   border-radius: 8px;
@@ -96,20 +108,20 @@
   -webkit-font-smoothing: antialiased;
 }
 .submitButton:hover {
-  background: var(--brand-selected);
+  background: var(--text-secondary);
 }
 .submitButton:disabled {
-  background: var(--text-secondary);
+  background: var(--text-tertiary);
   cursor: not-allowed;
 }
 .googleButton {
   width: 100%;
   padding: 0px 10px;
   height: 40px;
-  background: var(--container);
-  color: #000;
-  border: 1px solid #000;
+  color: var(--text-primary);
+  border: 1px solid var(--border-dark);
   border-radius: 8px;
+  background: var(--surface-1);
   cursor: pointer;
   font-weight: 600;
   font-size: 15px;
@@ -148,6 +160,6 @@
   line-height: 19px;
 }
 .footerLink {
-  color: var(--brand);
+  color: var(--text-primary);
   text-decoration: none !important;
 }

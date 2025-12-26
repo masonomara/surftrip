@@ -3,7 +3,8 @@ export interface EncryptionEnv {
   ENCRYPTION_KEY_OLD?: string;
 }
 
-const PBKDF2_ITERATIONS = 600000;
+// Cloudflare Workers limits PBKDF2 to 100,000 iterations max
+const PBKDF2_ITERATIONS = 100000;
 const IV_LENGTH = 12;
 const KEY_LENGTH = 256;
 

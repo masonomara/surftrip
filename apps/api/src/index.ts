@@ -1,8 +1,19 @@
 import { getAuth } from "./lib/auth";
 import { TenantDO } from "./do/tenant";
 import { handleTeamsMessage } from "./handlers/teams";
-import { handleClioConnect, handleClioCallback } from "./handlers/clio-oauth";
-import { handleCreateOrg, handleGetUserOrg } from "./handlers/org";
+import { handleClioCallback } from "./handlers/clio-oauth";
+import {
+  handleClioConnectAuth,
+  handleClioStatus,
+  handleClioRefreshSchema,
+  handleClioDisconnect,
+} from "./handlers/clio";
+import {
+  handleCreateOrg,
+  handleGetUserOrg,
+  handleGetOrgDeletionPreview,
+  handleDeleteOrg,
+} from "./handlers/org";
 import {
   handleGetMembers,
   handleSendInvitation,
@@ -14,6 +25,10 @@ import {
   handleGetInvitation,
   handleAcceptInvitation,
 } from "./handlers/members";
+import {
+  handleGetAccountDeletionPreview,
+  handleDeleteAccount,
+} from "./handlers/account";
 import type { Env } from "./types/env";
 
 export { TenantDO };
@@ -103,9 +118,6 @@ export default {
     if (path === "/api/messages") {
       return handleTeamsMessage(request, env);
     }
-    if (path === "/clio/connect") {
-      return handleClioConnect(request, env);
-    }
     if (path === "/clio/callback") {
       return handleClioCallback(request, env);
     }
@@ -134,8 +146,28 @@ async function routeRequest(
   if (path === "/api/org" && method === "POST") {
     return handleCreateOrg(request, env);
   }
+  if (path === "/api/org" && method === "DELETE") {
+    return handleDeleteOrg(request, env);
+  }
+  if (path === "/api/org/deletion-preview" && method === "GET") {
+    return handleGetOrgDeletionPreview(request, env);
+  }
   if (path === "/api/user/org" && method === "GET") {
     return handleGetUserOrg(request, env);
+  }
+
+  // Clio routes
+  if (path === "/api/clio/connect" && method === "GET") {
+    return handleClioConnectAuth(request, env);
+  }
+  if (path === "/api/clio/status" && method === "GET") {
+    return handleClioStatus(request, env);
+  }
+  if (path === "/api/clio/disconnect" && method === "POST") {
+    return handleClioDisconnect(request, env);
+  }
+  if (path === "/api/org/clio/refresh-schema" && method === "POST") {
+    return handleClioRefreshSchema(request, env);
   }
 
   // Member management routes
@@ -181,6 +213,14 @@ async function routeRequest(
   const acceptMatch = path.match(/^\/api\/invitations\/([^/]+)\/accept$/);
   if (acceptMatch && method === "POST") {
     return handleAcceptInvitation(request, env, acceptMatch[1]);
+  }
+
+  // Account routes
+  if (path === "/api/account/deletion-preview" && method === "GET") {
+    return handleGetAccountDeletionPreview(request, env);
+  }
+  if (path === "/api/account" && method === "DELETE") {
+    return handleDeleteAccount(request, env);
   }
 
   return null;

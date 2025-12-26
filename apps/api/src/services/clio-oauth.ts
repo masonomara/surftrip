@@ -6,6 +6,9 @@ import {
   constantTimeEqual,
   type EncryptionEnv,
 } from "../lib/encryption";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger({ component: "clio-oauth" });
 
 // =============================================================================
 // Constants
@@ -259,6 +262,12 @@ export function buildAuthorizationUrl(params: AuthorizationUrlParams): string {
 export async function exchangeCodeForTokens(
   params: TokenExchangeParams
 ): Promise<ClioTokens> {
+  log.info("Exchanging authorization code for tokens", {
+    redirectUri: params.redirectUri,
+    hasCode: !!params.code,
+    hasVerifier: !!params.codeVerifier,
+  });
+
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: params.code,
@@ -276,10 +285,19 @@ export async function exchangeCodeForTokens(
 
   if (!response.ok) {
     const errorText = await response.text();
+    log.error("Token exchange failed", {
+      status: response.status,
+      error: errorText,
+    });
     throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
   }
 
   const data = (await response.json()) as ClioTokenResponse;
+
+  log.info("Token exchange successful", {
+    tokenType: data.token_type,
+    expiresIn: data.expires_in,
+  });
 
   return {
     access_token: data.access_token,
@@ -295,6 +313,8 @@ export async function exchangeCodeForTokens(
 export async function refreshAccessToken(
   params: TokenRefreshParams
 ): Promise<ClioTokens> {
+  log.info("Refreshing access token");
+
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: params.refreshToken,
@@ -310,10 +330,19 @@ export async function refreshAccessToken(
 
   if (!response.ok) {
     const errorText = await response.text();
+    log.error("Token refresh failed", {
+      status: response.status,
+      error: errorText,
+    });
     throw new Error(`Token refresh failed: ${response.status} ${errorText}`);
   }
 
   const data = (await response.json()) as ClioTokenResponse;
+
+  log.info("Token refresh successful", {
+    tokenType: data.token_type,
+    expiresIn: data.expires_in,
+  });
 
   return {
     access_token: data.access_token,
@@ -336,11 +365,17 @@ export async function storeClioTokens(
   tokens: ClioTokens,
   encryptionKey: string
 ): Promise<void> {
+  log.debug("Encrypting and storing Clio tokens", {
+    userId,
+    expiresAt: new Date(tokens.expires_at).toISOString(),
+  });
+
   const tokenJson = JSON.stringify(tokens);
   const encrypted = await encrypt(tokenJson, userId, encryptionKey);
   const encryptedBase64 = arrayBufferToBase64(encrypted);
 
   await storage.put(`clio_token:${userId}`, encryptedBase64);
+  log.debug("Clio tokens stored successfully", { userId });
 }
 
 /**
@@ -356,15 +391,28 @@ export async function getClioTokens(
     | undefined;
 
   if (!encryptedBase64) {
+    log.debug("No stored Clio tokens found", { userId });
     return null;
   }
 
   try {
     const encrypted = base64ToArrayBuffer(encryptedBase64);
     const decrypted = await decrypt(encrypted, userId, env);
-    return JSON.parse(decrypted) as ClioTokens;
-  } catch {
+    const tokens = JSON.parse(decrypted) as ClioTokens;
+    log.debug("Retrieved Clio tokens", {
+      userId,
+      tokenExpired: tokens.expires_at < Date.now(),
+      expiresAt: new Date(tokens.expires_at).toISOString(),
+    });
+    return tokens;
+  } catch (error) {
     // Decryption failed - token may be corrupted or key changed
+    const message = error instanceof Error ? error.message : String(error);
+    log.error("Failed to decrypt Clio tokens", {
+      userId,
+      error: message,
+      hint: "Token may be corrupted or encryption key may have changed",
+    });
     return null;
   }
 }

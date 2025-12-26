@@ -2,89 +2,74 @@
 // Clio Schema Service
 // =============================================================================
 //
-// Fetches and caches Clio object schemas for LLM context injection.
-// The LLM uses these schemas to understand what fields are available
-// when building Clio API queries.
+// Fetches per-org custom fields from Clio. Base object fields (matters, contacts,
+// etc.) are not fetched - the LLM uses its training knowledge of Clio's API.
+// Only custom fields vary per-firm and need to be fetched.
 
+import { createLogger } from "../lib/logger";
+
+const log = createLogger({ component: "clio-schema" });
 const CLIO_API_BASE = "https://app.clio.com/api/v4";
 
 /**
- * Increment this version when schemas need to be re-fetched.
- * Used to invalidate cached schemas when our understanding of
- * Clio's API changes.
+ * Increment when custom field handling changes.
+ * Used to invalidate cached custom fields.
  */
-export const CLIO_SCHEMA_VERSION = 1;
+export const CLIO_SCHEMA_VERSION = 2;
 
 /**
- * Core Clio objects that users commonly query and modify
+ * Custom fields refresh after this duration (1 hour).
+ * Lazy refresh: only checked when user makes a Clio API call.
  */
-const CORE_OBJECTS = [
-  "matters",
-  "contacts",
-  "tasks",
-  "calendar_entries",
-  "time_entries",
-  "documents",
-];
+export const CUSTOM_FIELDS_TTL_MS = 60 * 60 * 1000;
 
 /**
- * Reference objects that are read-only (used for lookups)
+ * Parent types that support custom fields in Clio
  */
-const READ_ONLY_OBJECTS = ["practice_areas", "activity_descriptions", "users"];
+const CUSTOM_FIELD_PARENT_TYPES = ["Matter", "Contact"] as const;
 
 // =============================================================================
 // Types
 // =============================================================================
 
-export interface ClioSchemaField {
+export interface ClioCustomField {
+  id: number;
   name: string;
-  type: string;
+  fieldType: string; // checkbox, contact, date, email, etc.
+  parentType: string; // Matter or Contact
   required?: boolean;
-  readOnly?: boolean;
-  enum?: string[];
-  relationship?: boolean;
+  options?: string[]; // For picklist/multi-select types
 }
 
-export interface ClioSchema {
-  objectType: string;
-  fields: ClioSchemaField[];
-  customFields?: Array<{
+interface ClioCustomFieldApiResponse {
+  data: Array<{
+    id: number;
     name: string;
-    type: string;
-    fieldType: string;
+    field_type: string;
+    parent_type: string;
+    required?: boolean;
+    picklist_options?: Array<{ option: string }>;
   }>;
 }
 
-interface ClioSchemaApiResponse {
-  schema?: {
-    type: string;
-    fields: Array<{
-      name: string;
-      type: string;
-      required?: boolean;
-      read_only?: boolean;
-      enum?: string[];
-      relationship?: boolean;
-    }>;
-  };
-}
-
 // =============================================================================
-// Schema Fetching
+// Custom Field Fetching
 // =============================================================================
 
 /**
- * Fetch the schema for a single Clio object type.
+ * Fetch custom fields for a specific parent type.
  *
- * @param objectType - The Clio object type (e.g., "matters", "contacts")
+ * @param parentType - "Matter" or "Contact"
  * @param accessToken - Valid Clio access token
- * @returns The schema, or null if fetch failed
+ * @returns Array of custom fields, empty if none or fetch failed
  */
-export async function fetchObjectSchema(
-  objectType: string,
+async function fetchCustomFieldsForType(
+  parentType: string,
   accessToken: string
-): Promise<ClioSchema | null> {
-  const url = `${CLIO_API_BASE}/${objectType}.json?fields=schema`;
+): Promise<ClioCustomField[]> {
+  const url = `${CLIO_API_BASE}/custom_fields.json?parent_type=${parentType}&deleted=false&fields=id,name,field_type,parent_type,required,picklist_options`;
+
+  log.debug("Fetching custom fields", { parentType, url });
 
   const response = await fetch(url, {
     headers: {
@@ -94,123 +79,150 @@ export async function fetchObjectSchema(
   });
 
   if (!response.ok) {
-    console.error(`Failed to fetch schema for ${objectType}:`, response.status);
-    return null;
+    const errorText = await response.text();
+    log.error("Failed to fetch custom fields", {
+      parentType,
+      status: response.status,
+      error: errorText.slice(0, 200),
+    });
+    return [];
   }
 
-  const data = (await response.json()) as ClioSchemaApiResponse;
+  const data = (await response.json()) as ClioCustomFieldApiResponse;
 
-  if (!data.schema) {
-    return null;
+  if (!data.data || data.data.length === 0) {
+    log.debug("No custom fields found", { parentType });
+    return [];
   }
 
-  // Transform the API response to our schema format
-  const fields: ClioSchemaField[] = data.schema.fields.map((field) => ({
+  return data.data.map((field) => ({
+    id: field.id,
     name: field.name,
-    type: field.type,
+    fieldType: field.field_type,
+    parentType: field.parent_type,
     required: field.required,
-    readOnly: field.read_only,
-    enum: field.enum,
-    relationship: field.relationship,
+    options: field.picklist_options?.map((p) => p.option),
   }));
-
-  return {
-    objectType: data.schema.type,
-    fields,
-  };
 }
 
 /**
- * Fetch schemas for all known Clio object types.
+ * Fetch all custom fields for the organization.
  *
- * Fetches in parallel for performance. Individual failures are logged
- * but don't prevent other schemas from being returned.
+ * Fetches Matter and Contact custom fields in parallel.
  *
  * @param accessToken - Valid Clio access token
- * @returns Map of object type to schema
+ * @returns Array of all custom fields
  */
-export async function fetchAllSchemas(
+export async function fetchAllCustomFields(
   accessToken: string
-): Promise<Map<string, ClioSchema>> {
-  const allObjectTypes = [...CORE_OBJECTS, ...READ_ONLY_OBJECTS];
-  const schemas = new Map<string, ClioSchema>();
+): Promise<ClioCustomField[]> {
+  log.info("Fetching all custom fields", {
+    parentTypes: CUSTOM_FIELD_PARENT_TYPES,
+  });
 
-  // Fetch all schemas in parallel
-  const fetchPromises = allObjectTypes.map((objectType) =>
-    fetchObjectSchema(objectType, accessToken)
+  const fetchPromises = CUSTOM_FIELD_PARENT_TYPES.map((type) =>
+    fetchCustomFieldsForType(type, accessToken)
   );
 
   const results = await Promise.allSettled(fetchPromises);
 
-  // Collect successful results
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i];
-    const objectType = allObjectTypes[i];
-
-    if (result.status === "fulfilled" && result.value) {
-      schemas.set(objectType, result.value);
+  const allFields: ClioCustomField[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      allFields.push(...result.value);
     }
   }
 
-  return schemas;
+  log.info("Custom field fetch complete", {
+    total: allFields.length,
+    byType: {
+      Matter: allFields.filter((f) => f.parentType === "Matter").length,
+      Contact: allFields.filter((f) => f.parentType === "Contact").length,
+    },
+  });
+
+  return allFields;
 }
 
 // =============================================================================
-// Schema Formatting (for LLM context)
+// Formatting (for LLM context)
 // =============================================================================
 
 /**
- * Format schemas into a compact string for LLM context.
+ * Format custom fields into a compact string for LLM context.
  *
  * Example output:
  * ```
- * Matter: { id: integer (read-only), display_number: string, ... }
- * Contact: { id: integer (read-only), name: string (required), ... }
+ * Matter Custom Fields: Case Type (picklist: Criminal|Civil|Family), Jurisdiction (text)
+ * Contact Custom Fields: SSN (text), Preferred Name (text)
  * ```
  */
-export function formatSchemasForLLM(schemas: Map<string, ClioSchema>): string {
-  const formattedLines: string[] = [];
-
-  for (const schema of schemas.values()) {
-    const fieldDescriptions = schema.fields.map((field) => {
-      let description = `${field.name}: ${field.type}`;
-
-      if (field.required) {
-        description += " (required)";
-      }
-      if (field.readOnly) {
-        description += " (read-only)";
-      }
-      if (field.enum) {
-        description += ` [${field.enum.join("|")}]`;
-      }
-
-      return description;
-    });
-
-    const fieldsString = fieldDescriptions.join(", ");
-    formattedLines.push(`${schema.objectType}: { ${fieldsString} }`);
+export function formatCustomFieldsForLLM(fields: ClioCustomField[]): string {
+  if (fields.length === 0) {
+    return "";
   }
 
-  return formattedLines.join("\n");
+  const byType = new Map<string, ClioCustomField[]>();
+  for (const field of fields) {
+    const existing = byType.get(field.parentType) || [];
+    existing.push(field);
+    byType.set(field.parentType, existing);
+  }
+
+  const lines: string[] = [];
+  for (const [parentType, typeFields] of byType) {
+    const fieldDescriptions = typeFields.map((field) => {
+      let desc = `${field.name} (${field.fieldType}`;
+      if (field.options && field.options.length > 0) {
+        desc += `: ${field.options.join("|")}`;
+      }
+      if (field.required) {
+        desc += ", required";
+      }
+      desc += ")";
+      return desc;
+    });
+    lines.push(`${parentType} Custom Fields: ${fieldDescriptions.join(", ")}`);
+  }
+
+  return lines.join("\n");
 }
 
 // =============================================================================
-// Schema Versioning
+// Versioning & TTL
 // =============================================================================
 
 /**
- * Check if cached schemas are outdated and need to be refreshed.
+ * Check if cached custom fields are outdated.
  *
- * @param cachedVersion - The version of currently cached schemas (null if none)
- * @returns true if schemas should be re-fetched
+ * Returns true if:
+ * - No cached version exists
+ * - Cached version is older than current CLIO_SCHEMA_VERSION
+ * - Cache is older than CUSTOM_FIELDS_TTL_MS (1 hour)
+ *
+ * @param cachedVersion - Version of cached custom fields (null if none)
+ * @param fetchedAt - Timestamp when custom fields were last fetched (null if never)
+ * @returns true if custom fields should be re-fetched
  */
-export function schemaNeedsRefresh(cachedVersion: number | null): boolean {
-  // No cached version - definitely need to fetch
-  if (cachedVersion === null) {
+export function customFieldsNeedRefresh(
+  cachedVersion: number | null,
+  fetchedAt: number | null
+): boolean {
+  // No cache exists
+  if (cachedVersion === null || fetchedAt === null) {
     return true;
   }
 
-  // Cached version is older than current
-  return cachedVersion < CLIO_SCHEMA_VERSION;
+  // Version mismatch (developer bumped version)
+  if (cachedVersion < CLIO_SCHEMA_VERSION) {
+    return true;
+  }
+
+  // TTL expired (lazy refresh after 1 hour)
+  const age = Date.now() - fetchedAt;
+  if (age > CUSTOM_FIELDS_TTL_MS) {
+    return true;
+  }
+
+  return false;
 }

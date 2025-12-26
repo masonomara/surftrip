@@ -26,9 +26,13 @@
   "vectorize": [{ "binding": "VECTORIZE", "index_name": "docket-kb" }],
   "ai": { "binding": "AI" },
   "durable_objects": {
-    "bindings": [{ "name": "TENANT", "class_name": "TenantDO" }],
+    "bindings": [{ "name": "TENANT", "class_name": "TenantDO" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TenantDO"] }],
+  "migrations": [
+    { "tag": "v1", "new_classes": ["TenantDO"] },
+    { "tag": "v2", "deleted_classes": ["TenantDO"] },
+    { "tag": "v3", "new_sqlite_classes": ["TenantDO"] }
+  ],
   "routes": [
     { "pattern": "api.docketadmin.com/*", "zone_name": "docketadmin.com" },
   ],

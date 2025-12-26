@@ -231,6 +231,29 @@ export default function SignupPage() {
 
         {errorMessage && <div className={styles.errorBox}>{errorMessage}</div>}
 
+        {/* Social signup buttons */}
+        <div className={styles.socialButtonContainer}>
+          <button
+            type="button"
+            onClick={() => handleSocialSignIn("google")}
+            disabled={isLoading}
+            className={styles.googleButton}
+          >
+            Continue with Google
+          </button>
+
+          {/* <button
+          type="button"
+          onClick={() => handleSocialSignIn("apple")}
+          disabled={isLoading}
+          className={styles.appleButton}
+        >
+          Continue with Apple
+        </button> */}
+        </div>
+
+        <div className={styles.divider}>or</div>
+
         <form onSubmit={handleSubmit}>
           {/* Name field */}
           <div className={styles.fieldGroup}>
@@ -309,29 +332,6 @@ export default function SignupPage() {
             {isLoading ? "Creating account..." : "Sign up"}
           </button>
         </form>
-
-        <div className={styles.divider}>or</div>
-
-        {/* Social signup buttons */}
-        <div className={styles.socialButtonContainer}>
-          <button
-            type="button"
-            onClick={() => handleSocialSignIn("google")}
-            disabled={isLoading}
-            className={styles.googleButton}
-          >
-            Continue with Google
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSocialSignIn("apple")}
-            disabled={isLoading}
-            className={styles.appleButton}
-          >
-            Continue with Apple
-          </button>
-        </div>
 
         <p className={styles.footer}>
           Already have an account?{" "}

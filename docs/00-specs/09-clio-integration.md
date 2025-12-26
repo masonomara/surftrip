@@ -23,48 +23,20 @@ Base URL: `https://app.clio.com/api/v4/`
 - Activity Descriptions
 - Users (firm staff)
 
-## Clio Schema Caching
+## Clio Custom Fields
 
-A per-org Clio Schema is cached in DO SQLite. Fetch handles custom fields added by firm admins, and Clio API changes. Fetch is triggered by:
+Clio has no schema introspection API - base object fields are documented in the API Reference and known to the LLM. Only custom fields (firm-specific) need to be fetched dynamically.
 
-- First Clio API call (no cached schema)
-- User triggers refresh via docket.com/settings
-- Developer schema updates
-
-## Clio API Schema
-
-Each object type has a schema endpoint:
-
+**Fetch custom fields per-org:**
 ```
-GET /api/v4/matters.json?fields=schema
-GET /api/v4/contacts.json?fields=schema
-GET /api/v4/tasks.json?fields=schema
-...
+GET /api/v4/custom_fields.json?parent_type=Matter&deleted=false
+GET /api/v4/custom_fields.json?parent_type=Contact&deleted=false
 ```
 
-Response includes field definitions:
-
-```json
-{
-  "schema": {
-    "type": "Matter",
-    "fields": [
-      { "name": "id", "type": "integer", "read_only": true },
-      { "name": "display_number", "type": "string", "required": true },
-      { "name": "description", "type": "string" },
-      {
-        "name": "status",
-        "type": "string",
-        "enum": ["Open", "Pending", "Closed"]
-      },
-      { "name": "client", "type": "Contact", "relationship": true },
-      { "name": "practice_area", "type": "PracticeArea", "relationship": true },
-      { "name": "open_date", "type": "date" },
-      { "name": "close_date", "type": "date" }
-    ]
-  }
-}
-```
+Cached in DO SQLite with `fetched_at` timestamp. Lazy refresh (automatic, no user action):
+- First Clio API call (no cached custom fields)
+- Cache older than 1 hour (checked on each Clio API call)
+- Developer bumps `CLIO_SCHEMA_VERSION`
 
 ## Clio OAuth
 

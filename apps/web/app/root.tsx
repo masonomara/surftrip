@@ -45,11 +45,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        {/* Header with logo */}
-        <div style={headerStyles}>
-          <img src="/docket-wordmark.png" alt="Docket" height="20px" />
-        </div>
-
         {/* Page content */}
         {children}
 

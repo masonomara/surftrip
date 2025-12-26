@@ -2,6 +2,10 @@ import { getAuth } from "../lib/auth";
 import type { Env } from "../types/env";
 import type { OrgMemberRow } from "../types";
 import { orgMemberRowToEntity } from "../types";
+import {
+  getOrgDeletionPreview,
+  deleteOrg,
+} from "../services/org-deletion";
 
 /**
  * Expected request body for creating an organization.
@@ -185,4 +189,114 @@ export async function handleGetUserOrg(
     role: membership.role,
     isOwner: membership.isOwner,
   });
+}
+
+/**
+ * Gets a preview of what would be deleted if the org is deleted.
+ * Owner only.
+ *
+ * GET /api/org/deletion-preview
+ */
+export async function handleGetOrgDeletionPreview(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  const session = await getAuthenticatedSession(request, env);
+  if (!session?.user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Get user's org membership
+  const row = await env.DB.prepare(
+    `SELECT org_id, is_owner FROM org_members WHERE user_id = ?`
+  )
+    .bind(session.user.id)
+    .first<{ org_id: string; is_owner: number }>();
+
+  if (!row) {
+    return Response.json({ error: "No organization found" }, { status: 404 });
+  }
+
+  if (!row.is_owner) {
+    return Response.json(
+      { error: "Only the owner can delete the organization" },
+      { status: 403 }
+    );
+  }
+
+  const preview = await getOrgDeletionPreview(env.DB, row.org_id);
+  return Response.json(preview);
+}
+
+/**
+ * Deletes the organization and all its data.
+ * Owner only, requires password confirmation.
+ *
+ * DELETE /api/org
+ */
+export async function handleDeleteOrg(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  const session = await getAuthenticatedSession(request, env);
+  if (!session?.user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Get user's org membership
+  const row = await env.DB.prepare(
+    `SELECT org_id, is_owner FROM org_members WHERE user_id = ?`
+  )
+    .bind(session.user.id)
+    .first<{ org_id: string; is_owner: number }>();
+
+  if (!row) {
+    return Response.json({ error: "No organization found" }, { status: 404 });
+  }
+
+  if (!row.is_owner) {
+    return Response.json(
+      { error: "Only the owner can delete the organization" },
+      { status: 403 }
+    );
+  }
+
+  // Parse request body for confirmation
+  let body: { confirmName?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  // Verify org name confirmation
+  const org = await env.DB.prepare(`SELECT name FROM org WHERE id = ?`)
+    .bind(row.org_id)
+    .first<{ name: string }>();
+
+  if (!org) {
+    return Response.json({ error: "Organization not found" }, { status: 404 });
+  }
+
+  if (body.confirmName !== org.name) {
+    return Response.json(
+      { error: "Organization name does not match" },
+      { status: 400 }
+    );
+  }
+
+  // Perform deletion
+  const result = await deleteOrg(
+    env.DB,
+    env.R2,
+    row.org_id,
+    session.user.id,
+    env.TENANT
+  );
+
+  if ("error" in result) {
+    return Response.json({ error: result.message }, { status: 400 });
+  }
+
+  return Response.json(result);
 }

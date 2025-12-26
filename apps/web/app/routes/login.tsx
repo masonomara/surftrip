@@ -95,16 +95,8 @@ export default function LoginPage() {
 
   return (
     <main className={styles.page}>
-      <img
-        src="/gradient-background.png"
-        alt=""
-        height="100%"
-        width="100%"
-        style={{ position: "absolute", inset: 0, zIndex: -1 }}
-      />
-
       <div className={styles.container}>
-        <h1 className={styles.title}>Welcome back</h1>
+        <h1 className={styles.title}>Work with Docket Case Management</h1>
 
         <p className={styles.subtitle}>
           {invitation ? (
@@ -113,11 +105,55 @@ export default function LoginPage() {
               {invitation.role}.
             </>
           ) : (
-            "We're excited to work with you again."
+            "Log in to your account to work with Docket"
           )}
         </p>
 
         {errorMessage && <div className={styles.errorBox}>{errorMessage}</div>}
+
+        {/* Social login buttons */}
+        <div className={styles.socialButtonContainer}>
+          <button
+            type="button"
+            onClick={() => handleSocialSignIn("google")}
+            disabled={isLoading}
+            className={styles.googleButton}
+          >
+            <img
+              src="/google-icon-button.png"
+              alt=""
+              height="18px"
+              width="18px"
+            />
+            Continue with Google
+            <img
+              src="/google-icon-button.png"
+              alt=""
+              height="18px"
+              width="18px"
+              style={{ opacity: 0 }}
+            />
+          </button>
+
+          {/* <button
+          type="button"
+          onClick={() => handleSocialSignIn("apple")}
+          disabled={isLoading}
+          className={styles.appleButton}
+        >
+          <img src="/apple-icon-button.png" alt="" height="18px" width="18px" />
+          Continue with Apple
+          <img
+            src="/apple-icon-button.png"
+            alt=""
+            height="18px"
+            width="18px"
+            style={{ opacity: 0 }}
+          />
+        </button> */}
+        </div>
+
+        <div className={styles.divider}>or</div>
 
         <form onSubmit={handleSubmit}>
           {/* Email field */}
@@ -145,6 +181,7 @@ export default function LoginPage() {
               disabled={isLoading || !!invitation}
               readOnly={!!invitation}
               className={styles.input}
+              placeholder="Enter your email"
               style={
                 invitation
                   ? {
@@ -158,24 +195,10 @@ export default function LoginPage() {
 
           {/* Password field */}
           <div className={styles.fieldGroupLast}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <label htmlFor="password" className={styles.label}>
-                Password
-              </label>
-              <Link
-                to="/forgot-password"
-                className={styles.footerLink}
-                style={{ fontSize: "14px" }}
-              >
-                Forgot password?
-              </Link>
-            </div>
+            <label htmlFor="password" className={styles.label}>
+              Password
+            </label>
+
             <input
               id="password"
               type="password"
@@ -184,7 +207,15 @@ export default function LoginPage() {
               required
               disabled={isLoading}
               className={styles.input}
+              placeholder="Enter your password"
             />
+            <Link
+              to="/forgot-password"
+              className={styles.footerLink}
+              style={{ fontSize: "14px" }}
+            >
+              Forgot password?
+            </Link>
           </div>
 
           <button
@@ -195,55 +226,6 @@ export default function LoginPage() {
             {isLoading ? "Logging in..." : "Log in"}
           </button>
         </form>
-
-        <div className={styles.divider}>or</div>
-
-        {/* Social login buttons */}
-        <div className={styles.socialButtonContainer}>
-          <button
-            type="button"
-            onClick={() => handleSocialSignIn("google")}
-            disabled={isLoading}
-            className={styles.googleButton}
-          >
-            <img
-              src="/google-icon-button.png"
-              alt=""
-              height="18px"
-              width="18px"
-            />
-            Continue with Google
-            <img
-              src="/google-icon-button.png"
-              alt=""
-              height="18px"
-              width="18px"
-              style={{ opacity: 0 }}
-            />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSocialSignIn("apple")}
-            disabled={isLoading}
-            className={styles.appleButton}
-          >
-            <img
-              src="/apple-icon-button.png"
-              alt=""
-              height="18px"
-              width="18px"
-            />
-            Continue with Apple
-            <img
-              src="/apple-icon-button.png"
-              alt=""
-              height="18px"
-              width="18px"
-              style={{ opacity: 0 }}
-            />
-          </button>
-        </div>
 
         <p className={styles.footer}>
           Need an account?{" "}

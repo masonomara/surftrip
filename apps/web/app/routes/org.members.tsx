@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, redirect, useRevalidator } from "react-router";
+import { redirect, useRevalidator } from "react-router";
 import type { Route } from "./+types/org.members";
 import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
@@ -9,6 +9,7 @@ import type {
   OrgMember,
   PendingInvitation,
 } from "~/lib/types";
+import { AppLayout } from "~/components/AppLayout";
 import styles from "~/styles/org-members.module.css";
 
 /**
@@ -184,20 +185,14 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
   }
 
   return (
-    <main className={styles.page}>
+    <AppLayout user={user} org={org} currentPath="/org/members">
       <header className={styles.header}>
-        <Link to="/dashboard" className={styles.backLink}>
-          &larr; Dashboard
-        </Link>
-        <div className={styles.headerTop}>
-          <h1>Members</h1>
-        </div>
+        <h1>Members</h1>
       </header>
 
       {error && <div className={styles.error}>{error}</div>}
       {success && <div className={styles.success}>{success}</div>}
 
-      {/* Current Members Section */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>
@@ -225,7 +220,6 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
         )}
       </section>
 
-      {/* Pending Invitations Section */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>
@@ -249,7 +243,7 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
           onSuccess={handleInviteSent}
         />
       )}
-    </main>
+    </AppLayout>
   );
 }
 

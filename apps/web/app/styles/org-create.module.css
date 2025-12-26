@@ -29,7 +29,7 @@
 }
 .progressStep.active,
 .progressStep.completed {
-  background: var(--brand);
+  background: var(--text-primary);
 }
 .title {
   color: var(--text-primary);
@@ -74,10 +74,10 @@
     background 0.2s;
 }
 .optionCard:hover {
-  border-color: var(--brand);
+  border-color: var(--text-primary);
 }
 .optionCard.selected {
-  border-color: var(--brand);
+  border-color: var(--text-primary);
   background: var(--surface-2);
 }
 .formFields {
@@ -126,10 +126,10 @@
     background 0.2s;
 }
 .sizeCard:hover {
-  border-color: var(--brand);
+  border-color: var(--text-primary);
 }
 .sizeCard.selected {
-  border-color: var(--brand);
+  border-color: var(--text-primary);
   background: var(--surface-2);
 }
 .sizeLabel {
@@ -168,10 +168,10 @@
     background 0.2s;
 }
 .checkboxItem:hover {
-  border-color: var(--brand);
+  border-color: var(--text-primary);
 }
 .checkboxItem.selected {
-  border-color: var(--brand);
+  border-color: var(--text-primary);
   background: var(--surface-2);
 }
 .checkboxInput {
@@ -206,10 +206,10 @@
     background 0.2s;
 }
 .practiceItem:hover {
-  border-color: var(--brand);
+  border-color: var(--text-primary);
 }
 .practiceItem.selected {
-  border-color: var(--brand);
+  border-color: var(--text-primary);
   background: var(--surface-2);
 }
 .practiceLabel {
@@ -245,7 +245,7 @@
   flex: 2;
   padding: 0 16px;
   height: 40px;
-  background: var(--brand);
+  background: var(--text-primary);
   color: var(--container);
   border: none;
   border-radius: 8px;
@@ -258,7 +258,7 @@
 }
 .continueButton:hover,
 .submitButton:hover {
-  background: var(--brand-selected);
+  background: var(--surface-3);
 }
 .continueButton:disabled,
 .submitButton:disabled {

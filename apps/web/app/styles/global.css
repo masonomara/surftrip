@@ -1,15 +1,17 @@
 :root {
   --container: #ffffff;
-  --surface-1: #f9f8f6;
-  --surface-2: #f5f3f0;
-  --surface-3: #e8e5de;
-  --brand: #2768dd;
-  --brand-selected: #19489e;
-  --border-default: #00000047;
-  --border-dark: #0000001c;
-  --text-primary: #000000eb;
-  --text-secondary: #000000c2;
-  --text-tertiary: #00000061;
+  --surface-1: #f9f9f9;
+  --surface-2: #f4f4f5;
+  --surface-3: #e7e7e9;
+  --brand-primary: #003e99eb;
+  --brand-secondary: #003e99c2;
+  --brand-tertiary: #003e9961;
+  --brand-highlight: #003e991c;
+  --border-dark: #32333947;
+  --border-default: #3233391c;
+  --text-primary: #323339eb;
+  --text-secondary: #323339c2;
+  --text-tertiary: #32333961;
 }
 
 *,
@@ -19,7 +21,8 @@
   margin: 0;
   padding: 0;
 }
-html {
+html,
+html * {
   font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.02em;

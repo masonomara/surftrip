@@ -12,9 +12,11 @@ import {
   formatRAGContext,
 } from "../services/rag-retrieval";
 import {
-  fetchAllSchemas,
+  fetchAllCustomFields,
   CLIO_SCHEMA_VERSION,
-  schemaNeedsRefresh,
+  customFieldsNeedRefresh,
+  formatCustomFieldsForLLM,
+  type ClioCustomField,
 } from "../services/clio-schema";
 import {
   storeClioTokens,
@@ -32,24 +34,40 @@ import {
   buildDeleteEndpoint,
   formatClioResponse,
 } from "../services/clio-api";
+import { createLogger, type Logger } from "../lib/logger";
 import type { Env } from "../types/env";
 import { sanitizeAuditParams } from "../lib/sanitize";
 
 export class TenantDO extends DurableObject<Env> {
   private sql: SqlStorage;
   private orgId: string;
-  private schemaCache: Map<string, object> = new Map();
+  private customFieldsCache: ClioCustomField[] = [];
+  private customFieldsFetchedAt: number | null = null;
   private schemaVersion: number | null = null;
+  private log: Logger;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.sql = ctx.storage.sql;
     this.orgId = ctx.id.toString();
+    this.log = createLogger({ orgId: this.orgId, component: "TenantDO" });
+
+    // Check if SQLite storage is available
+    if (!ctx.storage.sql) {
+      this.log.error("SQLite storage not available - DO may not be configured for SQLite");
+      throw new Error("SQLite storage not available for this Durable Object");
+    }
+    this.sql = ctx.storage.sql;
 
     ctx.blockConcurrencyWhile(async () => {
-      await this.runMigrations();
-      await this.loadSchemaCache();
-      await this.ensureAlarmIsSet();
+      try {
+        await this.runMigrations();
+        await this.loadSchemaCache();
+        await this.ensureAlarmIsSet();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.log.error("DO initialization failed", { error: message });
+        throw error;
+      }
     });
   }
 
@@ -80,6 +98,10 @@ export class TenantDO extends DurableObject<Env> {
           return this.handlePurgeUserData(request);
         case "/store-clio-token":
           return this.handleStoreClioToken(request);
+        case "/get-clio-status":
+          return this.handleGetClioStatus(request);
+        case "/delete-clio-token":
+          return this.handleDeleteClioToken(request);
         default:
           return Response.json({ error: "Not found" }, { status: 404 });
       }
@@ -190,16 +212,7 @@ export class TenantDO extends DurableObject<Env> {
   }
 
   private buildSystemPrompt(ragContext: string, userRole: string): string {
-    // Format schema entries for the prompt
-    const schemaEntries: string[] = [];
-    for (const [typeName, schema] of this.schemaCache) {
-      schemaEntries.push(`### ${typeName}\n${JSON.stringify(schema, null, 2)}`);
-    }
-
-    const schemaSection =
-      schemaEntries.length > 0
-        ? schemaEntries.join("\n\n")
-        : "Schema not yet loaded. User needs to connect Clio first.";
+    const customFieldsSection = formatCustomFieldsForLLM(this.customFieldsCache);
 
     const roleNote =
       userRole === "admin"
@@ -216,12 +229,11 @@ ${roleNote}
 **Knowledge Base Context:**
 ${ragContext || "No relevant context found."}
 
-**Clio Schema Reference:**
-${schemaSection}
+${customFieldsSection ? `**Firm Custom Fields:**\n${customFieldsSection}` : ""}
 
 **Instructions:**
 - Use Knowledge Base and firm context for case management questions
-- Query Clio using the clioQuery tool per the schema above
+- Query Clio using the clioQuery tool for matters, contacts, tasks, calendar entries, time entries
 - For write operations (create, update, delete), always confirm first
 - NEVER give legal advice—you manage cases, not law
 - Stay in scope: case management, Clio operations, firm procedures
@@ -664,9 +676,9 @@ Only include modifiedRequest if intent is "modify".`;
       return "You haven't connected your Clio account yet. Please connect at docket.com/settings to enable Clio queries.";
     }
 
-    // Refresh schema if needed
-    if (schemaNeedsRefresh(this.schemaVersion)) {
-      await this.refreshSchemaWithToken(accessToken);
+    // Lazy refresh: update custom fields if stale (>1 hour) or version mismatch
+    if (customFieldsNeedRefresh(this.schemaVersion, this.customFieldsFetchedAt)) {
+      await this.refreshCustomFieldsWithToken(accessToken);
     }
 
     try {
@@ -831,24 +843,44 @@ Only include modifiedRequest if intent is "modify".`;
       return Response.json({ error: "Method not allowed" }, { status: 405 });
     }
 
-    const { userId, tokens } = (await request.json()) as {
+    const { userId, tokens, requestId } = (await request.json()) as {
       userId: string;
       tokens: ClioTokens;
+      requestId?: string;
     };
 
+    const log = requestId ? this.log.child({ requestId }) : this.log;
+
     if (!userId || !tokens) {
+      log.warn("Store token called with missing data", {
+        hasUserId: !!userId,
+        hasTokens: !!tokens,
+      });
       return Response.json(
         { error: "Missing userId or tokens" },
         { status: 400 }
       );
     }
 
-    await storeClioTokens(
-      this.ctx.storage,
+    log.info("Storing Clio tokens", {
       userId,
-      tokens,
-      this.env.ENCRYPTION_KEY
-    );
+      tokenType: tokens.token_type,
+      expiresAt: new Date(tokens.expires_at).toISOString(),
+    });
+
+    try {
+      await storeClioTokens(
+        this.ctx.storage,
+        userId,
+        tokens,
+        this.env.ENCRYPTION_KEY
+      );
+      log.info("Clio tokens stored successfully", { userId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log.error("Failed to store Clio tokens", { userId, error: message });
+      return Response.json({ error: "Failed to store tokens" }, { status: 500 });
+    }
 
     await this.appendAuditLog({
       user_id: userId,
@@ -861,14 +893,101 @@ Only include modifiedRequest if intent is "modify".`;
     return Response.json({ success: true });
   }
 
+  private async handleGetClioStatus(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const { userId, requestId } = (await request.json()) as {
+      userId: string;
+      requestId?: string;
+    };
+    const log = requestId ? this.log.child({ requestId }) : this.log;
+
+    if (!userId) {
+      return Response.json(
+        { error: "Missing required field: userId" },
+        { status: 400 }
+      );
+    }
+
+    log.debug("Getting Clio status", { userId });
+
+    const tokens = await getClioTokens(this.ctx.storage, userId, this.env);
+    const connected = tokens !== null;
+    const customFieldsLoaded = this.customFieldsCache.length > 0;
+
+    log.debug("Clio status result", {
+      userId,
+      connected,
+      customFieldsLoaded,
+      customFieldsCount: this.customFieldsCache.length,
+      schemaVersion: this.schemaVersion,
+      tokenExpired: tokens ? tokens.expires_at < Date.now() : null,
+    });
+
+    return Response.json({
+      connected,
+      customFieldsLoaded,
+      customFieldsCount: this.customFieldsCache.length,
+      schemaVersion: this.schemaVersion,
+    });
+  }
+
+  private async handleDeleteClioToken(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const { userId, requestId } = (await request.json()) as {
+      userId: string;
+      requestId?: string;
+    };
+    const log = requestId ? this.log.child({ requestId }) : this.log;
+
+    if (!userId) {
+      return Response.json(
+        { error: "Missing required field: userId" },
+        { status: 400 }
+      );
+    }
+
+    log.info("Deleting Clio tokens", { userId });
+
+    try {
+      await deleteClioTokens(this.ctx.storage, userId);
+      log.info("Clio tokens deleted successfully", { userId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log.error("Failed to delete Clio tokens", { userId, error: message });
+      return Response.json({ error: "Failed to delete tokens" }, { status: 500 });
+    }
+
+    await this.appendAuditLog({
+      user_id: userId,
+      action: "clio_disconnect",
+      object_type: "oauth",
+      params: {},
+      result: "success",
+    });
+
+    return Response.json({ success: true });
+  }
+
   private async getValidClioToken(userId: string): Promise<string | null> {
     const tokens = await getClioTokens(this.ctx.storage, userId, this.env);
     if (!tokens) {
+      this.log.debug("No Clio tokens found for user", { userId });
       return null;
     }
 
     // Refresh if needed
     if (tokenNeedsRefresh(tokens)) {
+      this.log.info("Clio token needs refresh", {
+        userId,
+        expiresAt: new Date(tokens.expires_at).toISOString(),
+      });
+
       try {
         const newTokens = await refreshAccessToken({
           refreshToken: tokens.refresh_token,
@@ -883,9 +1002,11 @@ Only include modifiedRequest if intent is "modify".`;
           this.env.ENCRYPTION_KEY
         );
 
+        this.log.info("Clio token refreshed successfully", { userId });
         return newTokens.access_token;
       } catch (error) {
-        console.error(`[TenantDO:${this.orgId}] Token refresh failed:`, error);
+        const message = error instanceof Error ? error.message : String(error);
+        this.log.error("Clio token refresh failed", { userId, error: message });
         await deleteClioTokens(this.ctx.storage, userId);
         return null;
       }
@@ -895,8 +1016,13 @@ Only include modifiedRequest if intent is "modify".`;
   }
 
   private async handleClioUnauthorized(userId: string): Promise<string | null> {
+    this.log.info("Handling Clio 401 unauthorized - attempting token refresh", {
+      userId,
+    });
+
     const tokens = await getClioTokens(this.ctx.storage, userId, this.env);
     if (!tokens?.refresh_token) {
+      this.log.warn("No refresh token available for retry", { userId });
       return null;
     }
 
@@ -914,8 +1040,11 @@ Only include modifiedRequest if intent is "modify".`;
         this.env.ENCRYPTION_KEY
       );
 
+      this.log.info("Token refreshed after 401", { userId });
       return newTokens.access_token;
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log.error("Token refresh failed after 401", { userId, error: message });
       await deleteClioTokens(this.ctx.storage, userId);
       return null;
     }
@@ -937,21 +1066,20 @@ Only include modifiedRequest if intent is "modify".`;
       return Response.json({ error: "No valid Clio token" }, { status: 401 });
     }
 
-    const schemas = await fetchAllSchemas(accessToken);
-    await this.saveSchemas(schemas);
+    const customFields = await fetchAllCustomFields(accessToken);
+    await this.saveCustomFields(customFields);
 
     await this.appendAuditLog({
       user_id: userId,
       action: "schema_provision",
-      object_type: "clio_schema",
-      params: { objectCount: schemas.size },
+      object_type: "clio_custom_fields",
+      params: { count: customFields.length },
       result: "success",
     });
 
     return Response.json({
       success: true,
-      count: schemas.size,
-      schemas: Array.from(schemas.keys()),
+      count: customFields.length,
     });
   }
 
@@ -973,21 +1101,20 @@ Only include modifiedRequest if intent is "modify".`;
       return Response.json({ error: "No valid Clio token" }, { status: 401 });
     }
 
-    const schemas = await fetchAllSchemas(accessToken);
-    await this.saveSchemas(schemas);
+    const customFields = await fetchAllCustomFields(accessToken);
+    await this.saveCustomFields(customFields);
 
     await this.appendAuditLog({
       user_id: userId,
       action: "schema_refresh",
-      object_type: "clio_schema",
-      params: { objectCount: schemas.size },
+      object_type: "clio_custom_fields",
+      params: { count: customFields.length },
       result: "success",
     });
 
     return Response.json({
       success: true,
-      count: schemas.size,
-      schemas: Array.from(schemas.keys()),
+      count: customFields.length,
     });
   }
 
@@ -998,9 +1125,10 @@ Only include modifiedRequest if intent is "modify".`;
 
     const previousVersion = this.schemaVersion;
 
-    // Clear all cached schema data
+    // Clear all cached custom field data
     this.sql.exec("DELETE FROM clio_schema_cache");
-    this.schemaCache.clear();
+    this.customFieldsCache = [];
+    this.customFieldsFetchedAt = null;
     this.sql.exec(
       `INSERT OR REPLACE INTO org_settings (key, value, updated_at) VALUES ('clio_schema_version', '0', ?)`,
       Date.now()
@@ -1010,46 +1138,46 @@ Only include modifiedRequest if intent is "modify".`;
     await this.appendAuditLog({
       user_id: "system",
       action: "schema_force_refresh",
-      object_type: "clio_schema",
+      object_type: "clio_custom_fields",
       params: { previousVersion, targetVersion: CLIO_SCHEMA_VERSION },
       result: "success",
     });
 
     return Response.json({
       success: true,
-      message: "Schema cache invalidated. Will refresh on next Clio API call.",
+      message: "Custom fields cache invalidated. Will refresh on next Clio API call.",
       previousVersion,
       targetVersion: CLIO_SCHEMA_VERSION,
     });
   }
 
-  private async refreshSchemaWithToken(accessToken: string): Promise<void> {
+  private async refreshCustomFieldsWithToken(accessToken: string): Promise<void> {
     try {
-      const schemas = await fetchAllSchemas(accessToken);
-      await this.saveSchemas(schemas);
-      console.log(
-        `[TenantDO:${this.orgId}] Auto-refreshed schema to version ${CLIO_SCHEMA_VERSION}`
-      );
+      const customFields = await fetchAllCustomFields(accessToken);
+      await this.saveCustomFields(customFields);
+      this.log.info("Auto-refreshed custom fields", {
+        version: CLIO_SCHEMA_VERSION,
+        count: customFields.length,
+      });
     } catch (error) {
-      console.error(
-        `[TenantDO:${this.orgId}] Schema auto-refresh failed:`,
-        error
-      );
+      const message = error instanceof Error ? error.message : String(error);
+      this.log.error("Custom fields auto-refresh failed", { error: message });
     }
   }
 
-  private async saveSchemas(schemas: Map<string, object>): Promise<void> {
+  private async saveCustomFields(customFields: ClioCustomField[]): Promise<void> {
     const now = Date.now();
 
-    for (const [objectType, schema] of schemas) {
-      this.sql.exec(
-        `INSERT OR REPLACE INTO clio_schema_cache (object_type, schema, fetched_at) VALUES (?, ?, ?)`,
-        objectType,
-        JSON.stringify(schema),
-        now
-      );
-      this.schemaCache.set(objectType, schema);
-    }
+    // Clear existing and store new custom fields as a single JSON blob
+    this.sql.exec("DELETE FROM clio_schema_cache");
+    this.sql.exec(
+      `INSERT INTO clio_schema_cache (object_type, schema, fetched_at) VALUES (?, ?, ?)`,
+      "custom_fields",
+      JSON.stringify(customFields),
+      now
+    );
+    this.customFieldsCache = customFields;
+    this.customFieldsFetchedAt = now;
 
     this.sql.exec(
       `INSERT OR REPLACE INTO org_settings (key, value, updated_at) VALUES ('clio_schema_version', ?, ?)`,
@@ -1060,35 +1188,32 @@ Only include modifiedRequest if intent is "modify".`;
   }
 
   private async loadSchemaCache(): Promise<void> {
-    this.schemaCache.clear();
+    this.customFieldsCache = [];
+    this.customFieldsFetchedAt = null;
 
     // Load version
-    const versionRow = this.sql
+    const versionRows = this.sql
       .exec("SELECT value FROM org_settings WHERE key = 'clio_schema_version'")
-      .one();
+      .toArray();
+    const versionRow = versionRows[0] as { value: string } | undefined;
     this.schemaVersion = versionRow ? Number(versionRow.value) : null;
 
-    // Skip loading if schema is stale
-    if (schemaNeedsRefresh(this.schemaVersion)) {
-      console.log(
-        `[TenantDO:${this.orgId}] Schema version ${this.schemaVersion} stale (current: ${CLIO_SCHEMA_VERSION})`
-      );
-      return;
-    }
-
-    // Load cached schemas
+    // Load cached custom fields and fetchedAt
     const rows = this.sql
-      .exec("SELECT object_type, schema FROM clio_schema_cache")
+      .exec("SELECT schema, fetched_at FROM clio_schema_cache WHERE object_type = 'custom_fields'")
       .toArray();
 
-    for (const row of rows) {
+    if (rows.length > 0) {
       try {
-        this.schemaCache.set(
-          row.object_type as string,
-          JSON.parse(row.schema as string)
-        );
+        this.customFieldsCache = JSON.parse(rows[0].schema as string);
+        this.customFieldsFetchedAt = rows[0].fetched_at as number;
+        this.log.debug("Loaded custom fields from cache", {
+          count: this.customFieldsCache.length,
+          fetchedAt: new Date(this.customFieldsFetchedAt).toISOString(),
+          ageMinutes: Math.round((Date.now() - this.customFieldsFetchedAt) / 60000),
+        });
       } catch {
-        // Skip invalid entries
+        this.log.warn("Failed to parse cached custom fields");
       }
     }
   }
@@ -1355,7 +1480,8 @@ Only include modifiedRequest if intent is "modify".`;
       kvDeletedCount++;
     }
 
-    this.schemaCache.clear();
+    this.customFieldsCache = [];
+    this.customFieldsFetchedAt = null;
 
     return Response.json({
       success: true,
@@ -1429,15 +1555,57 @@ Only include modifiedRequest if intent is "modify".`;
   // ─────────────────────────────────────────────────────────────────────────────
 
   private async runMigrations(): Promise<void> {
-    const versionResult = this.sql.exec("PRAGMA user_version").one() as {
-      user_version: number;
-    };
-    const currentVersion = versionResult.user_version;
+    this.log.debug("Running migrations - checking version");
 
-    if (currentVersion >= 1) {
-      return; // Already migrated
+    // First, try a simple query to test SQLite access
+    try {
+      this.log.debug("Testing basic SQLite access with SELECT 1");
+      const testResult = this.sql.exec("SELECT 1 as test").one();
+      this.log.debug("Basic SQLite test passed", { result: testResult });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log.error("Basic SQLite access failed", { error: message });
+      throw error;
     }
 
+    // Create migration tracking table if it doesn't exist
+    try {
+      this.log.debug("Creating schema_version table");
+      this.sql.exec(`
+        CREATE TABLE IF NOT EXISTS schema_version (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          version INTEGER NOT NULL DEFAULT 0
+        )
+      `);
+      this.sql.exec(`
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 0)
+      `);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log.error("Failed to create schema_version table", { error: message });
+      throw error;
+    }
+
+    // Check current version
+    let currentVersion: number;
+    try {
+      const versionResult = this.sql
+        .exec("SELECT version FROM schema_version WHERE id = 1")
+        .one() as { version: number } | null;
+      currentVersion = versionResult?.version ?? 0;
+      this.log.debug("Current schema version", { version: currentVersion });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log.error("Failed to read schema version", { error: message });
+      throw error;
+    }
+
+    if (currentVersion >= 1) {
+      this.log.debug("Schema already migrated", { version: currentVersion });
+      return;
+    }
+
+    this.log.info("Running initial schema migration");
     // Run initial migration
     this.sql.exec(`
       CREATE TABLE IF NOT EXISTS conversations (
@@ -1487,9 +1655,11 @@ Only include modifiedRequest if intent is "modify".`;
         custom_fields TEXT,
         fetched_at INTEGER NOT NULL
       );
-
-      PRAGMA user_version = 1;
     `);
+
+    // Update version
+    this.sql.exec("UPDATE schema_version SET version = 1 WHERE id = 1");
+    this.log.info("Schema migration completed", { version: 1 });
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
