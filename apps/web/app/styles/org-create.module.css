@@ -8,7 +8,7 @@
   justify-content: center;
 }
 .container {
-  background: var(--foreground-1);
+  background: var(--container);
   border-radius: 16px;
   border: 1px solid var(--border-default);
   padding: 32px;
@@ -61,7 +61,7 @@
 }
 .optionCard {
   padding: 24px 16px;
-  background: var(--foreground-3);
+  background: var(--surface-3);
   border: 2px solid var(--border-default);
   border-radius: 8px;
   cursor: pointer;
@@ -78,7 +78,7 @@
 }
 .optionCard.selected {
   border-color: var(--brand);
-  background: var(--foreground-2);
+  background: var(--surface-2);
 }
 .formFields {
   margin-bottom: 24px;
@@ -99,7 +99,7 @@
   padding: 0.5rem;
   border: 1px solid var(--border-dark);
   border-radius: 8px;
-  background: var(--foreground-3);
+  background: var(--surface-3);
   color: var(--text-primary);
   height: 42px;
   font-family: "Inter", system-ui, sans-serif;
@@ -116,7 +116,7 @@
 }
 .sizeCard {
   padding: 16px;
-  background: var(--foreground-3);
+  background: var(--surface-3);
   border: 2px solid var(--border-default);
   border-radius: 8px;
   cursor: pointer;
@@ -130,7 +130,7 @@
 }
 .sizeCard.selected {
   border-color: var(--brand);
-  background: var(--foreground-2);
+  background: var(--surface-2);
 }
 .sizeLabel {
   display: block;
@@ -159,7 +159,7 @@
   align-items: center;
   justify-content: center;
   padding: 10px 8px;
-  background: var(--foreground-3);
+  background: var(--surface-3);
   border: 2px solid var(--border-default);
   border-radius: 6px;
   cursor: pointer;
@@ -172,7 +172,7 @@
 }
 .checkboxItem.selected {
   border-color: var(--brand);
-  background: var(--foreground-2);
+  background: var(--surface-2);
 }
 .checkboxInput {
   position: absolute;
@@ -197,7 +197,7 @@
   display: flex;
   align-items: center;
   padding: 12px 14px;
-  background: var(--foreground-3);
+  background: var(--surface-3);
   border: 2px solid var(--border-default);
   border-radius: 6px;
   cursor: pointer;
@@ -210,7 +210,7 @@
 }
 .practiceItem.selected {
   border-color: var(--brand);
-  background: var(--foreground-2);
+  background: var(--surface-2);
 }
 .practiceLabel {
   font-family: "Inter", system-ui, sans-serif;
@@ -226,7 +226,7 @@
   flex: 1;
   padding: 0 16px;
   height: 40px;
-  background: var(--foreground-3);
+  background: var(--surface-3);
   color: var(--text-primary);
   border: 1px solid var(--border-dark);
   border-radius: 8px;
@@ -238,7 +238,7 @@
   transition: background 0.2s;
 }
 .backButton:hover {
-  background: var(--foreground-2);
+  background: var(--surface-2);
 }
 .continueButton,
 .submitButton {
@@ -246,7 +246,7 @@
   padding: 0 16px;
   height: 40px;
   background: var(--brand);
-  color: var(--foreground-1);
+  color: var(--container);
   border: none;
   border-radius: 8px;
   cursor: pointer;

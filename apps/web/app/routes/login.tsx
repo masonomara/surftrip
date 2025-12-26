@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router";
 import type { MetaFunction } from "react-router";
-import { signIn } from "~/lib/auth-client";
+import { signIn, API_URL } from "~/lib/auth-client";
+import type { InvitationDetails } from "~/lib/types";
 import styles from "~/styles/auth.module.css";
 
 export const meta: MetaFunction = () => [
@@ -9,40 +10,52 @@ export const meta: MetaFunction = () => [
   { name: "description", content: "Log in to your Docket account" },
 ];
 
-/**
- * Background image styles for the login page.
- */
-const backgroundImageStyles: React.CSSProperties = {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  zIndex: -1,
-};
-
-/**
- * Hidden spacer image styles (used to balance button layouts).
- */
-const hiddenSpacerStyles: React.CSSProperties = {
-  opacity: 0,
-};
-
-/**
- * Login page component.
- */
 export default function LoginPage() {
   const [searchParams] = useSearchParams();
-  const redirectUrl = searchParams.get("redirect") || "/dashboard";
 
+  // Get invitation ID from URL if present
+  const invitationId = searchParams.get("invitation");
+
+  // Where to redirect after login
+  const redirectUrl = invitationId
+    ? `/accept-invite?invitation=${invitationId}`
+    : searchParams.get("redirect") || "/dashboard";
+
+  // Form state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  /**
-   * Handles email/password form submission.
-   */
+  // Invitation state (for pre-filling email)
+  const [invitation, setInvitation] = useState<InvitationDetails | null>(null);
+
+  // Fetch invitation details if we have an invitation ID
+  useEffect(() => {
+    if (!invitationId) {
+      return;
+    }
+
+    fetch(`${API_URL}/api/invitations/${invitationId}`, {
+      credentials: "include",
+    })
+      .then((response) => {
+        if (!response.ok) {
+          return null;
+        }
+        return response.json() as Promise<InvitationDetails>;
+      })
+      .then((data) => {
+        if (data) {
+          setInvitation(data);
+          setEmail(data.email);
+        }
+      })
+      .catch(() => {
+        // Ignore errors - invitation might not exist
+      });
+  }, [invitationId]);
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setErrorMessage(null);
@@ -68,9 +81,6 @@ export default function LoginPage() {
     }
   }
 
-  /**
-   * Initiates OAuth sign-in with the specified provider.
-   */
   function handleSocialSignIn(provider: "google" | "apple") {
     signIn.social({
       provider,
@@ -78,28 +88,53 @@ export default function LoginPage() {
     });
   }
 
+  // Build the signup link (preserve invitation if present)
+  const signupLink = invitationId
+    ? `/signup?invitation=${invitationId}`
+    : "/signup";
+
   return (
     <main className={styles.page}>
-      {/* Background image */}
       <img
         src="/gradient-background.png"
         alt=""
         height="100%"
         width="100%"
-        style={backgroundImageStyles}
+        style={{ position: "absolute", inset: 0, zIndex: -1 }}
       />
 
       <div className={styles.container}>
         <h1 className={styles.title}>Welcome back</h1>
-        <p className={styles.subtitle}>We're excited to work with you again.</p>
+
+        <p className={styles.subtitle}>
+          {invitation ? (
+            <>
+              Log in to join <strong>{invitation.orgName}</strong> as a{" "}
+              {invitation.role}.
+            </>
+          ) : (
+            "We're excited to work with you again."
+          )}
+        </p>
 
         {errorMessage && <div className={styles.errorBox}>{errorMessage}</div>}
 
-        {/* Email/Password Form */}
         <form onSubmit={handleSubmit}>
+          {/* Email field */}
           <div className={styles.fieldGroup}>
             <label htmlFor="email" className={styles.label}>
               Email
+              {invitation && (
+                <span
+                  style={{
+                    fontWeight: "normal",
+                    color: "var(--text-secondary)",
+                    marginLeft: "0.5rem",
+                  }}
+                >
+                  (from invitation)
+                </span>
+              )}
             </label>
             <input
               id="email"
@@ -107,11 +142,21 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={isLoading}
+              disabled={isLoading || !!invitation}
+              readOnly={!!invitation}
               className={styles.input}
+              style={
+                invitation
+                  ? {
+                      backgroundColor: "var(--surface-3)",
+                      cursor: "not-allowed",
+                    }
+                  : undefined
+              }
             />
           </div>
 
+          {/* Password field */}
           <div className={styles.fieldGroupLast}>
             <div
               style={{
@@ -153,7 +198,7 @@ export default function LoginPage() {
 
         <div className={styles.divider}>or</div>
 
-        {/* Social Sign-In Buttons */}
+        {/* Social login buttons */}
         <div className={styles.socialButtonContainer}>
           <button
             type="button"
@@ -173,7 +218,7 @@ export default function LoginPage() {
               alt=""
               height="18px"
               width="18px"
-              style={hiddenSpacerStyles}
+              style={{ opacity: 0 }}
             />
           </button>
 
@@ -195,14 +240,14 @@ export default function LoginPage() {
               alt=""
               height="18px"
               width="18px"
-              style={hiddenSpacerStyles}
+              style={{ opacity: 0 }}
             />
           </button>
         </div>
 
         <p className={styles.footer}>
           Need an account?{" "}
-          <Link to="/signup" className={styles.footerLink}>
+          <Link to={signupLink} className={styles.footerLink}>
             Register
           </Link>
         </p>

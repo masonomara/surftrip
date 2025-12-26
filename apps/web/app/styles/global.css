@@ -1,15 +1,15 @@
 :root {
-  --background: #1f1f1f;
-  --foreground-1: #ffffff;
-  --foreground-2: #fbfbfb;
-  --foreground-3: #f3f3f4;
+  --container: #ffffff;
+  --surface-1: #f9f8f6;
+  --surface-2: #f5f3f0;
+  --surface-3: #e8e5de;
   --brand: #2768dd;
-  --brand-background: #cfddf6;
   --brand-selected: #19489e;
-  --border-default: #e2e2e4;
-  --border-dark: #dfdfe1;
-  --text-primary: #323339;
-  --text-secondary: #62626b;
+  --border-default: #00000047;
+  --border-dark: #0000001c;
+  --text-primary: #000000eb;
+  --text-secondary: #000000c2;
+  --text-tertiary: #00000061;
 }
 
 *,
@@ -26,6 +26,6 @@ html {
 }
 body {
   min-height: 100vh;
-  background: var(--background);
+  background: var(--surface-1);
   color: var(--text-primary);
 }

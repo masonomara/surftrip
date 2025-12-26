@@ -7,7 +7,7 @@
   align-items: center;
 }
 .container {
-  background: var(--foreground-1);
+  background: var(--container);
   border-radius: 16px;
   border: 1px solid var(--border-default);
   padding: 32px;
@@ -64,7 +64,7 @@
   padding: 0.5rem;
   border: 1px solid var(--border-dark);
   border-radius: 8px;
-  background: var(--foreground-3);
+  background: var(--surface-3);
   color: var(--text-primary);
   height: 42px;
   font-family: "Inter", system-ui, sans-serif;
@@ -85,7 +85,7 @@
   padding: 0px 10px;
   height: 40px;
   background: var(--brand);
-  color: var(--foreground-1);
+  color: var(--container);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -106,7 +106,7 @@
   width: 100%;
   padding: 0px 10px;
   height: 40px;
-  background: var(--foreground-1);
+  background: var(--container);
   color: #000;
   border: 1px solid #000;
   border-radius: 8px;
@@ -126,7 +126,7 @@
   padding: 0px 10px;
   height: 40px;
   background: #000;
-  color: var(--foreground-1);
+  color: var(--container);
   border: 1px solid #000;
   border-radius: 8px;
   cursor: pointer;

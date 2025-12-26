@@ -1,0 +1,208 @@
+.page {
+  padding: 2rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-default);
+}
+.headerTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.backLink {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+}
+.backLink:hover {
+  color: var(--text-primary);
+}
+.section {
+  margin-bottom: 2rem;
+}
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.sectionTitle {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.inviteButton {
+  padding: 0.5rem 1rem;
+  background: var(--brand);
+  color: var(--container);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.inviteButton:hover {
+  opacity: 0.9;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface-2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.table th,
+.table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+.table th {
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+.table tbody tr {
+  border-top: 1px solid var(--border-default);
+}
+.table tbody tr:first-child {
+  border-top: none;
+}
+.memberName,
+.pendingEmail {
+  font-weight: 500;
+}
+.memberEmail,
+.pendingMeta {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--surface-3);
+  color: var(--text-primary);
+  border-radius: 4px;
+}
+.badgeOwner {
+  background: var(--brand);
+  color: var(--container);
+}
+.badgeAdmin {
+  background: var(--surface-3);
+}
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.actionButton {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.actionButton:hover {
+  background: var(--surface-3);
+}
+.actionButtonDanger {
+  color: #dc3545;
+  border-color: #dc3545;
+}
+.actionButtonDanger:hover {
+  background: rgba(220, 53, 69, 0.1);
+}
+.roleSelect {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.emptyState {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modalContent {
+  background: var(--container);
+  padding: 1.5rem;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 400px;
+}
+.modalTitle {
+  margin: 0 0 1rem 0;
+}
+.formGroup {
+  margin-bottom: 1rem;
+}
+.label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.input,
+.select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+.modalActions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+.cancelButton {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.submitButton {
+  padding: 0.5rem 1rem;
+  background: var(--brand);
+  color: var(--container);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.submitButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.error {
+  color: #dc3545;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+.success {
+  color: #28a745;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}

@@ -1,14 +1,9 @@
 import { type OrgRole, type Invitation } from "../types";
 import { sendInvitationEmail, type EmailEnv } from "./email";
 
-// Invitations expire after 7 days by default
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
-const DEFAULT_EXPIRATION_DAYS = 7;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/**
- * Database row structure for invitations.
- */
-interface InvitationRow {
+type InvitationRow = {
   id: string;
   email: string;
   org_id: string;
@@ -17,10 +12,10 @@ interface InvitationRow {
   created_at: number;
   expires_at: number;
   accepted_at: number | null;
-}
+};
 
 /**
- * Converts a database row to an Invitation entity.
+ * Convert a database row to an Invitation object.
  */
 function rowToInvitation(row: InvitationRow): Invitation {
   return {
@@ -35,34 +30,23 @@ function rowToInvitation(row: InvitationRow): Invitation {
   };
 }
 
-// ============================================================================
-// Create Invitation
-// ============================================================================
-
-interface CreateInvitationInput {
-  email: string;
-  orgId: string;
-  role: OrgRole;
-  invitedBy: string;
-  expiresInDays?: number;
-}
-
-interface CreateInvitationResult {
-  id: string;
-  expiresAt: number;
-}
-
 /**
- * Creates a new invitation in the database.
+ * Create a new invitation in the database.
  */
 export async function createInvitation(
   db: D1Database,
-  input: CreateInvitationInput
-): Promise<CreateInvitationResult> {
-  const invitationId = crypto.randomUUID();
+  input: {
+    email: string;
+    orgId: string;
+    role: OrgRole;
+    invitedBy: string;
+    expiresInDays?: number;
+  }
+) {
+  const id = crypto.randomUUID();
   const now = Date.now();
-  const expirationDays = input.expiresInDays ?? DEFAULT_EXPIRATION_DAYS;
-  const expiresAt = now + expirationDays * MILLISECONDS_PER_DAY;
+  const daysUntilExpiry = input.expiresInDays ?? 7;
+  const expiresAt = now + daysUntilExpiry * MS_PER_DAY;
 
   await db
     .prepare(
@@ -70,7 +54,7 @@ export async function createInvitation(
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
-      invitationId,
+      id,
       input.email.toLowerCase(),
       input.orgId,
       input.role,
@@ -80,130 +64,80 @@ export async function createInvitation(
     )
     .run();
 
-  return {
-    id: invitationId,
-    expiresAt: expiresAt,
-  };
-}
-
-// ============================================================================
-// Find Pending Invitation
-// ============================================================================
-
-interface PendingInvitation {
-  id: string;
-  orgId: string;
-  role: OrgRole;
+  return { id, expiresAt };
 }
 
 /**
- * Finds a pending (not accepted, not expired) invitation for an email.
+ * Accept an invitation and add the user to the organization.
+ * Returns the org info if successful, null if the invitation is invalid.
  */
-export async function findPendingInvitation(
+export async function acceptInvitationById(
   db: D1Database,
-  email: string
-): Promise<PendingInvitation | null> {
-  const row = await db
+  invitationId: string,
+  userId: string
+) {
+  // Find a valid, unexpired, unaccepted invitation
+  const invitation = await db
     .prepare(
-      `SELECT id, org_id, role
-       FROM invitations
-       WHERE email = ?
-         AND accepted_at IS NULL
-         AND expires_at > ?`
+      `SELECT org_id, role FROM invitations
+       WHERE id = ? AND accepted_at IS NULL AND expires_at > ?`
     )
-    .bind(email.toLowerCase(), Date.now())
-    .first<{ id: string; org_id: string; role: OrgRole }>();
-
-  if (!row) {
-    return null;
-  }
-
-  return {
-    id: row.id,
-    orgId: row.org_id,
-    role: row.role,
-  };
-}
-
-// ============================================================================
-// Process Invitation (Accept)
-// ============================================================================
-
-interface ProcessInvitationResult {
-  orgId: string;
-  role: OrgRole;
-}
-
-/**
- * Processes a pending invitation for a newly registered user.
- * Adds them to the organization and marks the invitation as accepted.
- */
-export async function processInvitation(
-  db: D1Database,
-  user: { id: string; email: string }
-): Promise<ProcessInvitationResult | null> {
-  const invitation = await findPendingInvitation(db, user.email);
+    .bind(invitationId, Date.now())
+    .first<{ org_id: string; role: OrgRole }>();
 
   if (!invitation) {
     return null;
   }
 
+  // Add user to org and mark invitation as accepted
   const now = Date.now();
-  const membershipId = crypto.randomUUID();
+  const memberId = crypto.randomUUID();
 
-  // Add user to org and mark invitation as accepted in one transaction
   await db.batch([
     db
       .prepare(
         `INSERT INTO org_members (id, org_id, user_id, role, created_at)
          VALUES (?, ?, ?, ?, ?)`
       )
-      .bind(membershipId, invitation.orgId, user.id, invitation.role, now),
+      .bind(memberId, invitation.org_id, userId, invitation.role, now),
     db
       .prepare(`UPDATE invitations SET accepted_at = ? WHERE id = ?`)
-      .bind(now, invitation.id),
+      .bind(now, invitationId),
   ]);
 
   return {
-    orgId: invitation.orgId,
+    orgId: invitation.org_id,
     role: invitation.role,
   };
 }
 
-// ============================================================================
-// Get Organization Invitations
-// ============================================================================
-
 /**
- * Gets all pending invitations for an organization.
- * Returns only invitations that haven't been accepted and haven't expired.
+ * Get all pending (unaccepted, unexpired) invitations for an organization.
  */
 export async function getOrgInvitations(
   db: D1Database,
   orgId: string
 ): Promise<Invitation[]> {
-  const result = await db
-    .prepare(
-      `SELECT id, email, org_id, role, invited_by, created_at, expires_at, accepted_at
-       FROM invitations
-       WHERE org_id = ?
-         AND accepted_at IS NULL
-         AND expires_at > ?
-       ORDER BY created_at DESC`
-    )
+  const query = `
+    SELECT id, email, org_id, role, invited_by, created_at, expires_at, accepted_at
+    FROM invitations
+    WHERE org_id = ?
+      AND accepted_at IS NULL
+      AND expires_at > ?
+    ORDER BY created_at DESC
+  `;
+
+  const { results } = await db
+    .prepare(query)
     .bind(orgId, Date.now())
     .all<InvitationRow>();
 
-  return result.results.map(rowToInvitation);
+  return results.map(rowToInvitation);
 }
 
-// ============================================================================
-// Revoke Invitation
-// ============================================================================
-
 /**
- * Revokes (deletes) a pending invitation.
- * Returns true if an invitation was deleted, false if not found.
+ * Revoke (delete) a pending invitation.
+ * Returns true if the invitation was deleted, false if it didn't exist or was already accepted.
  */
 export async function revokeInvitation(
   db: D1Database,
@@ -217,61 +151,97 @@ export async function revokeInvitation(
   return result.meta.changes > 0;
 }
 
-// ============================================================================
-// Check for Pending Invitation
-// ============================================================================
+/**
+ * Get full invitation details by ID, including org name and inviter name.
+ * Used for the invitation acceptance flow.
+ */
+export async function getInvitationById(db: D1Database, invitationId: string) {
+  const query = `
+    SELECT
+      i.id,
+      i.email,
+      i.org_id,
+      i.role,
+      i.expires_at,
+      i.accepted_at,
+      o.name as org_name,
+      u.name as inviter_name
+    FROM invitations i
+    JOIN org o ON o.id = i.org_id
+    JOIN user u ON u.id = i.invited_by
+    WHERE i.id = ?
+  `;
+
+  const row = await db.prepare(query).bind(invitationId).first<{
+    id: string;
+    email: string;
+    org_id: string;
+    role: OrgRole;
+    expires_at: number;
+    accepted_at: number | null;
+    org_name: string;
+    inviter_name: string;
+  }>();
+
+  if (!row) {
+    return null;
+  }
+
+  const now = Date.now();
+
+  return {
+    id: row.id,
+    email: row.email,
+    orgId: row.org_id,
+    orgName: row.org_name,
+    role: row.role,
+    inviterName: row.inviter_name,
+    expiresAt: row.expires_at,
+    isExpired: row.expires_at < now,
+    isAccepted: row.accepted_at !== null,
+  };
+}
 
 /**
- * Checks if a pending invitation already exists for an email in an org.
+ * Check if there's already a pending invitation for this email at this org.
  */
 export async function hasPendingInvitation(
   db: D1Database,
   email: string,
   orgId: string
 ): Promise<boolean> {
+  const query = `
+    SELECT 1 FROM invitations
+    WHERE email = ?
+      AND org_id = ?
+      AND accepted_at IS NULL
+      AND expires_at > ?
+  `;
+
   const row = await db
-    .prepare(
-      `SELECT 1
-       FROM invitations
-       WHERE email = ?
-         AND org_id = ?
-         AND accepted_at IS NULL
-         AND expires_at > ?`
-    )
+    .prepare(query)
     .bind(email.toLowerCase(), orgId, Date.now())
     .first();
 
   return row !== null;
 }
 
-// ============================================================================
-// Invite User (Create + Send Email)
-// ============================================================================
-
-interface InviteUserInput {
-  email: string;
-  orgId: string;
-  orgName: string;
-  role: OrgRole;
-  invitedBy: string;
-  inviterName: string;
-}
-
-interface InviteUserResult {
-  id: string;
-  expiresAt: number;
-  emailError?: string;
-}
-
 /**
- * Creates an invitation and sends the invitation email.
- * This is the main function to use when inviting a new user.
+ * Create an invitation and send the invitation email.
+ * This is the main function for inviting users.
  */
 export async function inviteUser(
   env: EmailEnv,
   db: D1Database,
-  input: InviteUserInput
-): Promise<InviteUserResult> {
+  input: {
+    email: string;
+    orgId: string;
+    orgName: string;
+    role: OrgRole;
+    invitedBy: string;
+    inviterName: string;
+  }
+) {
   // Create the invitation record
   const invitation = await createInvitation(db, {
     email: input.email,

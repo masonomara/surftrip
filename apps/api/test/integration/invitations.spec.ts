@@ -2,8 +2,6 @@ import { env } from "cloudflare:test";
 import { describe, it, expect, beforeAll } from "vitest";
 import {
   createInvitation,
-  findPendingInvitation,
-  processInvitation,
   getOrgInvitations,
   revokeInvitation,
   hasPendingInvitation,
@@ -108,109 +106,6 @@ describe("Invitations", () => {
   });
 
   // --------------------------------------------------------------------------
-  // Lookup Tests
-  // --------------------------------------------------------------------------
-
-  it("finds pending invitation by email", async () => {
-    const email = uniqueEmail("pending");
-
-    await createInvitation(env.DB, {
-      email,
-      orgId: testOrgId,
-      role: "member",
-      invitedBy: adminUserId,
-    });
-
-    const invitation = await findPendingInvitation(env.DB, email);
-
-    expect(invitation?.orgId).toBe(testOrgId);
-    expect(invitation?.role).toBe("member");
-  });
-
-  it("returns null for non-existent invitation", async () => {
-    const result = await findPendingInvitation(env.DB, "nobody@example.com");
-
-    expect(result).toBeNull();
-  });
-
-  it("ignores expired invitations", async () => {
-    const email = uniqueEmail("expired");
-    const pastTime = Date.now() - 1000;
-
-    // Insert an already-expired invitation directly
-    await env.DB.prepare(
-      `INSERT INTO invitations (id, email, org_id, role, invited_by, created_at, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        crypto.randomUUID(),
-        email,
-        testOrgId,
-        "member",
-        adminUserId,
-        pastTime - 1000,
-        pastTime
-      )
-      .run();
-
-    const result = await findPendingInvitation(env.DB, email);
-
-    expect(result).toBeNull();
-  });
-
-  // --------------------------------------------------------------------------
-  // Processing Tests
-  // --------------------------------------------------------------------------
-
-  it("processes invitation on user signup", async () => {
-    const email = uniqueEmail("newuser");
-    const newUserId = crypto.randomUUID();
-
-    // Create invitation
-    await createInvitation(env.DB, {
-      email,
-      orgId: testOrgId,
-      role: "member",
-      invitedBy: adminUserId,
-    });
-
-    // Create user
-    await createTestUser(newUserId, email, "New User");
-
-    // Process invitation
-    const result = await processInvitation(env.DB, { id: newUserId, email });
-
-    expect(result?.orgId).toBe(testOrgId);
-
-    // Verify org membership was created
-    const membership = await env.DB.prepare(
-      `SELECT role FROM org_members WHERE user_id = ? AND org_id = ?`
-    )
-      .bind(newUserId, testOrgId)
-      .first<{ role: string }>();
-
-    expect(membership?.role).toBe("member");
-
-    // Verify invitation was marked as accepted
-    const invitation = await env.DB.prepare(
-      `SELECT accepted_at FROM invitations WHERE email = ?`
-    )
-      .bind(email)
-      .first<{ accepted_at: number }>();
-
-    expect(invitation?.accepted_at).toBeGreaterThan(0);
-  });
-
-  it("returns null when processing without invitation", async () => {
-    const result = await processInvitation(env.DB, {
-      id: crypto.randomUUID(),
-      email: uniqueEmail("noinvite"),
-    });
-
-    expect(result).toBeNull();
-  });
-
-  // --------------------------------------------------------------------------
   // Listing Tests
   // --------------------------------------------------------------------------
 
@@ -255,14 +150,14 @@ describe("Invitations", () => {
     });
 
     // Verify it exists
-    expect(await findPendingInvitation(env.DB, email)).not.toBeNull();
+    expect(await hasPendingInvitation(env.DB, email, testOrgId)).toBe(true);
 
     // Revoke it
     const revoked = await revokeInvitation(env.DB, id);
     expect(revoked).toBe(true);
 
     // Verify it's gone
-    expect(await findPendingInvitation(env.DB, email)).toBeNull();
+    expect(await hasPendingInvitation(env.DB, email, testOrgId)).toBe(false);
   });
 
   it("returns false when revoking non-existent invitation", async () => {
@@ -314,11 +209,12 @@ describe("Invitations", () => {
     });
 
     // Find with lowercase
-    const result = await findPendingInvitation(
+    const result = await hasPendingInvitation(
       env.DB,
-      `${baseEmail}@example.com`
+      `${baseEmail}@example.com`,
+      testOrgId
     );
 
-    expect(result).not.toBeNull();
+    expect(result).toBe(true);
   });
 });

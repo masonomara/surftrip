@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router";
 import type { MetaFunction } from "react-router";
-import { signUp, signIn, authClient } from "~/lib/auth-client";
+import { signUp, signIn, authClient, API_URL } from "~/lib/auth-client";
+import type { InvitationDetails } from "~/lib/types";
 import styles from "~/styles/auth.module.css";
 
 export const meta: MetaFunction = () => [
@@ -9,12 +10,20 @@ export const meta: MetaFunction = () => [
   { name: "description", content: "Create your Docket account" },
 ];
 
-/**
- * Signup page component.
- */
 export default function SignupPage() {
   const [searchParams] = useSearchParams();
-  const inviteCode = searchParams.get("invite");
+
+  // Get invitation ID from URL if present
+  const invitationId = searchParams.get("invitation");
+
+  // Where to redirect after signup
+  const redirectUrl = invitationId
+    ? `/accept-invite?invitation=${invitationId}`
+    : searchParams.get("redirect") || "/dashboard";
+
+  // Invitation state
+  const [invitation, setInvitation] = useState<InvitationDetails | null>(null);
+  const [invitationLoading, setInvitationLoading] = useState(!!invitationId);
 
   // Form state
   const [name, setName] = useState("");
@@ -28,12 +37,35 @@ export default function SignupPage() {
   const [isResending, setIsResending] = useState(false);
   const [hasResent, setHasResent] = useState(false);
 
-  // Redirect URL (respects invite code if present)
-  const redirectUrl = inviteCode ? `/invite/${inviteCode}` : "/dashboard";
+  // Fetch invitation details if we have an invitation ID
+  useEffect(() => {
+    if (!invitationId) {
+      return;
+    }
 
-  /**
-   * Handles the signup form submission.
-   */
+    fetch(`${API_URL}/api/invitations/${invitationId}`, {
+      credentials: "include",
+    })
+      .then((response) => {
+        if (!response.ok) {
+          return null;
+        }
+        return response.json() as Promise<InvitationDetails>;
+      })
+      .then((data) => {
+        if (data) {
+          setInvitation(data);
+          setEmail(data.email);
+        }
+      })
+      .catch(() => {
+        // Ignore errors - invitation might not exist
+      })
+      .finally(() => {
+        setInvitationLoading(false);
+      });
+  }, [invitationId]);
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setErrorMessage(null);
@@ -44,7 +76,7 @@ export default function SignupPage() {
         name,
         email,
         password,
-        callbackURL: `${window.location.origin}/dashboard`,
+        callbackURL: `${window.location.origin}${redirectUrl}`,
       },
       {
         onSuccess: () => {
@@ -59,33 +91,19 @@ export default function SignupPage() {
     );
   }
 
-  /**
-   * Resends the verification email.
-   */
   async function handleResendVerification() {
     setIsResending(true);
     setHasResent(false);
 
     await authClient.sendVerificationEmail({
       email,
-      callbackURL: `${window.location.origin}/dashboard`,
+      callbackURL: `${window.location.origin}${redirectUrl}`,
     });
 
     setIsResending(false);
     setHasResent(true);
   }
 
-  /**
-   * Goes back to the signup form (to change email).
-   */
-  function handleGoBack() {
-    setEmailSent(false);
-    setHasResent(false);
-  }
-
-  /**
-   * Initiates OAuth sign-in with the specified provider.
-   */
   function handleSocialSignIn(provider: "google" | "apple") {
     signIn.social({
       provider,
@@ -93,12 +111,18 @@ export default function SignupPage() {
     });
   }
 
-  // Show verification email sent screen
+  function handleGoBack() {
+    setEmailSent(false);
+    setHasResent(false);
+  }
+
+  // Email verification sent - show confirmation page
   if (emailSent) {
     return (
       <main className={styles.page}>
         <div className={styles.container}>
           <h1 className={styles.title}>Check your email</h1>
+
           <p className={styles.subtitle}>
             We sent a verification link to <strong>{email}</strong>. Click the
             link to verify your account.
@@ -134,17 +158,81 @@ export default function SignupPage() {
     );
   }
 
-  // Show signup form
+  // Loading invitation
+  if (invitationLoading) {
+    return (
+      <main className={styles.page}>
+        <div className={styles.container}>
+          <p className={styles.subtitle}>Loading invitation...</p>
+        </div>
+      </main>
+    );
+  }
+
+  // Invitation expired
+  if (invitation?.isExpired) {
+    return (
+      <main className={styles.page}>
+        <div className={styles.container}>
+          <h1 className={styles.title}>Invitation Expired</h1>
+          <p className={styles.subtitle}>
+            This invitation to join {invitation.orgName} has expired. Please
+            contact your organization admin for a new invitation.
+          </p>
+          <Link to="/login" className={styles.submitButton}>
+            Go to Login
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  // Invitation already accepted
+  if (invitation?.isAccepted) {
+    return (
+      <main className={styles.page}>
+        <div className={styles.container}>
+          <h1 className={styles.title}>Already Accepted</h1>
+          <p className={styles.subtitle}>
+            This invitation has already been accepted.
+          </p>
+          <Link to="/login" className={styles.submitButton}>
+            Go to Login
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  // Build login link (preserve invitation if present)
+  const loginLink = invitationId
+    ? `/login?invitation=${invitationId}`
+    : "/login";
+
+  // Main signup form
   return (
     <main className={styles.page}>
       <div className={styles.container}>
-        <h1 className={styles.title}>Create your account</h1>
-        <p className={styles.subtitle}>Sign up to get started with Docket.</p>
+        <h1 className={styles.title}>
+          {invitation ? "You're invited!" : "Create your account"}
+        </h1>
+
+        <p className={styles.subtitle}>
+          {invitation ? (
+            <>
+              {invitation.inviterName} invited you to join{" "}
+              <strong>{invitation.orgName}</strong> as a {invitation.role}.
+              Create an account to get started.
+            </>
+          ) : (
+            "Sign up to get started with Docket."
+          )}
+        </p>
 
         {errorMessage && <div className={styles.errorBox}>{errorMessage}</div>}
 
         <form onSubmit={handleSubmit}>
-          {/* Name Field */}
+          {/* Name field */}
           <div className={styles.fieldGroup}>
             <label htmlFor="name" className={styles.label}>
               Name
@@ -160,10 +248,21 @@ export default function SignupPage() {
             />
           </div>
 
-          {/* Email Field */}
+          {/* Email field */}
           <div className={styles.fieldGroup}>
             <label htmlFor="email" className={styles.label}>
               Email
+              {invitation && (
+                <span
+                  style={{
+                    fontWeight: "normal",
+                    color: "var(--text-secondary)",
+                    marginLeft: "0.5rem",
+                  }}
+                >
+                  (from invitation)
+                </span>
+              )}
             </label>
             <input
               id="email"
@@ -171,12 +270,21 @@ export default function SignupPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={isLoading}
+              disabled={isLoading || !!invitation}
+              readOnly={!!invitation}
               className={styles.input}
+              style={
+                invitation
+                  ? {
+                      backgroundColor: "var(--surface-3)",
+                      cursor: "not-allowed",
+                    }
+                  : undefined
+              }
             />
           </div>
 
-          {/* Password Field */}
+          {/* Password field */}
           <div className={styles.fieldGroupLast}>
             <label htmlFor="password" className={styles.label}>
               Password
@@ -204,7 +312,7 @@ export default function SignupPage() {
 
         <div className={styles.divider}>or</div>
 
-        {/* Social Sign-In Buttons */}
+        {/* Social signup buttons */}
         <div className={styles.socialButtonContainer}>
           <button
             type="button"
@@ -227,7 +335,7 @@ export default function SignupPage() {
 
         <p className={styles.footer}>
           Already have an account?{" "}
-          <Link to="/login" className={styles.footerLink}>
+          <Link to={loginLink} className={styles.footerLink}>
             Log in
           </Link>
         </p>
