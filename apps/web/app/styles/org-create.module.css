@@ -31,24 +31,6 @@
 .progressStep.completed {
   background: var(--text-primary);
 }
-/* title-2 (21/26/400) */
-.title {
-  color: var(--text-primary);
-  font-size: 21px;
-  line-height: 26px;
-  font-weight: 500;
-  text-align: center;
-  margin-bottom: 8px;
-}
-/* body (16/21/400) */
-.subtitle {
-  color: var(--text-secondary);
-  font-size: 16px;
-  line-height: 21px;
-  font-weight: 400;
-  text-align: center;
-  margin-bottom: 24px;
-}
 .optionGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -80,34 +62,6 @@
 .formFields {
   margin-bottom: 24px;
 }
-.fieldGroup {
-  margin-bottom: 20px;
-}
-/* body (16/21/600) */
-.label {
-  display: block;
-  color: var(--text-primary);
-  font-size: 16px;
-  line-height: 21px;
-  font-weight: 400;
-  margin-bottom: 8px;
-}
-/* callout (15/20/400) */
-.input {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid var(--border-dark);
-  border-radius: 8px;
-  background: var(--surface-3);
-  color: var(--text-primary);
-  height: 42px;
-  font-size: 15px;
-  line-height: 20px;
-  font-weight: 400;
-}
-.input::placeholder {
-  color: var(--text-secondary);
-}
 .sizeGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -130,23 +84,6 @@
 .sizeCard.selected {
   border-color: var(--text-primary);
   background: var(--surface-2);
-}
-/* callout (15/20/600) */
-.sizeLabel {
-  display: block;
-  font-size: 15px;
-  line-height: 20px;
-  font-weight: 400;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
-/* footnote (12/16/400) */
-.sizeDescription {
-  display: block;
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 400;
-  color: var(--text-secondary);
 }
 .checkboxGrid {
   display: grid;
@@ -181,13 +118,6 @@
   opacity: 0;
   pointer-events: none;
 }
-/* subhead (14/19/600) */
-.checkboxLabel {
-  font-size: 14px;
-  line-height: 19px;
-  font-weight: 400;
-  color: var(--text-primary);
-}
 .practiceGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -214,13 +144,6 @@
 .practiceItem.selected {
   border-color: var(--text-primary);
   background: var(--surface-2);
-}
-/* subhead (14/19/600) */
-.practiceLabel {
-  font-size: 14px;
-  line-height: 19px;
-  font-weight: 400;
-  color: var(--text-primary);
 }
 .buttons {
   display: flex;

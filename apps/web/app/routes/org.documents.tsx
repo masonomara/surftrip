@@ -9,6 +9,7 @@ import type {
   OrgContextDocument,
 } from "~/lib/types";
 import { AppLayout } from "~/components/AppLayout";
+import { PageLayout } from "~/components/PageLayout";
 import styles from "~/styles/org-documents.module.css";
 
 // Allowed MIME types for document upload
@@ -249,17 +250,11 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <AppLayout user={user} org={org} currentPath="/org/documents">
-      <header className={styles.header}>
-        <div className={styles.headerInfo}>
-          <h1>Org Context Documents</h1>
-          <p className={styles.description}>
-            Upload your firm&apos;s internal documents for Docket to use when
-            answering questions.
-          </p>
-        </div>
-      </header>
-
-      {error && <div className="alert alert-error">{error}</div>}
+      <PageLayout
+        title="Org Context Documents"
+        subtitle="Upload your firm's internal documents for Docket to use when answering questions."
+      >
+        {error && <div className="alert alert-error">{error}</div>}
 
       {/* Upload Area */}
       <div
@@ -307,9 +302,9 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
       </div>
 
       {/* Documents Table */}
-      <section className={styles.section}>
+      <section>
         <div className="section-header">
-          <h2 className="section-title">
+          <h2 className="text-title-3">
             Uploaded Documents ({documents.length})
           </h2>
         </div>
@@ -317,14 +312,14 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
         {documents.length === 0 ? (
           <p className="empty-state">No documents uploaded yet.</p>
         ) : (
-          <table className={styles.documentsTable}>
+          <table className="table">
             <thead>
               <tr>
                 <th>Filename</th>
                 <th>Size</th>
                 <th>Chunks</th>
                 <th>Uploaded</th>
-                <th className={styles.actionsCell}>Actions</th>
+                <th style={{ textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -334,7 +329,7 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
                   <td>{formatFileSize(doc.size)}</td>
                   <td>{doc.chunkCount}</td>
                   <td>{new Date(doc.uploadedAt).toLocaleDateString()}</td>
-                  <td className={styles.actionsCell}>
+                  <td style={{ textAlign: "right" }}>
                     <button
                       onClick={() => handleDelete(doc.id, doc.filename)}
                       className="btn btn-danger-outline btn-sm"
@@ -349,21 +344,22 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
         )}
       </section>
 
-      {/* Information Section */}
-      <section className={styles.infoSection}>
-        <h3>How Org Context works</h3>
-        <ol>
-          <li>Upload a document (PDF, DOCX, Markdown, etc.)</li>
-          <li>Docket extracts text and creates vector embeddings</li>
-          <li>
-            When users ask questions, relevant chunks are included in context
-          </li>
-        </ol>
-        <p>
-          <strong>Tip:</strong> Upload procedures, templates, and policies.
-          Avoid sensitive client data.
-        </p>
-      </section>
+        {/* Information Section */}
+        <section>
+          <div className="info-card" style={{ marginTop: "2rem" }}>
+            <h3 className="text-headline" style={{ marginBottom: "0.75rem" }}>How Org Context works</h3>
+            <ol className="text-secondary" style={{ paddingLeft: "1.25rem", lineHeight: "1.75" }}>
+              <li>Upload a document (PDF, DOCX, Markdown, etc.)</li>
+              <li>Docket extracts text and creates vector embeddings</li>
+              <li>When users ask questions, relevant chunks are included in context</li>
+            </ol>
+            <p className="text-secondary" style={{ marginTop: "1rem" }}>
+              <strong className="text-primary">Tip:</strong> Upload procedures, templates, and policies.
+              Avoid sensitive client data.
+            </p>
+          </div>
+        </section>
+      </PageLayout>
     </AppLayout>
   );
 }

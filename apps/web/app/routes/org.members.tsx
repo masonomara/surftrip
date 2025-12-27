@@ -10,7 +10,7 @@ import type {
   PendingInvitation,
 } from "~/lib/types";
 import { AppLayout } from "~/components/AppLayout";
-import styles from "~/styles/org-members.module.css";
+import { PageLayout } from "~/components/PageLayout";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const cookie = request.headers.get("cookie") || "";
@@ -181,177 +181,178 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <AppLayout user={user} org={org} currentPath="/org/members">
-      <header className={styles.header}>
-        <h1>Members</h1>
-      </header>
+      <PageLayout title="Members">
+        {error && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
+        {/* Current Members Section */}
+        <section>
+          <div className="section-header">
+            <h2 className="text-title-3">
+              Current Members ({members.length})
+            </h2>
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="btn btn-primary"
+            >
+              Invite Member
+            </button>
+          </div>
 
-      {/* Current Members Section */}
-      <section className={styles.section}>
-        <div className="section-header">
-          <h2 className="section-title">Current Members ({members.length})</h2>
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="btn btn-primary"
-          >
-            Invite Member
-          </button>
-        </div>
+          {members.length === 0 ? (
+            <div className="empty-state">No members found</div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Joined</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((member) => {
+                  const isSelf = member.userId === user.id;
+                  const canEditRole = !member.isOwner && !isSelf;
+                  const canTransferOwnership =
+                    org.isOwner &&
+                    !member.isOwner &&
+                    !isSelf &&
+                    member.role === "admin";
 
-        {members.length === 0 ? (
-          <div className="empty-state">No members found</div>
-        ) : (
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Role</th>
-                <th>Joined</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((member) => {
-                const isSelf = member.userId === user.id;
-                const canEditRole = !member.isOwner && !isSelf;
-                const canTransferOwnership =
-                  org.isOwner &&
-                  !member.isOwner &&
-                  !isSelf &&
-                  member.role === "admin";
+                  return (
+                    <tr key={member.id}>
+                      <td>
+                        <div>
+                          {member.name}
+                          {isSelf && " (you)"}
+                        </div>
+                        <div className="text-secondary">{member.email}</div>
+                      </td>
+                      <td>
+                        {canEditRole ? (
+                          <select
+                            className="form-select"
+                            value={member.role}
+                            onChange={(e) =>
+                              handleRoleChange(member, e.target.value)
+                            }
+                            style={{ width: "auto", padding: "0.25rem 0.5rem" }}
+                          >
+                            <option value="admin">Admin</option>
+                            <option value="member">Member</option>
+                          </select>
+                        ) : (
+                          <RoleBadge
+                            role={member.role}
+                            isOwner={member.isOwner}
+                          />
+                        )}
+                      </td>
+                      <td>{new Date(member.createdAt).toLocaleDateString()}</td>
+                      <td>
+                        <div className="btn-group">
+                          {canTransferOwnership && (
+                            <button
+                              className="action-btn"
+                              onClick={() => handleOpenTransferModal(member)}
+                            >
+                              Transfer Ownership
+                            </button>
+                          )}
+                          {canEditRole && (
+                            <button
+                              className="action-btn action-btn-danger"
+                              onClick={() => handleRemoveMember(member)}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </section>
 
-                return (
-                  <tr key={member.id}>
-                    <td>
-                      <div className={styles.memberName}>
-                        {member.name}
-                        {isSelf && " (you)"}
-                      </div>
-                      <div className={styles.memberEmail}>{member.email}</div>
-                    </td>
-                    <td>
-                      {canEditRole ? (
-                        <select
-                          className={styles.roleSelect}
-                          value={member.role}
-                          onChange={(e) =>
-                            handleRoleChange(member, e.target.value)
-                          }
+        {/* Pending Invitations Section */}
+        <section>
+          <div className="section-header">
+            <h2 className="text-title-3">
+              Pending Invitations ({invitations.length})
+            </h2>
+          </div>
+
+          {invitations.length === 0 ? (
+            <div className="empty-state">No pending invitations</div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Invited By</th>
+                  <th>Expires</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invitations.map((invitation) => {
+                  const expiresAt = new Date(invitation.expiresAt);
+                  const expiringsSoon =
+                    invitation.expiresAt - Date.now() < 24 * 60 * 60 * 1000;
+
+                  return (
+                    <tr key={invitation.id}>
+                      <td>{invitation.email}</td>
+                      <td>
+                        <span className="badge">{invitation.role}</span>
+                      </td>
+                      <td className="text-secondary">
+                        {invitation.inviterName}
+                      </td>
+                      <td className="text-secondary">
+                        {expiresAt.toLocaleDateString()}
+                        {expiringsSoon && " (soon)"}
+                      </td>
+                      <td>
+                        <button
+                          className="action-btn action-btn-danger"
+                          onClick={() => handleRevokeInvitation(invitation)}
                         >
-                          <option value="admin">Admin</option>
-                          <option value="member">Member</option>
-                        </select>
-                      ) : (
-                        <RoleBadge
-                          role={member.role}
-                          isOwner={member.isOwner}
-                        />
-                      )}
-                    </td>
-                    <td>{new Date(member.createdAt).toLocaleDateString()}</td>
-                    <td>
-                      <div className={styles.actions}>
-                        {canTransferOwnership && (
-                          <button
-                            className={styles.actionButton}
-                            onClick={() => handleOpenTransferModal(member)}
-                          >
-                            Transfer Ownership
-                          </button>
-                        )}
-                        {canEditRole && (
-                          <button
-                            className={`${styles.actionButton} ${styles.actionButtonDanger}`}
-                            onClick={() => handleRemoveMember(member)}
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                          Revoke
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        {/* Invite Modal */}
+        {showInviteModal && (
+          <InviteModal
+            onClose={() => setShowInviteModal(false)}
+            onSuccess={handleInviteSuccess}
+          />
         )}
-      </section>
 
-      {/* Pending Invitations Section */}
-      <section className={styles.section}>
-        <div className="section-header">
-          <h2 className="section-title">
-            Pending Invitations ({invitations.length})
-          </h2>
-        </div>
-
-        {invitations.length === 0 ? (
-          <div className="empty-state">No pending invitations</div>
-        ) : (
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Invited By</th>
-                <th>Expires</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invitations.map((invitation) => {
-                const expiresAt = new Date(invitation.expiresAt);
-                const expiringsSoon =
-                  invitation.expiresAt - Date.now() < 24 * 60 * 60 * 1000;
-
-                return (
-                  <tr key={invitation.id}>
-                    <td className={styles.pendingEmail}>{invitation.email}</td>
-                    <td>
-                      <span className={styles.badge}>{invitation.role}</span>
-                    </td>
-                    <td className={styles.pendingMeta}>
-                      {invitation.inviterName}
-                    </td>
-                    <td className={styles.pendingMeta}>
-                      {expiresAt.toLocaleDateString()}
-                      {expiringsSoon && " (soon)"}
-                    </td>
-                    <td>
-                      <button
-                        className={`${styles.actionButton} ${styles.actionButtonDanger}`}
-                        onClick={() => handleRevokeInvitation(invitation)}
-                      >
-                        Revoke
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {/* Transfer Ownership Modal */}
+        {showTransferModal && transferTarget && (
+          <TransferOwnershipModal
+            targetMember={transferTarget}
+            orgName={org.org.name}
+            onClose={handleCloseTransferModal}
+            onSuccess={handleTransferSuccess}
+          />
         )}
-      </section>
-
-      {/* Invite Modal */}
-      {showInviteModal && (
-        <InviteModal
-          onClose={() => setShowInviteModal(false)}
-          onSuccess={handleInviteSuccess}
-        />
-      )}
-
-      {/* Transfer Ownership Modal */}
-      {showTransferModal && transferTarget && (
-        <TransferOwnershipModal
-          targetMember={transferTarget}
-          orgName={org.org.name}
-          onClose={handleCloseTransferModal}
-          onSuccess={handleTransferSuccess}
-        />
-      )}
+      </PageLayout>
     </AppLayout>
   );
 }
@@ -362,12 +363,12 @@ interface RoleBadgeProps {
 }
 
 function RoleBadge({ role, isOwner }: RoleBadgeProps) {
-  let badgeClass = styles.badge;
+  let badgeClass = "badge";
 
   if (isOwner) {
-    badgeClass = `${styles.badge} ${styles.badgeOwner}`;
+    badgeClass = "badge badge-owner";
   } else if (role === "admin") {
-    badgeClass = `${styles.badge} ${styles.badgeAdmin}`;
+    badgeClass = "badge badge-admin";
   }
 
   const displayText = isOwner ? "Owner" : role;
@@ -533,7 +534,7 @@ function TransferOwnershipModal({
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h2 className="modal-title">Transfer Ownership</h2>
 
-        <div className={styles.warning}>
+        <div className="alert alert-error">
           Transfer ownership to <strong>{targetMember.name}</strong> (
           {targetMember.email}). This action cannot be undone.
         </div>

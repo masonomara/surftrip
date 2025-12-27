@@ -4,7 +4,7 @@ An AI assistant for law firms that use Clio. Users chat through Microsoft Teams,
 
 ## How It Works
 
-```
+```text
 User → Chat Channel → Worker → Durable Object → AI + Clio → Response
 ```
 
@@ -32,8 +32,16 @@ Copy the example env files:
 
 ```bash
 cp apps/api/.dev.vars.example apps/api/.dev.vars
-# Edit .dev.vars with your Clio credentials and secrets
+cp apps/web/.dev.vars.example apps/web/.dev.vars
 ```
+
+Create a `.env` file for the web app (Vite uses `.env`, Wrangler uses `.dev.vars`):
+
+```bash
+echo "VITE_API_URL=http://localhost:8787" > apps/web/.env
+```
+
+Edit `apps/api/.dev.vars` with your Clio credentials and secrets.
 
 Run the API and web app in separate terminals:
 

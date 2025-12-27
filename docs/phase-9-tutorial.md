@@ -685,232 +685,47 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
 
 ### 4.1 Unit Tests
 
-Unit tests focus on isolated logic—validation, formatting, state management.
+Unit tests focus on isolated logic—validation, formatting, state management. Tests should include but not be limited to:
 
-**Create `apps/web/app/lib/__tests__/validation.test.ts`:**
-
-```typescript
-import { describe, it, expect } from "vitest";
-
-// Example validation functions to test
-const ALLOWED_TYPES = [
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "text/markdown",
-  "text/plain",
-];
-
-const MAX_SIZE = 25 * 1024 * 1024;
-
-function validateFile(file: { type: string; size: number }): string | null {
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    return `File type "${file.type}" is not supported.`;
-  }
-  if (file.size > MAX_SIZE) {
-    return `File is too large.`;
-  }
-  return null;
-}
-
-function sanitizeFilename(filename: string): string {
-  return filename
-    .replace(/[^a-zA-Z0-9._-]/g, "_")
-    .replace(/\.{2,}/g, ".")
-    .slice(0, 255);
-}
-
-describe("File Validation", () => {
-  it("accepts valid PDF files", () => {
-    const result = validateFile({
-      type: "application/pdf",
-      size: 1024 * 1024,
-    });
-    expect(result).toBeNull();
-  });
-
-  it("rejects unsupported file types", () => {
-    const result = validateFile({
-      type: "application/zip",
-      size: 1024,
-    });
-    expect(result).toContain("not supported");
-  });
-
-  it("rejects files over 25MB", () => {
-    const result = validateFile({
-      type: "application/pdf",
-      size: 30 * 1024 * 1024,
-    });
-    expect(result).toContain("too large");
-  });
-});
-
-describe("Filename Sanitization", () => {
-  it("removes special characters", () => {
-    expect(sanitizeFilename("file<>name.pdf")).toBe("file__name.pdf");
-  });
-
-  it("prevents path traversal", () => {
-    expect(sanitizeFilename("../../../etc/passwd")).toBe(
-      "_.._.._.._etc_passwd"
-    );
-  });
-
-  it("removes double extensions", () => {
-    expect(sanitizeFilename("file..exe.pdf")).toBe("file.exe.pdf");
-  });
-
-  it("truncates long filenames", () => {
-    const longName = "a".repeat(300) + ".pdf";
-    expect(sanitizeFilename(longName).length).toBeLessThanOrEqual(255);
-  });
-});
-```
+1. File validation
+   - rejects unsupported file types
+   - rejects files over 25MB
+2. Filename Sanitization
+   - removes special characters
+   - prevents path traversal
+   - removes double extensions
+   - truncates long filenames
 
 ### 4.2 Integration Tests
 
-Integration tests verify the web app works correctly with the API. These run against a local dev server.
+Integration tests verify the web app works correctly with the API. These run against a local dev server. Tests should include but not be limited to:
 
-**Create `apps/web/test/integration/auth-flow.spec.ts`:**
-
-```typescript
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-
-const API_URL = process.env.API_URL || "http://localhost:8787";
-const WEB_URL = process.env.WEB_URL || "http://localhost:5173";
-
-describe("Authentication Flow", () => {
-  const testEmail = `test-${Date.now()}@example.com`;
-  const testPassword = "SecurePassword123!";
-  let sessionCookie: string;
-
-  it("creates a new account", async () => {
-    const response = await fetch(`${API_URL}/api/auth/sign-up/email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: testEmail,
-        password: testPassword,
-        name: "Test User",
-      }),
-    });
-
-    expect(response.ok).toBe(true);
-
-    const setCookie = response.headers.get("set-cookie");
-    expect(setCookie).toBeTruthy();
-    sessionCookie = setCookie!.split(";")[0];
-  });
-
-  it("retrieves session with cookie", async () => {
-    const response = await fetch(`${API_URL}/api/auth/get-session`, {
-      headers: { cookie: sessionCookie },
-    });
-
-    expect(response.ok).toBe(true);
-
-    const session = await response.json();
-    expect(session.user.email).toBe(testEmail);
-  });
-
-  it("fails to access protected route without session", async () => {
-    const response = await fetch(`${API_URL}/api/user/org`);
-    expect(response.status).toBe(401);
-  });
-
-  it("signs out successfully", async () => {
-    const response = await fetch(`${API_URL}/api/auth/sign-out`, {
-      method: "POST",
-      headers: { cookie: sessionCookie },
-    });
-
-    expect(response.ok).toBe(true);
-  });
-});
-```
+1. Authentication Flow
+   - creates a new account
+   - retrieves session with cookie
+   - fails to access protected route without session
+   - signs out successfully
 
 ### 4.3 End-to-End Tests
 
-E2E tests simulate real user interactions using Playwright.
+E2E tests simulate real user interactions using Playwright. Tests should include but not be limited to:
 
-**Create `apps/web/test/e2e/signup-flow.spec.ts`:**
-
-```typescript
-import { test, expect } from "@playwright/test";
-
-test.describe("Signup Flow", () => {
-  const testEmail = `e2e-${Date.now()}@example.com`;
-
-  test("user can sign up and create an organization", async ({ page }) => {
-    // Navigate to signup
-    await page.goto("/signup");
-    await expect(page).toHaveTitle(/Docket/);
-
-    // Fill signup form
-    await page.fill('input[type="text"]', "E2E Test User");
-    await page.fill('input[type="email"]', testEmail);
-    await page.fill('input[type="password"]', "SecurePassword123!");
-    await page.click('button[type="submit"]');
-
-    // Should redirect to dashboard
-    await expect(page).toHaveURL(/dashboard/);
-    await expect(
-      page.locator("text=not part of an organization")
-    ).toBeVisible();
-
-    // Click create organization
-    await page.click("text=Create an organization");
-    await expect(page).toHaveURL(/org\/create/);
-
-    // Step 1: Org type
-    await page.click("text=Law Firm");
-    await page.click("text=Continue");
-
-    // Step 2: Basic info
-    await page.fill('input[type="text"]', "E2E Test Firm");
-    await page.click("text=Small firm");
-    await page.click("text=Continue");
-
-    // Step 3: Jurisdictions
-    await page.click("text=CA");
-    await page.click("text=NY");
-    await page.click("text=Continue");
-
-    // Step 4: Practice areas
-    await page.click("text=Family Law");
-    await page.click("text=Create Organization");
-
-    // Should redirect to dashboard with org
-    await expect(page).toHaveURL(/dashboard/);
-    await expect(page.locator("text=E2E Test Firm")).toBeVisible();
-  });
-
-  test("user can invite a team member", async ({ page }) => {
-    // Login first (assuming test user from previous test)
-    await page.goto("/login");
-    await page.fill('input[type="email"]', testEmail);
-    await page.fill('input[type="password"]', "SecurePassword123!");
-    await page.click('button[type="submit"]');
-    await expect(page).toHaveURL(/dashboard/);
-
-    // Navigate to members
-    await page.click("text=Members");
-    await expect(page).toHaveURL(/org\/members/);
-
-    // Open invite modal
-    await page.click("text=Invite Member");
-    await expect(page.locator("text=Invite a team member")).toBeVisible();
-
-    // Fill invitation form
-    await page.fill('input[type="email"]', "invited@example.com");
-    await page.click("text=Send Invitation");
-
-    // Should see pending invitation
-    await expect(page.locator("text=invited@example.com")).toBeVisible();
-    await expect(page.locator("text=pending")).toBeVisible();
-  });
-});
-```
+1. user can sign up and create an organization
+   - Navigate to signup
+   - Fill signup form
+   - Should redirect to dashboard
+   - Click create organization
+     - Step 1: Org type
+     - Step 2: Basic info
+     - Step 3: Jurisdictions
+     - Step 4: Practice areas
+   - Should redirect to dashboard with org
+2. user can invite a team member
+   - Login first (assuming test user from previous test)
+   - Navigate to members
+   - Open invite modal
+   - Fill invitation form
+   - Should see pending invitation
 
 ### 4.4 Running Tests
 

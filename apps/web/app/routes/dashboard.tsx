@@ -3,7 +3,7 @@ import type { Route } from "./+types/dashboard";
 import { apiFetch } from "~/lib/api";
 import type { SessionResponse, OrgMembership } from "~/lib/types";
 import { AppLayout } from "~/components/AppLayout";
-import styles from "~/styles/dashboard.module.css";
+import { PageLayout } from "~/components/PageLayout";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const cookie = request.headers.get("cookie") || "";
@@ -50,33 +50,34 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 
   return (
     <AppLayout user={user} org={org} currentPath="/dashboard">
-      <header className={styles.header}>
-        <h1>Dashboard</h1>
-        <p className={styles.greeting}>Welcome back, {user.name}</p>
-      </header>
-
-      {org === null ? (
-        <div className={styles.card}>
-          <h2 className={styles.cardTitle}>Get Started</h2>
-          <p className={styles.cardText}>
-            You're not part of an organization yet. Create one to start using
-            Docket, or wait for an invitation.
-          </p>
-          <Link to="/org/create" className={styles.link}>
-            Create an organization
-          </Link>
-        </div>
-      ) : (
-        <div className={styles.card}>
-          <div className={styles.orgInfo}>
-            <h2 className={styles.cardTitle}>{org.org.name}</h2>
-            <span className={styles.badge}>{roleDisplay}</span>
+      <PageLayout title="Dashboard" subtitle={`Welcome back, ${user.name}`}>
+        {org === null ? (
+          <div className="card">
+            <h2 className="text-title-3" style={{ marginBottom: "0.5rem" }}>
+              Get Started
+            </h2>
+            <p className="text-secondary" style={{ marginBottom: "1rem" }}>
+              You're not part of an organization yet. Create one to start using
+              Docket, or wait for an invitation.
+            </p>
+            <Link to="/org/create" className="btn btn-primary">
+              Create an organization
+            </Link>
           </div>
-          <p className={styles.cardText}>
-            Your organization is set up and ready to use.
-          </p>
-        </div>
-      )}
+        ) : (
+          <div className="card">
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+            >
+              <h2 className="text-title-3">{org.org.name}</h2>
+              <span className="badge">{roleDisplay}</span>
+            </div>
+            <p className="text-secondary" style={{ marginTop: "0.5rem" }}>
+              Your organization is set up and ready to use.
+            </p>
+          </div>
+        )}
+      </PageLayout>
     </AppLayout>
   );
 }

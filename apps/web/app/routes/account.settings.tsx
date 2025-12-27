@@ -5,7 +5,7 @@ import { apiFetch } from "~/lib/api";
 import { API_URL, authClient, signOut } from "~/lib/auth-client";
 import type { SessionResponse, OrgMembership } from "~/lib/types";
 import { AppLayout } from "~/components/AppLayout";
-import styles from "~/styles/org-settings.module.css";
+import { PageLayout } from "~/components/PageLayout";
 
 interface DeletionPreview {
   user: { id: string; email: string } | null;
@@ -141,131 +141,144 @@ export default function AccountSettingsPage({
 
   return (
     <AppLayout user={user} org={org} currentPath="/account/settings">
-      <header className={styles.header}>
-        <h1>Account Settings</h1>
-      </header>
+      <PageLayout title="Account Settings">
+        {error && <div className="alert alert-error">{error}</div>}
 
-      {error && <div className={styles.error}>{error}</div>}
+        {/* Account Information Section */}
+        <section>
+          <h2 className="text-title-3">Account</h2>
+          <div className="info-card">
+            <div className="info-row">
+              <span className="info-label">Email</span>
+              <span className="info-value">{user.email}</span>
+            </div>
+            <div className="info-row">
+              <span className="info-label">Name</span>
+              <span className="info-value">{user.name}</span>
+            </div>
+          </div>
+        </section>
 
-      {/* Account Information Section */}
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Account</h2>
-        <div className={styles.infoCard}>
-          <div className={styles.infoRow}>
-            <span className={styles.infoLabel}>Email</span>
-            <span className={styles.infoValue}>{user.email}</span>
+        {/* Session Section */}
+        <section>
+          <h2 className="text-title-3">Session</h2>
+          <div className="info-card">
+            <div>
+              <h3 className="text-headline">Sign Out</h3>
+              <p className="text-secondary">
+                Sign out of your account on this device.
+              </p>
+            </div>
+            <button
+              onClick={() =>
+                signOut().then(() => (window.location.href = "/auth"))
+              }
+              className="btn btn-secondary"
+            >
+              Sign Out
+            </button>
           </div>
-          <div className={styles.infoRow}>
-            <span className={styles.infoLabel}>Name</span>
-            <span className={styles.infoValue}>{user.name}</span>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Session Section */}
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Session</h2>
-        <div className={styles.infoCard}>
-          <div className={styles.dangerInfo}>
-            <h3>Sign Out</h3>
-            <p>Sign out of your account on this device.</p>
-          </div>
-          <button
-            onClick={() => signOut().then(() => (window.location.href = "/auth"))}
-            className="btn btn-secondary"
+        {/* Danger Zone Section */}
+        <section>
+          <h2
+            className="text-title-3"
+            style={{ color: "var(--error-primary)" }}
           >
-            Sign Out
-          </button>
-        </div>
-      </section>
+            Danger Zone
+          </h2>
 
-      {/* Danger Zone Section */}
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitleDanger}>Danger Zone</h2>
-        <div className={styles.dangerCard}>
-          <div className={styles.dangerInfo}>
-            <h3>Delete Account</h3>
-            <p>
-              Permanently delete your account and all associated data. This
-              action cannot be undone.
-            </p>
+          <div className="info-card">
+            <div>
+              <h3 className="text-headline">Delete Account</h3>
+              <p className="text-secondary">
+                Permanently delete your account and all associated data. This
+                action cannot be undone.
+              </p>
+            </div>
+
+            <button onClick={handleShowDeleteModal} className="btn btn-danger">
+              Delete Account
+            </button>
           </div>
-          <button
-            onClick={handleShowDeleteModal}
-            className={styles.deleteButton}
-          >
-            Delete Account
-          </button>
-        </div>
-      </section>
+        </section>
 
-      {/* Delete Account Modal */}
-      {showDeleteModal && deletionPreview && (
-        <div className={styles.modal} onClick={handleCloseModal}>
-          <div
-            className={styles.modalContent}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className={styles.modalTitle}>Delete Account</h2>
+        {/* Delete Account Modal */}
+        {showDeleteModal && deletionPreview && (
+          <div className="modal-overlay" onClick={handleCloseModal}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <h2
+                className="modal-title"
+                style={{ color: "var(--error-primary)" }}
+              >
+                Delete Account
+              </h2>
 
-            <div className={styles.warning}>This will permanently delete:</div>
-
-            <ul className={styles.deletionList}>
-              <li>
-                Your account (<strong>{deletionPreview.user?.email}</strong>)
-              </li>
-              {deletionPreview.orgsOwned > 0 && (
-                <li>{deletionPreview.orgsOwned} organization(s) you own</li>
-              )}
-              {deletionPreview.orgMemberships > 0 && (
-                <li>
-                  {deletionPreview.orgMemberships} organization membership(s)
-                </li>
-              )}
-              <li>All your conversations and messages</li>
-            </ul>
-
-            {deletionPreview.orgsOwned > 0 && (
-              <div className={styles.warning}>
-                Warning: You must transfer ownership before deleting your
-                account.
+              <div className="alert alert-error">
+                This will permanently delete:
               </div>
-            )}
 
-            <div className={styles.confirmSection}>
-              <label htmlFor="confirmEmail" className={styles.confirmLabel}>
-                Type <strong>{user.email}</strong> to confirm:
-              </label>
-              <input
-                id="confirmEmail"
-                type="email"
-                value={confirmEmail}
-                onChange={(e) => setConfirmEmail(e.target.value)}
-                className={styles.confirmInput}
-                placeholder="Your email"
-              />
-            </div>
-
-            {error && <div className={styles.modalError}>{error}</div>}
-
-            <div className={styles.modalActions}>
-              <button
-                onClick={handleCloseModal}
-                className={styles.cancelButton}
+              <ul
+                className="text-secondary"
+                style={{ paddingLeft: "1.5rem", margin: "1rem 0" }}
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteAccount}
-                disabled={isDeleting || confirmEmail !== user.email}
-                className={styles.confirmDeleteButton}
-              >
-                {isDeleting ? "Deleting..." : "Delete Account"}
-              </button>
+                <li>
+                  Your account (<strong>{deletionPreview.user?.email}</strong>)
+                </li>
+                {deletionPreview.orgsOwned > 0 && (
+                  <li>{deletionPreview.orgsOwned} organization(s) you own</li>
+                )}
+                {deletionPreview.orgMemberships > 0 && (
+                  <li>
+                    {deletionPreview.orgMemberships} organization membership(s)
+                  </li>
+                )}
+                <li>All your conversations and messages</li>
+              </ul>
+
+              {deletionPreview.orgsOwned > 0 && (
+                <div className="alert alert-error">
+                  Warning: You must transfer ownership before deleting your
+                  account.
+                </div>
+              )}
+
+              <div className="form-group">
+                <label htmlFor="confirmEmail" className="form-label">
+                  Type <strong>{user.email}</strong> to confirm:
+                </label>
+                <input
+                  id="confirmEmail"
+                  type="email"
+                  value={confirmEmail}
+                  onChange={(e) => setConfirmEmail(e.target.value)}
+                  className="form-input"
+                  placeholder="Your email"
+                />
+              </div>
+
+              {error && <div className="alert alert-error">{error}</div>}
+
+              <div className="modal-actions">
+                <button
+                  onClick={handleCloseModal}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={isDeleting || confirmEmail !== user.email}
+                  className="btn btn-danger"
+                >
+                  {isDeleting ? "Deleting..." : "Delete Account"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </PageLayout>
     </AppLayout>
   );
 }

@@ -5,7 +5,7 @@ import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
 import type { SessionResponse, OrgMembership } from "~/lib/types";
 import { AppLayout } from "~/components/AppLayout";
-import styles from "~/styles/org-clio.module.css";
+import { PageLayout } from "~/components/PageLayout";
 
 interface ClioStatus {
   connected: boolean;
@@ -175,112 +175,108 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
     ? `Loaded (v${clioStatus.schemaVersion || "?"})`
     : "Not Loaded";
 
+  const actionButtons = clioStatus.connected ? (
+    <>
+      <button
+        onClick={handleDisconnect}
+        disabled={isDisconnecting}
+        className="btn btn-danger-outline"
+      >
+        {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+      </button>
+      <button onClick={handleConnect} className="btn btn-secondary">
+        Reconnect
+      </button>
+    </>
+  ) : (
+    <button onClick={handleConnect} className="btn btn-primary">
+      Connect to Clio
+    </button>
+  );
+
   return (
     <AppLayout user={user} org={org} currentPath="/org/clio">
-      <header className={styles.header}>
-        <div className={styles.headerInfo}>
-          <h1>Clio Connection</h1>
-          <p className={styles.description}>
-            Connect your Clio account to let Docket query and manage your case
-            data.
-          </p>
-        </div>
+      <PageLayout
+        title="Clio Connection"
+        subtitle="Connect your Clio account to let Docket query and manage your case data."
+        actions={actionButtons}
+      >
+        {error && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
 
-        <div className={styles.statusActions}>
-          {clioStatus.connected ? (
-            <>
-              <button
-                onClick={handleDisconnect}
-                disabled={isDisconnecting}
-                className={styles.disconnectButton}
-              >
-                {isDisconnecting ? "Disconnecting..." : "Disconnect"}
-              </button>
-              <button
-                onClick={handleConnect}
-                className={styles.reconnectButton}
-              >
-                Reconnect
-              </button>
-            </>
-          ) : (
-            <button onClick={handleConnect} className={styles.connectButton}>
-              Connect to Clio
-            </button>
-          )}
-        </div>
-      </header>
-
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
-
-      {/* Connection Status Section */}
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Connection Status</h2>
-        <div className={styles.statusCard}>
-          <div className={styles.statusRow}>
-            <span className={styles.statusLabel}>Clio Account</span>
-            <span
-              className={`${styles.statusValue} ${
-                clioStatus.connected ? styles.connected : styles.disconnected
-              }`}
-            >
-              {clioStatus.connected ? "Connected" : "Not Connected"}
-            </span>
-          </div>
-
-          {clioStatus.connected && (
-            <div className={styles.statusRow}>
-              <span className={styles.statusLabel}>Schema Cache</span>
+        {/* Connection Status Section */}
+        <section>
+          <h2 className="text-title-3">Connection Status</h2>
+          <div className="card card-sm">
+            <div className="info-row">
+              <span className="info-label">Clio Account</span>
               <span
-                className={`${styles.statusValue} ${
-                  clioStatus.schemaLoaded
-                    ? styles.connected
-                    : styles.disconnected
-                }`}
+                className={
+                  clioStatus.connected ? "status-success" : "status-muted"
+                }
               >
-                {schemaVersionText}
+                {clioStatus.connected ? "Connected" : "Not Connected"}
               </span>
             </div>
-          )}
-        </div>
-      </section>
 
-      {/* Schema Management Section (Admin only, when connected) */}
-      {isAdmin && clioStatus.connected && (
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Schema Management</h2>
-          <p className={styles.sectionDescription}>
-            Refresh the schema cache to pick up Clio configuration changes.
-          </p>
-          <button
-            onClick={handleRefreshSchema}
-            disabled={isRefreshing}
-            className={styles.refreshButton}
-          >
-            {isRefreshing ? "Refreshing..." : "Refresh Schema"}
-          </button>
+            {clioStatus.connected && (
+              <div className="info-row">
+                <span className="info-label">Schema Cache</span>
+                <span
+                  className={
+                    clioStatus.schemaLoaded ? "status-success" : "status-muted"
+                  }
+                >
+                  {schemaVersionText}
+                </span>
+              </div>
+            )}
+          </div>
         </section>
-      )}
 
-      {/* Information Section */}
-      <section className={styles.section}>
-        <div className={`info-card ${styles.infoList}`}>
-          <h3 className={styles.sectionTitle}>What Docket can do with Clio:</h3>
-          <ul>
-            <li>Query matters, contacts, tasks, and calendar entries</li>
-            <li>Create and update records (Admin only, with confirmation)</li>
-            <li>Search across your firm&apos;s case data</li>
-          </ul>
+        {/* Schema Management Section (Admin only, when connected) */}
+        {isAdmin && clioStatus.connected && (
+          <section>
+            <h2 className="text-title-3">Schema Management</h2>
+            <p className="section-description">
+              Refresh the schema cache to pick up Clio configuration changes.
+            </p>
+            <button
+              onClick={handleRefreshSchema}
+              disabled={isRefreshing}
+              className="btn btn-secondary"
+            >
+              {isRefreshing ? "Refreshing..." : "Refresh Schema"}
+            </button>
+          </section>
+        )}
 
-          <h3>Security:</h3>
-          <ul>
-            <li>Tokens are encrypted and stored securely</li>
-            <li>Access is limited to your Clio permissions</li>
-            <li>Write operations require explicit confirmation</li>
-          </ul>
-        </div>
-      </section>
+        {/* Information Section */}
+        <section>
+          <div className="info-card">
+            <h3 className="text-headline" style={{ marginBottom: "0.5rem" }}>
+              What Docket can do with Clio:
+            </h3>
+            <ul
+              className="text-secondary"
+              style={{ paddingLeft: "1.25rem", marginBottom: "1rem" }}
+            >
+              <li>Query matters, contacts, tasks, and calendar entries</li>
+              <li>Create and update records (Admin only, with confirmation)</li>
+              <li>Search across your firm&apos;s case data</li>
+            </ul>
+
+            <h3 className="text-headline" style={{ marginBottom: "0.5rem" }}>
+              Security:
+            </h3>
+            <ul className="text-secondary" style={{ paddingLeft: "1.25rem" }}>
+              <li>Tokens are encrypted and stored securely</li>
+              <li>Access is limited to your Clio permissions</li>
+              <li>Write operations require explicit confirmation</li>
+            </ul>
+          </div>
+        </section>
+      </PageLayout>
     </AppLayout>
   );
 }

@@ -208,8 +208,8 @@ export default function OrgCreatePage(_props: Route.ComponentProps) {
           })}
         </div>
 
-        <h1 className={styles.title}>{currentStepConfig.title}</h1>
-        <p className={styles.subtitle}>{currentStepConfig.subtitle}</p>
+        <h1 className="text-title-2">{currentStepConfig.title}</h1>
+        <p className="text-secondary" style={{ marginTop: "0.5rem", marginBottom: "1.5rem" }}>{currentStepConfig.subtitle}</p>
 
         {error && <div className="alert alert-error">{error}</div>}
 
@@ -239,22 +239,22 @@ export default function OrgCreatePage(_props: Route.ComponentProps) {
         {/* Step 2: Basic Information */}
         {step === 2 && (
           <div className={styles.formFields}>
-            <div className={styles.fieldGroup}>
-              <label className={styles.label} htmlFor="orgName">
+            <div className="form-group">
+              <label className="form-label" htmlFor="orgName">
                 Organization Name
               </label>
               <input
                 id="orgName"
                 type="text"
-                className={styles.input}
+                className="form-input"
                 value={form.name}
                 onChange={(e) => updateField("name", e.target.value)}
                 placeholder="Smith & Associates"
               />
             </div>
 
-            <div className={styles.fieldGroup}>
-              <label className={styles.label}>Firm Size</label>
+            <div className="form-group">
+              <label className="form-label">Firm Size</label>
               <div className={styles.sizeGrid}>
                 {FIRM_SIZES.map((size) => {
                   const isSelected = form.firmSize === size.id;
@@ -269,8 +269,8 @@ export default function OrgCreatePage(_props: Route.ComponentProps) {
                       className={cardClass}
                       onClick={() => updateField("firmSize", size.id)}
                     >
-                      <span className={styles.sizeLabel}>{size.label}</span>
-                      <span className={styles.sizeDescription}>
+                      <span className="text-callout">{size.label}</span>
+                      <span className="text-footnote text-secondary">
                         {size.description}
                       </span>
                     </button>
@@ -298,7 +298,7 @@ export default function OrgCreatePage(_props: Route.ComponentProps) {
                     onChange={() => toggleArrayField("jurisdictions", state)}
                     className={styles.checkboxInput}
                   />
-                  <span className={styles.checkboxLabel}>{state}</span>
+                  <span className="text-subhead">{state}</span>
                 </label>
               );
             })}
@@ -322,7 +322,7 @@ export default function OrgCreatePage(_props: Route.ComponentProps) {
                     onChange={() => toggleArrayField("practiceAreas", area.id)}
                     className={styles.checkboxInput}
                   />
-                  <span className={styles.practiceLabel}>{area.label}</span>
+                  <span className="text-subhead">{area.label}</span>
                 </label>
               );
             })}

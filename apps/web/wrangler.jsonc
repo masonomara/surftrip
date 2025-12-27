@@ -7,7 +7,6 @@
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "directory": "./build/client" },
   "vars": { "API_URL": "https://api.docketadmin.com" },
-  "services": [{ "binding": "API", "service": "docket" }],
   "env": {
     "production": {
       "vars": { "API_URL": "https://api.docketadmin.com" },
