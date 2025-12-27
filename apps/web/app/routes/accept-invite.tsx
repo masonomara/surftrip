@@ -1,21 +1,17 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router";
-import { redirect } from "react-router";
+import { useNavigate, Link, redirect } from "react-router";
 import type { Route } from "./+types/accept-invite";
 import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
 import type { SessionResponse, InvitationDetails } from "~/lib/types";
 import styles from "~/styles/auth.module.css";
 
-/**
- * Server-side loader: Check auth and fetch invitation details.
- */
 export async function loader({ request, context }: Route.LoaderArgs) {
   const cookie = request.headers.get("cookie") || "";
   const url = new URL(request.url);
   const invitationId = url.searchParams.get("invitation");
 
-  // No invitation ID? Go to dashboard
+  // Redirect to dashboard if no invitation ID provided
   if (!invitationId) {
     throw redirect("/dashboard");
   }
@@ -26,11 +22,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     "/api/auth/get-session",
     cookie
   );
+
   if (!sessionResponse.ok) {
     throw redirect(`/login?invitation=${invitationId}`);
   }
 
   const sessionData = (await sessionResponse.json()) as SessionResponse | null;
+
   if (!sessionData?.user) {
     throw redirect(`/login?invitation=${invitationId}`);
   }
@@ -42,15 +40,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     cookie
   );
 
-  if (!invitationResponse.ok) {
-    return {
-      user: sessionData.user,
-      invitation: null,
-      invitationId,
-    };
+  let invitation: InvitationDetails | null = null;
+  if (invitationResponse.ok) {
+    invitation = (await invitationResponse.json()) as InvitationDetails;
   }
-
-  const invitation = (await invitationResponse.json()) as InvitationDetails;
 
   return {
     user: sessionData.user,
@@ -59,10 +52,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   };
 }
 
-/**
- * Reusable error page component.
- */
-function ErrorPage({ title, message }: { title: string; message: string }) {
+interface ErrorPageProps {
+  title: string;
+  message: string;
+}
+
+function ErrorPage({ title, message }: ErrorPageProps) {
   return (
     <main className={styles.page}>
       <div className={styles.container}>
@@ -76,9 +71,6 @@ function ErrorPage({ title, message }: { title: string; message: string }) {
   );
 }
 
-/**
- * Accept invitation page.
- */
 export default function AcceptInvitePage({ loaderData }: Route.ComponentProps) {
   const { user, invitation, invitationId } = loaderData;
   const navigate = useNavigate();
@@ -86,7 +78,7 @@ export default function AcceptInvitePage({ loaderData }: Route.ComponentProps) {
   const [error, setError] = useState<string | null>(null);
   const [isAccepting, setIsAccepting] = useState(false);
 
-  // Handle various error states
+  // Handle case where invitation doesn't exist
   if (!invitation) {
     return (
       <ErrorPage
@@ -96,15 +88,17 @@ export default function AcceptInvitePage({ loaderData }: Route.ComponentProps) {
     );
   }
 
+  // Handle expired invitation
   if (invitation.isExpired) {
     return (
       <ErrorPage
         title="Invitation Expired"
-        message={`This invitation to join ${invitation.orgName} has expired. Please contact your organization admin for a new invitation.`}
+        message={`This invitation to join ${invitation.orgName} has expired. Please contact your organization admin.`}
       />
     );
   }
 
+  // Handle already accepted invitation
   if (invitation.isAccepted) {
     return (
       <ErrorPage
@@ -114,11 +108,11 @@ export default function AcceptInvitePage({ loaderData }: Route.ComponentProps) {
     );
   }
 
-  // Check email matches
-  const userEmail = user.email.toLowerCase();
-  const invitedEmail = invitation.email.toLowerCase();
+  // Handle email mismatch
+  const userEmailLower = user.email.toLowerCase();
+  const invitationEmailLower = invitation.email.toLowerCase();
 
-  if (userEmail !== invitedEmail) {
+  if (userEmailLower !== invitationEmailLower) {
     return (
       <ErrorPage
         title="Wrong Account"

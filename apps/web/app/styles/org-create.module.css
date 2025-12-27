@@ -31,27 +31,23 @@
 .progressStep.completed {
   background: var(--text-primary);
 }
+/* title-2 (21/26/400) */
 .title {
   color: var(--text-primary);
-  font-size: 24px;
-  line-height: 30px;
+  font-size: 21px;
+  line-height: 26px;
+  font-weight: 400;
   text-align: center;
   margin-bottom: 8px;
 }
+/* body (16/21/400) */
 .subtitle {
   color: var(--text-secondary);
   font-size: 16px;
   line-height: 21px;
+  font-weight: 400;
   text-align: center;
   margin-bottom: 24px;
-}
-.errorBox {
-  padding: 0.75rem;
-  background: #fee;
-  color: #c00;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-  text-align: center;
 }
 .optionGrid {
   display: grid;
@@ -59,15 +55,16 @@
   gap: 12px;
   margin-bottom: 24px;
 }
+/* body (16/21/600) */
 .optionCard {
   padding: 24px 16px;
   background: var(--surface-3);
   border: 2px solid var(--border-default);
   border-radius: 8px;
   cursor: pointer;
-  font-family: "Inter", system-ui, sans-serif;
   font-size: 16px;
-  font-weight: 500;
+  line-height: 21px;
+  font-weight: 400;
   color: var(--text-primary);
   transition:
     border-color 0.2s,
@@ -86,14 +83,16 @@
 .fieldGroup {
   margin-bottom: 20px;
 }
+/* body (16/21/600) */
 .label {
   display: block;
   color: var(--text-primary);
   font-size: 16px;
   line-height: 21px;
-  font-weight: 500;
+  font-weight: 400;
   margin-bottom: 8px;
 }
+/* callout (15/20/400) */
 .input {
   width: 100%;
   padding: 0.5rem;
@@ -102,9 +101,9 @@
   background: var(--surface-3);
   color: var(--text-primary);
   height: 42px;
-  font-family: "Inter", system-ui, sans-serif;
   font-size: 15px;
-  -webkit-font-smoothing: antialiased;
+  line-height: 20px;
+  font-weight: 400;
 }
 .input::placeholder {
   color: var(--text-secondary);
@@ -132,18 +131,21 @@
   border-color: var(--text-primary);
   background: var(--surface-2);
 }
+/* callout (15/20/600) */
 .sizeLabel {
   display: block;
-  font-family: "Inter", system-ui, sans-serif;
   font-size: 15px;
-  font-weight: 500;
+  line-height: 20px;
+  font-weight: 400;
   color: var(--text-primary);
   margin-bottom: 4px;
 }
+/* footnote (12/16/400) */
 .sizeDescription {
   display: block;
-  font-family: "Inter", system-ui, sans-serif;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
   color: var(--text-secondary);
 }
 .checkboxGrid {
@@ -179,10 +181,11 @@
   opacity: 0;
   pointer-events: none;
 }
+/* subhead (14/19/600) */
 .checkboxLabel {
-  font-family: "Inter", system-ui, sans-serif;
   font-size: 14px;
-  font-weight: 500;
+  line-height: 19px;
+  font-weight: 400;
   color: var(--text-primary);
 }
 .practiceGrid {
@@ -212,56 +215,14 @@
   border-color: var(--text-primary);
   background: var(--surface-2);
 }
+/* subhead (14/19/600) */
 .practiceLabel {
-  font-family: "Inter", system-ui, sans-serif;
   font-size: 14px;
-  font-weight: 500;
+  line-height: 19px;
+  font-weight: 400;
   color: var(--text-primary);
 }
 .buttons {
   display: flex;
   gap: 12px;
-}
-.backButton {
-  flex: 1;
-  padding: 0 16px;
-  height: 40px;
-  background: var(--surface-3);
-  color: var(--text-primary);
-  border: 1px solid var(--border-dark);
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 15px;
-  font-family: "Inter", system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  transition: background 0.2s;
-}
-.backButton:hover {
-  background: var(--surface-2);
-}
-.continueButton,
-.submitButton {
-  flex: 2;
-  padding: 0 16px;
-  height: 40px;
-  background: var(--text-primary);
-  color: var(--container);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 15px;
-  font-family: "Inter", system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  transition: background 0.2s;
-}
-.continueButton:hover,
-.submitButton:hover {
-  background: var(--surface-3);
-}
-.continueButton:disabled,
-.submitButton:disabled {
-  background: var(--text-secondary);
-  cursor: not-allowed;
 }

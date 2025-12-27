@@ -5,6 +5,7 @@
   display: flex;
   flex-direction: row;
   justify-content: space-between;
+  margin-bottom: 24px;
 }
 .headerInfo {
   display: flex;
@@ -13,183 +14,163 @@
   flex: 1;
   flex-direction: column;
 }
-
-.backLink {
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: 14px;
-}
-
-.backLink:hover {
+/* title-2 (21/26/400) */
+.headerInfo h1 {
+  font-size: 21px;
+  line-height: 26px;
+  font-weight: 400;
   color: var(--text-primary);
+  margin: 0;
 }
-.header {
-  font-size: 24px;
-  line-height: 30px;
-  color: var(--text-primary);
-  font-weight: 500;
-}
+/* body (16/21/400) */
 .description {
   color: var(--text-secondary);
   font-size: 16px;
   line-height: 21px;
-  margin-top: 0.67em;
   font-weight: 400;
-}
-
-.section {
-}
-
-.sectionTitle {
-  font-size: 18px;
-  font-weight: 500;
-  line-height: 23px;
   margin-top: 0.67em;
 }
-
-.sectionDescription {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
+.section {
+  margin-top: 24px;
 }
-
+/* title-3 (19/24/600) */
+.sectionTitle {
+  font-size: 19px;
+  line-height: 24px;
+  font-weight: 500;
+  margin: 0 0 12px 0;
+}
 .statusCard {
   background: var(--surface-2);
   border-radius: 8px;
+  padding: 16px;
 }
-
 .statusRow {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border-default);
 }
-
 .statusRow:last-of-type {
   border-bottom: none;
 }
-
+/* subhead (14/19/400) */
 .statusLabel {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
 }
-
+/* subhead (14/19/600) */
 .statusValue {
-  font-weight: 500;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
 }
-
 .connected {
-  color: #28a745;
+  color: var(--success-primary);
 }
-
 .disconnected {
   color: var(--text-secondary);
 }
-
 .statusActions {
   display: flex;
   gap: 8px;
 }
-
+/* subhead (14/19/600) */
 .connectButton {
   background: var(--text-primary);
   color: var(--container);
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  padding: 6px 9px;
+  padding: 6px 12px;
   font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
-  height: fit-content;
+  line-height: 19px;
+  font-weight: 400;
 }
-
 .connectButton:hover {
   background: var(--text-secondary);
 }
-
+/* subhead (14/19/600) */
 .disconnectButton {
   background: transparent;
-  color: #dc3545;
-  border: 1px solid #dc3545;
+  color: var(--error-primary);
+  border: 1px solid var(--error-primary);
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.875rem;
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
 }
-
 .disconnectButton:hover {
-  background: rgba(220, 53, 69, 0.1);
+  background: var(--error-highlight);
 }
-
 .disconnectButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-
+/* subhead (14/19/600) */
 .reconnectButton {
   background: transparent;
   color: var(--text-primary);
   border: 1px solid var(--text-primary);
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.875rem;
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
 }
-
 .reconnectButton:hover {
-  background: rgba(39, 104, 221, 0.1);
+  background: var(--brand-highlight);
 }
-
+/* subhead (14/19/600) */
 .refreshButton {
   background: var(--surface-3);
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.875rem;
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
 }
-
 .refreshButton:hover {
   background: var(--surface-2);
 }
-
 .refreshButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-.infoCard {
-  background: var(--surface-2);
-  border-radius: 8px;
-  padding: 16px;
-  border: 1px solid var(--border-default);
-}
-
-.infoCard h3 {
-  font-size: 0.875rem;
-  color: var(--text-primary);
-}
-
-.infoCard h3:not(:first-child) {
-}
-
-.infoCard ul {
+/* subhead (14/19/400) */
+.sectionDescription {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
+  margin-bottom: 12px;
 }
-
-.infoCard li {
+/* subhead (14/19/400) */
+.infoList {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
+  margin: 8px 0;
+  padding-left: 20px;
 }
-
-.error {
-  background: rgba(220, 53, 69, 0.1);
-  color: #dc3545;
-  border-radius: 4px;
-  font-size: 0.875rem;
+/* subhead (14/19/600) */
+.infoList h3 {
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
+  color: var(--text-primary);
+  margin: 16px 0 8px 0;
 }
-
-.success {
-  background: rgba(40, 167, 69, 0.1);
-  color: #28a745;
-
-  border-radius: 4px;
-  font-size: 0.875rem;
+.infoList h3:first-child {
+  margin-top: 0;
 }

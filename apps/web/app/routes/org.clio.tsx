@@ -13,45 +13,54 @@ interface ClioStatus {
   schemaVersion?: number;
 }
 
-/**
- * Server-side loader: Fetch session, org membership, and Clio status.
- */
+// Error messages for OAuth error codes
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  denied: "Authorization denied.",
+  invalid_request: "Invalid request.",
+  invalid_state: "Session expired.",
+  exchange_failed: "Authorization failed.",
+};
+
 export async function loader({ request, context }: Route.LoaderArgs) {
   const cookie = request.headers.get("cookie") || "";
 
-  // Check session
+  // Check if user is logged in
   const sessionResponse = await apiFetch(
     context,
     "/api/auth/get-session",
     cookie
   );
+
   if (!sessionResponse.ok) {
     throw redirect("/login");
   }
 
   const sessionData = (await sessionResponse.json()) as SessionResponse | null;
+
   if (!sessionData?.user) {
     throw redirect("/login");
   }
 
-  // Check org membership
+  // Fetch user's organization membership
   const orgResponse = await apiFetch(context, "/api/user/org", cookie);
+
   if (!orgResponse.ok) {
     throw redirect("/dashboard");
   }
 
   const orgMembership = (await orgResponse.json()) as OrgMembership | null;
 
-  // Must have an org to view Clio settings
   if (!orgMembership?.org) {
     throw redirect("/dashboard");
   }
 
   // Fetch Clio connection status
   const clioResponse = await apiFetch(context, "/api/clio/status", cookie);
-  const clioStatus = clioResponse.ok
-    ? ((await clioResponse.json()) as ClioStatus)
-    : { connected: false, schemaLoaded: false };
+
+  let clioStatus: ClioStatus = { connected: false, schemaLoaded: false };
+  if (clioResponse.ok) {
+    clioStatus = (await clioResponse.json()) as ClioStatus;
+  }
 
   return {
     user: sessionData.user,
@@ -60,22 +69,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   };
 }
 
-/**
- * Clio connection management page.
- */
 export default function ClioPage({ loaderData }: Route.ComponentProps) {
   const { user, org, clioStatus } = loaderData;
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
 
+  // Action state
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+
+  // Feedback state
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Permission flags
   const isAdmin = org.role === "admin";
 
-  // Handle OAuth callback success/error messages
+  // Handle URL parameters from OAuth callback
   useEffect(() => {
     const successParam = searchParams.get("success");
     const errorParam = searchParams.get("error");
@@ -83,33 +93,26 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
     if (successParam === "connected") {
       setSuccess("Successfully connected to Clio!");
       setSearchParams({}, { replace: true });
-    } else if (errorParam) {
-      const errorMessages: Record<string, string> = {
-        denied: "Clio authorization was denied.",
-        invalid_request: "Invalid authorization request.",
-        invalid_state: "Authorization session expired. Please try again.",
-        exchange_failed: "Failed to complete authorization. Please try again.",
-      };
-      setError(errorMessages[errorParam] || "Authorization failed.");
+      return;
+    }
+
+    if (errorParam) {
+      const errorMessage =
+        OAUTH_ERROR_MESSAGES[errorParam] || "Authorization failed.";
+      setError(errorMessage);
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
-  /**
-   * Initiate Clio OAuth connection.
-   */
   function handleConnect() {
-    // Redirect to API's Clio connect endpoint
     window.location.href = `${API_URL}/api/clio/connect`;
   }
 
-  /**
-   * Disconnect Clio account.
-   */
   async function handleDisconnect() {
-    if (
-      !confirm("Disconnect your Clio account? You can reconnect at any time.")
-    ) {
+    const confirmed = confirm(
+      "Are you sure you want to disconnect your Clio account?"
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -139,9 +142,6 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
     }
   }
 
-  /**
-   * Refresh Clio schema cache.
-   */
   async function handleRefreshSchema() {
     setError(null);
     setSuccess(null);
@@ -170,6 +170,11 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
     }
   }
 
+  // Build schema version display text
+  const schemaVersionText = clioStatus.schemaLoaded
+    ? `Loaded (v${clioStatus.schemaVersion || "?"})`
+    : "Not Loaded";
+
   return (
     <AppLayout user={user} org={org} currentPath="/org/clio">
       <header className={styles.header}>
@@ -180,6 +185,7 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
             data.
           </p>
         </div>
+
         <div className={styles.statusActions}>
           {clioStatus.connected ? (
             <>
@@ -205,12 +211,12 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
         </div>
       </header>
 
-      {error && <div className={styles.error}>{error}</div>}
-      {success && <div className={styles.success}>{success}</div>}
+      {error && <div className="alert alert-error">{error}</div>}
+      {success && <div className="alert alert-success">{success}</div>}
 
+      {/* Connection Status Section */}
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Connection Status</h2>
-
         <div className={styles.statusCard}>
           <div className={styles.statusRow}>
             <span className={styles.statusLabel}>Clio Account</span>
@@ -233,26 +239,23 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
                     : styles.disconnected
                 }`}
               >
-                {clioStatus.schemaLoaded
-                  ? `Loaded (v${clioStatus.schemaVersion || "?"})`
-                  : "Not Loaded"}
+                {schemaVersionText}
               </span>
             </div>
           )}
         </div>
       </section>
 
+      {/* Schema Management Section (Admin only, when connected) */}
       {isAdmin && clioStatus.connected && (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Schema Management</h2>
           <p className={styles.sectionDescription}>
-            Refresh the Clio schema cache to pick up any changes to your Clio
-            configuration or custom fields.
+            Refresh the schema cache to pick up Clio configuration changes.
           </p>
-
           <button
             onClick={handleRefreshSchema}
-            disabled={isRefreshing || !clioStatus.connected}
+            disabled={isRefreshing}
             className={styles.refreshButton}
           >
             {isRefreshing ? "Refreshing..." : "Refresh Schema"}
@@ -260,8 +263,9 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
         </section>
       )}
 
+      {/* Information Section */}
       <section className={styles.section}>
-        <div className={styles.infoCard}>
+        <div className={`info-card ${styles.infoList}`}>
           <h3 className={styles.sectionTitle}>What Docket can do with Clio:</h3>
           <ul>
             <li>Query matters, contacts, tasks, and calendar entries</li>
@@ -271,7 +275,6 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
 
           <h3>Security:</h3>
           <ul>
-            <li>Each user connects their own Clio credentials</li>
             <li>Tokens are encrypted and stored securely</li>
             <li>Access is limited to your Clio permissions</li>
             <li>Write operations require explicit confirmation</li>

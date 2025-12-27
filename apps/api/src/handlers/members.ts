@@ -1,3 +1,16 @@
+/**
+ * Member Management Handlers
+ *
+ * HTTP handlers for organization member and invitation management:
+ * - Listing members
+ * - Sending invitations
+ * - Managing invitations (list, revoke)
+ * - Removing members
+ * - Updating member roles
+ * - Transferring ownership
+ * - Public invitation routes (view/accept)
+ */
+
 import { getAuth } from "../lib/auth";
 import type { Env } from "../types/env";
 import type { OrgRole } from "../types";
@@ -16,23 +29,20 @@ import {
 } from "../services/invitations";
 
 /**
- * Get the current session from the request.
- * Returns null if the user is not authenticated.
+ * Attempts to get the authenticated user session from the request.
+ * Returns null if authentication fails or no session exists.
  */
 async function getSession(request: Request, env: Env) {
   try {
-    const session = await getAuth(env).api.getSession({
-      headers: request.headers,
-    });
-    return session;
+    return await getAuth(env).api.getSession({ headers: request.headers });
   } catch {
     return null;
   }
 }
 
 /**
- * Check if the current user is an admin of their organization.
- * Returns the org info if they are, or an error response if not.
+ * Verifies that a user is an admin of their organization.
+ * Returns their org context if successful, or an error response if not.
  */
 async function requireAdmin(db: D1Database, userId: string) {
   const membership = await db
@@ -66,18 +76,23 @@ async function requireAdmin(db: D1Database, userId: string) {
 
 /**
  * GET /api/org/members
- * List all members of the current user's organization.
+ *
+ * Returns all members of the user's organization.
+ * Any member can view the member list.
+ *
+ * Response: [{ id, userId, email, name, role, isOwner, createdAt }, ...]
  */
 export async function handleGetMembers(
   request: Request,
   env: Env
 ): Promise<Response> {
   const session = await getSession(request, env);
+
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Find which org this user belongs to
+  // Get user's org
   const membership = await env.DB.prepare(
     `SELECT org_id FROM org_members WHERE user_id = ?`
   )
@@ -91,55 +106,55 @@ export async function handleGetMembers(
     );
   }
 
-  // Get all members of that org
-  const query = `
-    SELECT
-      om.id,
-      om.user_id,
-      u.email,
-      u.name,
-      om.role,
-      om.is_owner,
-      om.created_at
-    FROM org_members om
-    JOIN user u ON u.id = om.user_id
-    WHERE om.org_id = ?
-    ORDER BY om.created_at
-  `;
+  // Get all members with user details
+  const { results } = await env.DB.prepare(
+    `SELECT
+       om.id, om.user_id, u.email, u.name, om.role, om.is_owner, om.created_at
+     FROM org_members om
+     JOIN user u ON u.id = om.user_id
+     WHERE om.org_id = ?
+     ORDER BY om.created_at`
+  )
+    .bind(membership.org_id)
+    .all<{
+      id: string;
+      user_id: string;
+      email: string;
+      name: string;
+      role: OrgRole;
+      is_owner: number;
+      created_at: number;
+    }>();
 
-  const { results } = await env.DB.prepare(query).bind(membership.org_id).all<{
-    id: string;
-    user_id: string;
-    email: string;
-    name: string;
-    role: OrgRole;
-    is_owner: number;
-    created_at: number;
-  }>();
-
-  // Transform to camelCase for the API response
-  const members = results.map((row) => ({
-    id: row.id,
-    userId: row.user_id,
-    email: row.email,
-    name: row.name,
-    role: row.role,
-    isOwner: row.is_owner === 1,
-    createdAt: row.created_at,
-  }));
-
-  return Response.json(members);
+  return Response.json(
+    results.map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      email: row.email,
+      name: row.name,
+      role: row.role,
+      isOwner: row.is_owner === 1,
+      createdAt: row.created_at,
+    }))
+  );
 }
 
 /**
  * POST /api/org/invitations
- * Send an invitation to join the organization.
+ *
+ * Sends an invitation to join the organization.
+ * Requires admin access.
+ *
+ * Request body: { email: string, role: "admin" | "member" }
+ *
+ * Response: { id, email, role, expiresAt, emailError?: string }
  */
 export async function handleSendInvitation(
   request: Request,
   env: Env
 ): Promise<Response> {
   const session = await getSession(request, env);
+
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -151,6 +166,7 @@ export async function handleSendInvitation(
 
   // Parse request body
   let body: { email?: string; role?: OrgRole };
+
   try {
     body = await request.json();
   } catch {
@@ -159,13 +175,13 @@ export async function handleSendInvitation(
 
   // Validate email
   const email = body.email?.toLowerCase().trim();
+
   if (!email || !email.includes("@")) {
     return Response.json({ error: "Valid email is required" }, { status: 400 });
   }
 
   // Validate role
-  const role = body.role;
-  if (role !== "admin" && role !== "member") {
+  if (body.role !== "admin" && body.role !== "member") {
     return Response.json(
       { error: "Role must be 'admin' or 'member'" },
       { status: 400 }
@@ -189,15 +205,14 @@ export async function handleSendInvitation(
   }
 
   // Check for existing pending invitation
-  const hasPending = await hasPendingInvitation(env.DB, email, admin.orgId);
-  if (hasPending) {
+  if (await hasPendingInvitation(env.DB, email, admin.orgId)) {
     return Response.json(
       { error: "A pending invitation already exists for this email" },
       { status: 400 }
     );
   }
 
-  // Get org name for the invitation email
+  // Get org name for the email
   const org = await env.DB.prepare(`SELECT name FROM org WHERE id = ?`)
     .bind(admin.orgId)
     .first<{ name: string }>();
@@ -206,12 +221,12 @@ export async function handleSendInvitation(
     return Response.json({ error: "Organization not found" }, { status: 404 });
   }
 
-  // Create and send the invitation
+  // Send the invitation
   const result = await inviteUser(env, env.DB, {
     email,
     orgId: admin.orgId,
     orgName: org.name,
-    role,
+    role: body.role,
     invitedBy: session.user.id,
     inviterName: session.user.name,
   });
@@ -219,7 +234,7 @@ export async function handleSendInvitation(
   return Response.json({
     id: result.id,
     email,
-    role,
+    role: body.role,
     expiresAt: result.expiresAt,
     emailError: result.emailError,
   });
@@ -227,13 +242,18 @@ export async function handleSendInvitation(
 
 /**
  * GET /api/org/invitations
- * List all pending invitations for the organization.
+ *
+ * Returns all pending invitations for the organization.
+ * Requires admin access.
+ *
+ * Response: [{ id, email, role, invitedBy, inviterName, createdAt, expiresAt }, ...]
  */
 export async function handleGetInvitations(
   request: Request,
   env: Env
 ): Promise<Response> {
   const session = await getSession(request, env);
+
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -243,7 +263,7 @@ export async function handleGetInvitations(
     return admin.res;
   }
 
-  // Get all pending invitations
+  // Get pending invitations
   const invitations = await getOrgInvitations(env.DB, admin.orgId);
 
   // Get inviter names
@@ -263,23 +283,26 @@ export async function handleGetInvitations(
     }
   }
 
-  // Build response with inviter names
-  const response = invitations.map((inv) => ({
-    id: inv.id,
-    email: inv.email,
-    role: inv.role,
-    invitedBy: inv.invitedBy,
-    inviterName: inviterNames.get(inv.invitedBy) || "Unknown",
-    createdAt: inv.createdAt,
-    expiresAt: inv.expiresAt,
-  }));
-
-  return Response.json(response);
+  return Response.json(
+    invitations.map((inv) => ({
+      id: inv.id,
+      email: inv.email,
+      role: inv.role,
+      invitedBy: inv.invitedBy,
+      inviterName: inviterNames.get(inv.invitedBy) || "Unknown",
+      createdAt: inv.createdAt,
+      expiresAt: inv.expiresAt,
+    }))
+  );
 }
 
 /**
- * DELETE /api/org/invitations/:id
- * Revoke a pending invitation.
+ * DELETE /api/org/invitations/:invitationId
+ *
+ * Revokes a pending invitation.
+ * Requires admin access.
+ *
+ * Response: { success: true }
  */
 export async function handleRevokeInvitation(
   request: Request,
@@ -287,6 +310,7 @@ export async function handleRevokeInvitation(
   invitationId: string
 ): Promise<Response> {
   const session = await getSession(request, env);
+
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -296,7 +320,7 @@ export async function handleRevokeInvitation(
     return admin.res;
   }
 
-  // Verify the invitation belongs to this org
+  // Verify invitation belongs to this org
   const invitation = await env.DB.prepare(
     `SELECT org_id FROM invitations WHERE id = ?`
   )
@@ -307,21 +331,27 @@ export async function handleRevokeInvitation(
     return Response.json({ error: "Invitation not found" }, { status: 404 });
   }
 
-  // Revoke it
-  const revoked = await revokeInvitation(env.DB, invitationId);
-  if (!revoked) {
-    return Response.json(
-      { error: "Invitation not found or already accepted" },
-      { status: 404 }
-    );
+  // Revoke the invitation
+  const success = await revokeInvitation(env.DB, invitationId);
+
+  if (success) {
+    return Response.json({ success: true });
   }
 
-  return Response.json({ success: true });
+  return Response.json(
+    { error: "Invitation not found or already accepted" },
+    { status: 404 }
+  );
 }
 
 /**
  * DELETE /api/org/members/:userId
- * Remove a member from the organization.
+ *
+ * Removes a member from the organization.
+ * Requires admin access. Cannot remove yourself (use leave instead).
+ * Cannot remove the owner.
+ *
+ * Response: { success: true }
  */
 export async function handleRemoveMember(
   request: Request,
@@ -329,6 +359,7 @@ export async function handleRemoveMember(
   targetUserId: string
 ): Promise<Response> {
   const session = await getSession(request, env);
+
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -338,7 +369,7 @@ export async function handleRemoveMember(
     return admin.res;
   }
 
-  // Can't remove yourself
+  // Cannot remove yourself
   if (targetUserId === session.user.id) {
     return Response.json(
       { error: "Cannot remove yourself. Use leave organization instead." },
@@ -346,7 +377,7 @@ export async function handleRemoveMember(
     );
   }
 
-  // Attempt removal
+  // Remove the member
   const result = await removeUserFromOrg(
     env.DB,
     targetUserId,
@@ -360,8 +391,11 @@ export async function handleRemoveMember(
       is_owner: 400,
       db_error: 500,
     };
-    const status = statusCodes[result.error] || 500;
-    return Response.json({ error: result.message }, { status });
+
+    return Response.json(
+      { error: result.message },
+      { status: statusCodes[result.error] || 500 }
+    );
   }
 
   return Response.json({ success: true });
@@ -369,7 +403,13 @@ export async function handleRemoveMember(
 
 /**
  * PATCH /api/org/members/:userId
- * Update a member's role.
+ *
+ * Updates a member's role.
+ * Requires admin access. Cannot change the owner's role.
+ *
+ * Request body: { role: "admin" | "member" }
+ *
+ * Response: { success: true, role: string }
  */
 export async function handleUpdateMemberRole(
   request: Request,
@@ -377,6 +417,7 @@ export async function handleUpdateMemberRole(
   targetUserId: string
 ): Promise<Response> {
   const session = await getSession(request, env);
+
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -386,8 +427,9 @@ export async function handleUpdateMemberRole(
     return admin.res;
   }
 
-  // Parse body
+  // Parse request body
   let body: { role?: OrgRole };
+
   try {
     body = await request.json();
   } catch {
@@ -402,18 +444,15 @@ export async function handleUpdateMemberRole(
     );
   }
 
-  // Check target user exists and is in this org
-  const targetMember = await getOrgMembership(
-    env.DB,
-    targetUserId,
-    admin.orgId
-  );
-  if (!targetMember) {
+  // Get target membership
+  const target = await getOrgMembership(env.DB, targetUserId, admin.orgId);
+
+  if (!target) {
     return Response.json({ error: "User is not a member" }, { status: 404 });
   }
 
-  // Can't change owner's role
-  if (targetMember.isOwner) {
+  // Cannot change owner's role
+  if (target.isOwner) {
     return Response.json(
       { error: "Cannot change the owner's role" },
       { status: 400 }
@@ -432,13 +471,20 @@ export async function handleUpdateMemberRole(
 
 /**
  * POST /api/org/transfer-ownership
- * Transfer organization ownership to another admin.
+ *
+ * Transfers organization ownership to another admin.
+ * Requires current user to be the owner and type the org name to confirm.
+ *
+ * Request body: { toUserId: string, confirmName: string }
+ *
+ * Response: { success: true }
  */
 export async function handleTransferOwnership(
   request: Request,
   env: Env
 ): Promise<Response> {
   const session = await getSession(request, env);
+
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -448,7 +494,7 @@ export async function handleTransferOwnership(
     return admin.res;
   }
 
-  // Only the owner can transfer ownership
+  // Must be the owner to transfer ownership
   if (!admin.isOwner) {
     return Response.json(
       { error: "Only the owner can transfer ownership" },
@@ -456,14 +502,16 @@ export async function handleTransferOwnership(
     );
   }
 
-  // Parse body
-  let body: { toUserId?: string };
+  // Parse request body
+  let body: { toUserId?: string; confirmName?: string };
+
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  // Validate required fields
   if (!body.toUserId) {
     return Response.json(
       { error: "Target user ID is required" },
@@ -471,7 +519,23 @@ export async function handleTransferOwnership(
     );
   }
 
-  // Perform the transfer
+  if (!body.confirmName) {
+    return Response.json(
+      { error: "Organization name confirmation is required" },
+      { status: 400 }
+    );
+  }
+
+  // Get org name and verify it matches
+  const org = await env.DB.prepare(`SELECT name FROM org WHERE id = ?`)
+    .bind(admin.orgId)
+    .first<{ name: string }>();
+
+  if (!org || body.confirmName !== org.name) {
+    return Response.json({ error: "Name does not match" }, { status: 400 });
+  }
+
+  // Transfer ownership
   const result = await transferOwnership(
     env.DB,
     admin.orgId,
@@ -486,16 +550,28 @@ export async function handleTransferOwnership(
       target_not_admin: 400,
       db_error: 500,
     };
-    const status = statusCodes[result.error] || 500;
-    return Response.json({ error: result.message }, { status });
+
+    return Response.json(
+      { error: result.message },
+      { status: statusCodes[result.error] || 500 }
+    );
   }
 
   return Response.json({ success: true });
 }
 
+// ============================================================
+// Public Invitation Routes (can be accessed without being a member)
+// ============================================================
+
 /**
- * GET /api/invitations/:id
- * Get invitation details (public, no auth required).
+ * GET /api/invitations/:invitationId
+ *
+ * Gets public details about an invitation.
+ * Used by the accept invitation page.
+ * Does NOT require authentication.
+ *
+ * Response: { id, email, orgName, role, inviterName, isExpired, isAccepted }
  */
 export async function handleGetInvitation(
   _request: Request,
@@ -520,8 +596,13 @@ export async function handleGetInvitation(
 }
 
 /**
- * POST /api/invitations/:id/accept
- * Accept an invitation to join an organization.
+ * POST /api/invitations/:invitationId/accept
+ *
+ * Accepts an invitation and joins the organization.
+ * Requires authentication. The logged-in user's email must match
+ * the invitation email.
+ *
+ * Response: { success: true, orgId: string, role: string }
  */
 export async function handleAcceptInvitation(
   request: Request,
@@ -529,11 +610,12 @@ export async function handleAcceptInvitation(
   invitationId: string
 ): Promise<Response> {
   const session = await getSession(request, env);
+
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Check if user is already in an org
+  // Check if user already belongs to an organization
   const existingMembership = await env.DB.prepare(
     `SELECT org_id FROM org_members WHERE user_id = ?`
   )
@@ -547,7 +629,7 @@ export async function handleAcceptInvitation(
     );
   }
 
-  // Get the invitation
+  // Get invitation details
   const invitation = await getInvitationById(env.DB, invitationId);
 
   if (!invitation) {
@@ -568,11 +650,8 @@ export async function handleAcceptInvitation(
     );
   }
 
-  // Verify the email matches
-  const userEmail = session.user.email.toLowerCase();
-  const invitedEmail = invitation.email.toLowerCase();
-
-  if (userEmail !== invitedEmail) {
+  // Verify email matches
+  if (session.user.email.toLowerCase() !== invitation.email.toLowerCase()) {
     return Response.json(
       {
         error:
@@ -589,16 +668,16 @@ export async function handleAcceptInvitation(
     session.user.id
   );
 
-  if (!result) {
-    return Response.json(
-      { error: "Failed to accept invitation" },
-      { status: 500 }
-    );
+  if (result) {
+    return Response.json({
+      success: true,
+      orgId: result.orgId,
+      role: result.role,
+    });
   }
 
-  return Response.json({
-    success: true,
-    orgId: result.orgId,
-    role: result.role,
-  });
+  return Response.json(
+    { error: "Failed to accept invitation" },
+    { status: 500 }
+  );
 }

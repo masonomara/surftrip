@@ -13,13 +13,12 @@ export const meta: MetaFunction = () => [
 export default function LoginPage() {
   const [searchParams] = useSearchParams();
 
-  // Get invitation ID from URL if present
+  // Check if user is coming from an invitation link
   const invitationId = searchParams.get("invitation");
-
-  // Where to redirect after login
+  const redirectParam = searchParams.get("redirect") || "/dashboard";
   const redirectUrl = invitationId
     ? `/accept-invite?invitation=${invitationId}`
-    : searchParams.get("redirect") || "/dashboard";
+    : redirectParam;
 
   // Form state
   const [email, setEmail] = useState("");
@@ -27,37 +26,39 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Invitation state (for pre-filling email)
+  // Invitation details (if coming from an invite link)
   const [invitation, setInvitation] = useState<InvitationDetails | null>(null);
 
-  // Fetch invitation details if we have an invitation ID
+  // Load invitation details if we have an invitation ID
   useEffect(() => {
     if (!invitationId) {
       return;
     }
 
-    fetch(`${API_URL}/api/invitations/${invitationId}`, {
-      credentials: "include",
-    })
-      .then((response) => {
-        if (!response.ok) {
-          return null;
-        }
-        return response.json() as Promise<InvitationDetails>;
-      })
-      .then((data) => {
-        if (data) {
+    async function loadInvitation() {
+      try {
+        const response = await fetch(
+          `${API_URL}/api/invitations/${invitationId}`,
+          {
+            credentials: "include",
+          }
+        );
+
+        if (response.ok) {
+          const data = (await response.json()) as InvitationDetails;
           setInvitation(data);
           setEmail(data.email);
         }
-      })
-      .catch(() => {
-        // Ignore errors - invitation might not exist
-      });
+      } catch {
+        // Invitation fetch failed, but we can still let them log in normally
+      }
+    }
+
+    loadInvitation();
   }, [invitationId]);
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setErrorMessage(null);
     setIsLoading(true);
 
@@ -82,16 +83,17 @@ export default function LoginPage() {
   }
 
   function handleSocialSignIn(provider: "google" | "apple") {
-    signIn.social({
-      provider,
-      callbackURL: `${window.location.origin}${redirectUrl}`,
-    });
+    const callbackURL = `${window.location.origin}${redirectUrl}`;
+    signIn.social({ provider, callbackURL });
   }
 
-  // Build the signup link (preserve invitation if present)
+  // Build signup link, preserving invitation if present
   const signupLink = invitationId
     ? `/signup?invitation=${invitationId}`
     : "/signup";
+
+  // Determine if email field should be locked (when coming from invitation)
+  const isEmailLocked = invitation !== null;
 
   return (
     <main className={styles.page}>
@@ -101,62 +103,37 @@ export default function LoginPage() {
         <p className={styles.subtitle}>
           {invitation ? (
             <>
-              Log in to join <strong>{invitation.orgName}</strong> as a{" "}
-              {invitation.role}.
+              Continue to Docket as a {invitation.role} of {invitation.orgName}.
             </>
           ) : (
-            "Log in to your account to work with Docket"
+            "Continue to Docket"
           )}
         </p>
 
-        {errorMessage && <div className={styles.errorBox}>{errorMessage}</div>}
+        {errorMessage && (
+          <div className="alert alert-error">{errorMessage}</div>
+        )}
 
-        {/* Social login buttons */}
         <div className={styles.socialButtonContainer}>
           <button
             type="button"
             onClick={() => handleSocialSignIn("google")}
             disabled={isLoading}
-            className={styles.googleButton}
+            className={styles.ssoButton}
           >
             <img
-              src="/google-icon-button.png"
+              src="/google-icon-button.svg"
               alt=""
               height="18px"
               width="18px"
             />
             Continue with Google
-            <img
-              src="/google-icon-button.png"
-              alt=""
-              height="18px"
-              width="18px"
-              style={{ opacity: 0 }}
-            />
           </button>
-
-          {/* <button
-          type="button"
-          onClick={() => handleSocialSignIn("apple")}
-          disabled={isLoading}
-          className={styles.appleButton}
-        >
-          <img src="/apple-icon-button.png" alt="" height="18px" width="18px" />
-          Continue with Apple
-          <img
-            src="/apple-icon-button.png"
-            alt=""
-            height="18px"
-            width="18px"
-            style={{ opacity: 0 }}
-          />
-        </button> */}
         </div>
 
         <div className={styles.divider}>or</div>
 
         <form onSubmit={handleSubmit}>
-          {/* Email field */}
           <div className={styles.fieldGroup}>
             <label htmlFor="email" className={styles.label}>
               Email
@@ -178,12 +155,12 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={isLoading || !!invitation}
-              readOnly={!!invitation}
+              disabled={isLoading || isEmailLocked}
+              readOnly={isEmailLocked}
               className={styles.input}
               placeholder="Enter your email"
               style={
-                invitation
+                isEmailLocked
                   ? {
                       backgroundColor: "var(--surface-3)",
                       cursor: "not-allowed",
@@ -193,12 +170,10 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* Password field */}
           <div className={styles.fieldGroupLast}>
             <label htmlFor="password" className={styles.label}>
               Password
             </label>
-
             <input
               id="password"
               type="password"
@@ -221,7 +196,8 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className={styles.submitButton}
+            className="btn btn-primary btn-lg"
+            style={{ width: "100%" }}
           >
             {isLoading ? "Logging in..." : "Log in"}
           </button>

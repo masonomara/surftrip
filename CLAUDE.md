@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 Docket is an AI assistant for law firms that use Clio (legal practice management software). Users chat with the bot through Teams, Slack, or MCP clients. The bot can look up case information, answer questions about firm procedures, and perform operations in Clio.
 
-**Current status:** Phases 2-8 are complete. Starting Phase 9 (Website MVP).
+**Current status:** Phases 2-8 are complete. Finishing up Phase 9 (Website MVP).
 
 ## Project Structure
 

@@ -3,204 +3,142 @@
   max-width: 700px;
   margin: 0 auto;
 }
-
 .header {
   margin-bottom: 2rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--border-default);
 }
-
-.backLink {
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: 14px;
-}
-
-.backLink:hover {
-  color: var(--text-primary);
-}
-
 .section {
   margin-bottom: 2rem;
 }
-
-.sectionTitle {
-  margin: 0 0 0.75rem 0;
-  font-size: 1.125rem;
-}
-
+/* title-3 (19/24/600) */
 .sectionTitleDanger {
   margin: 0 0 0.75rem 0;
-  font-size: 1.125rem;
-  color: #dc3545;
+  font-size: 19px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--error-primary);
 }
-
-.infoCard {
-  background: var(--surface-2);
-  border-radius: 8px;
-  padding: 1rem;
-}
-
 .infoRow {
   display: flex;
   justify-content: space-between;
   padding: 0.5rem 0;
 }
-
 .infoRow:not(:last-child) {
   border-bottom: 1px solid var(--border-default);
 }
-
+/* subhead (14/19/400) */
 .infoLabel {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
 }
-
+/* subhead (14/19/600) */
 .infoValue {
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
+}
+/* headline (16/21/600) */
+.dangerInfo h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 16px;
+  line-height: 21px;
   font-weight: 500;
 }
-
-.dangerCard {
-  background: rgba(220, 53, 69, 0.05);
-  border: 1px solid rgba(220, 53, 69, 0.2);
-  border-radius: 8px;
-  padding: 1.5rem;
+/* subhead (14/19/400) */
+.dangerInfo p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
+}
+.dangerCardLayout {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
 }
-
-.dangerInfo h3 {
-  margin: 0 0 0.25rem 0;
-  font-size: 1rem;
-}
-
-.dangerInfo p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.deleteButton {
-  padding: 0.5rem 1rem;
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  white-space: nowrap;
-}
-
-.deleteButton:hover {
-  background: #c82333;
-}
-
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modalContent {
-  background: var(--container);
-  padding: 1.5rem;
-  border-radius: 8px;
-  width: 100%;
-  max-width: 480px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modalTitle {
-  margin: 0 0 1rem 0;
-  color: #dc3545;
-}
-
+/* subhead (14/19/600) */
 .warning {
-  background: rgba(220, 53, 69, 0.1);
-  color: #dc3545;
+  background: var(--error-highlight);
+  color: var(--error-primary);
   padding: 0.75rem 1rem;
   border-radius: 4px;
+  font-size: 14px;
+  line-height: 19px;
   font-weight: 500;
   margin-bottom: 1rem;
 }
-
+/* subhead (14/19/400) */
 .deletionList {
   margin: 0 0 1.5rem 0;
   padding-left: 1.5rem;
   color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
 }
-
 .deletionList li {
   margin-bottom: 0.25rem;
 }
-
 .confirmSection {
   margin-bottom: 1rem;
 }
-
+/* subhead (14/19/400) */
 .confirmLabel {
   display: block;
   margin-bottom: 0.5rem;
-  font-size: 0.875rem;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
 }
-
-.confirmInput {
-  width: 100%;
-  padding: 0.5rem;
+/* title-3 (19/24/600) */
+.modalTitleDanger {
+  margin: 0 0 1rem 0;
+  font-size: 19px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--error-primary);
+}
+.editForm {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+.chipGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+/* subhead (14/19/400) */
+.chip {
+  padding: 0.375rem 0.75rem;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
+  background: var(--container);
   border: 1px solid var(--border-default);
   border-radius: 4px;
-  background: var(--surface-2);
-  color: var(--text-primary);
-  font-size: 1rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
 }
-
-.modalError {
-  color: #dc3545;
-  font-size: 0.875rem;
-  margin-bottom: 1rem;
+.chip:hover {
+  border-color: var(--text-secondary);
 }
-
-.modalActions {
+.chipSelected {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--container);
+}
+.editActions {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
-}
-
-.cancelButton {
-  padding: 0.5rem 1rem;
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: 4px;
-  cursor: pointer;
-  color: var(--text-primary);
-}
-
-.confirmDeleteButton {
-  padding: 0.5rem 1rem;
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.confirmDeleteButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.error {
-  background: rgba(220, 53, 69, 0.1);
-  color: #dc3545;
-  padding: 0.75rem 1rem;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  margin-bottom: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-default);
 }

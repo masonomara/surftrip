@@ -92,7 +92,7 @@ describe("Routes", () => {
       expect(response.status).toBe(302);
 
       const redirectLocation = response.headers.get("Location");
-      expect(redirectLocation).toContain("/settings/clio?error=");
+      expect(redirectLocation).toContain("/org/clio?error=");
     });
   });
 });

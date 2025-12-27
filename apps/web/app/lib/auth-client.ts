@@ -1,6 +1,11 @@
 import { createAuthClient } from "better-auth/react";
 
-export const API_URL = "https://api.docketadmin.com";
+const isLocalhost =
+  typeof window !== "undefined" && window.location.hostname === "localhost";
+
+export const API_URL = isLocalhost
+  ? "http://localhost:8787"
+  : "https://api.docketadmin.com";
 
 const client = createAuthClient({
   baseURL: API_URL,

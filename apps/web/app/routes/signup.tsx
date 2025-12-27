@@ -13,17 +13,12 @@ export const meta: MetaFunction = () => [
 export default function SignupPage() {
   const [searchParams] = useSearchParams();
 
-  // Get invitation ID from URL if present
+  // Check if user is coming from an invitation link
   const invitationId = searchParams.get("invitation");
-
-  // Where to redirect after signup
+  const redirectParam = searchParams.get("redirect") || "/dashboard";
   const redirectUrl = invitationId
     ? `/accept-invite?invitation=${invitationId}`
-    : searchParams.get("redirect") || "/dashboard";
-
-  // Invitation state
-  const [invitation, setInvitation] = useState<InvitationDetails | null>(null);
-  const [invitationLoading, setInvitationLoading] = useState(!!invitationId);
+    : redirectParam;
 
   // Form state
   const [name, setName] = useState("");
@@ -32,52 +27,54 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Invitation details (if coming from an invite link)
+  const [invitation, setInvitation] = useState<InvitationDetails | null>(null);
+  const [invitationLoading, setInvitationLoading] = useState(!!invitationId);
+
   // Email verification state
   const [emailSent, setEmailSent] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [hasResent, setHasResent] = useState(false);
 
-  // Fetch invitation details if we have an invitation ID
+  // Load invitation details if we have an invitation ID
   useEffect(() => {
     if (!invitationId) {
       return;
     }
 
-    fetch(`${API_URL}/api/invitations/${invitationId}`, {
-      credentials: "include",
-    })
-      .then((response) => {
-        if (!response.ok) {
-          return null;
-        }
-        return response.json() as Promise<InvitationDetails>;
-      })
-      .then((data) => {
-        if (data) {
+    async function loadInvitation() {
+      try {
+        const response = await fetch(
+          `${API_URL}/api/invitations/${invitationId}`,
+          {
+            credentials: "include",
+          }
+        );
+
+        if (response.ok) {
+          const data = (await response.json()) as InvitationDetails;
           setInvitation(data);
           setEmail(data.email);
         }
-      })
-      .catch(() => {
-        // Ignore errors - invitation might not exist
-      })
-      .finally(() => {
+      } catch {
+        // Invitation fetch failed, but we can still let them sign up normally
+      } finally {
         setInvitationLoading(false);
-      });
+      }
+    }
+
+    loadInvitation();
   }, [invitationId]);
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setErrorMessage(null);
     setIsLoading(true);
 
+    const callbackURL = `${window.location.origin}${redirectUrl}`;
+
     await signUp.email(
-      {
-        name,
-        email,
-        password,
-        callbackURL: `${window.location.origin}${redirectUrl}`,
-      },
+      { name, email, password, callbackURL },
       {
         onSuccess: () => {
           setEmailSent(true);
@@ -95,20 +92,16 @@ export default function SignupPage() {
     setIsResending(true);
     setHasResent(false);
 
-    await authClient.sendVerificationEmail({
-      email,
-      callbackURL: `${window.location.origin}${redirectUrl}`,
-    });
+    const callbackURL = `${window.location.origin}${redirectUrl}`;
+    await authClient.sendVerificationEmail({ email, callbackURL });
 
     setIsResending(false);
     setHasResent(true);
   }
 
   function handleSocialSignIn(provider: "google" | "apple") {
-    signIn.social({
-      provider,
-      callbackURL: `${window.location.origin}${redirectUrl}`,
-    });
+    const callbackURL = `${window.location.origin}${redirectUrl}`;
+    signIn.social({ provider, callbackURL });
   }
 
   function handleGoBack() {
@@ -116,28 +109,27 @@ export default function SignupPage() {
     setHasResent(false);
   }
 
-  // Email verification sent - show confirmation page
+  // Show email verification screen after signup
   if (emailSent) {
     return (
       <main className={styles.page}>
         <div className={styles.container}>
           <h1 className={styles.title}>Check your email</h1>
-
           <p className={styles.subtitle}>
             We sent a verification link to <strong>{email}</strong>. Click the
             link to verify your account.
           </p>
 
           {hasResent && (
-            <p className={styles.successBox}>Verification email resent!</p>
+            <p className="alert alert-success">Verification email resent!</p>
           )}
 
           <button
             type="button"
             onClick={handleResendVerification}
             disabled={isResending}
-            className={styles.submitButton}
-            style={{ marginTop: "1rem" }}
+            className="btn btn-primary btn-lg"
+            style={{ marginTop: "1rem", width: "100%" }}
           >
             {isResending ? "Resending..." : "Resend verification email"}
           </button>
@@ -158,7 +150,7 @@ export default function SignupPage() {
     );
   }
 
-  // Loading invitation
+  // Show loading state while fetching invitation
   if (invitationLoading) {
     return (
       <main className={styles.page}>
@@ -169,7 +161,7 @@ export default function SignupPage() {
     );
   }
 
-  // Invitation expired
+  // Show expired invitation error
   if (invitation?.isExpired) {
     return (
       <main className={styles.page}>
@@ -177,7 +169,7 @@ export default function SignupPage() {
           <h1 className={styles.title}>Invitation Expired</h1>
           <p className={styles.subtitle}>
             This invitation to join {invitation.orgName} has expired. Please
-            contact your organization admin for a new invitation.
+            contact your organization admin.
           </p>
           <Link to="/login" className={styles.submitButton}>
             Go to Login
@@ -187,7 +179,7 @@ export default function SignupPage() {
     );
   }
 
-  // Invitation already accepted
+  // Show already accepted invitation error
   if (invitation?.isAccepted) {
     return (
       <main className={styles.page}>
@@ -204,12 +196,14 @@ export default function SignupPage() {
     );
   }
 
-  // Build login link (preserve invitation if present)
+  // Build login link, preserving invitation if present
   const loginLink = invitationId
     ? `/login?invitation=${invitationId}`
     : "/login";
 
-  // Main signup form
+  // Determine if email field should be locked (when coming from invitation)
+  const isEmailLocked = invitation !== null;
+
   return (
     <main className={styles.page}>
       <div className={styles.container}>
@@ -229,33 +223,30 @@ export default function SignupPage() {
           )}
         </p>
 
-        {errorMessage && <div className={styles.errorBox}>{errorMessage}</div>}
+        {errorMessage && (
+          <div className="alert alert-error">{errorMessage}</div>
+        )}
 
-        {/* Social signup buttons */}
         <div className={styles.socialButtonContainer}>
           <button
             type="button"
             onClick={() => handleSocialSignIn("google")}
             disabled={isLoading}
-            className={styles.googleButton}
+            className={styles.ssoButton}
           >
-            Continue with Google
+            <img
+              src="/google-icon-button.svg"
+              alt=""
+              height="18px"
+              width="18px"
+            />
+            Sign up with Google
           </button>
-
-          {/* <button
-          type="button"
-          onClick={() => handleSocialSignIn("apple")}
-          disabled={isLoading}
-          className={styles.appleButton}
-        >
-          Continue with Apple
-        </button> */}
         </div>
 
         <div className={styles.divider}>or</div>
 
         <form onSubmit={handleSubmit}>
-          {/* Name field */}
           <div className={styles.fieldGroup}>
             <label htmlFor="name" className={styles.label}>
               Name
@@ -271,7 +262,6 @@ export default function SignupPage() {
             />
           </div>
 
-          {/* Email field */}
           <div className={styles.fieldGroup}>
             <label htmlFor="email" className={styles.label}>
               Email
@@ -293,11 +283,11 @@ export default function SignupPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={isLoading || !!invitation}
-              readOnly={!!invitation}
+              disabled={isLoading || isEmailLocked}
+              readOnly={isEmailLocked}
               className={styles.input}
               style={
-                invitation
+                isEmailLocked
                   ? {
                       backgroundColor: "var(--surface-3)",
                       cursor: "not-allowed",
@@ -307,7 +297,6 @@ export default function SignupPage() {
             />
           </div>
 
-          {/* Password field */}
           <div className={styles.fieldGroupLast}>
             <label htmlFor="password" className={styles.label}>
               Password
@@ -327,7 +316,8 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className={styles.submitButton}
+            className="btn btn-primary btn-lg"
+            style={{ width: "100%" }}
           >
             {isLoading ? "Creating account..." : "Sign up"}
           </button>

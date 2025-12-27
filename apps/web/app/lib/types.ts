@@ -23,6 +23,9 @@ export interface OrgMembership {
   org: {
     id: string;
     name: string;
+    jurisdictions?: string[];
+    practiceTypes?: string[];
+    firmSize?: string;
   };
   role: "admin" | "member";
   isOwner: boolean;
@@ -68,4 +71,17 @@ export interface InvitationDetails {
   inviterName: string;
   isExpired: boolean;
   isAccepted: boolean;
+}
+
+/**
+ * An organization context document.
+ * Returned from /api/org/documents endpoint.
+ */
+export interface OrgContextDocument {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  uploadedAt: number;
+  chunkCount: number;
 }

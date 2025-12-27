@@ -11,28 +11,31 @@ interface DeletionPreview {
   user: { id: string; email: string } | null;
   orgsOwned: number;
   orgMemberships: number;
-  conversationsOwned: number;
-  messagesOwned: number;
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const cookie = request.headers.get("cookie") || "";
 
+  // Check if user is logged in
   const sessionResponse = await apiFetch(
     context,
     "/api/auth/get-session",
     cookie
   );
+
   if (!sessionResponse.ok) {
     throw redirect("/login");
   }
 
   const sessionData = (await sessionResponse.json()) as SessionResponse | null;
+
   if (!sessionData?.user) {
     throw redirect("/login");
   }
 
+  // Fetch user's organization membership
   const orgResponse = await apiFetch(context, "/api/user/org", cookie);
+
   let orgMembership: OrgMembership | null = null;
   if (orgResponse.ok) {
     const orgData = (await orgResponse.json()) as OrgMembership | null;
@@ -53,10 +56,11 @@ export default function AccountSettingsPage({
   const { user, org } = loaderData;
   const navigate = useNavigate();
 
+  // Modal and deletion state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletionPreview, setDeletionPreview] =
     useState<DeletionPreview | null>(null);
-  const [confirmText, setConfirmText] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,8 +88,8 @@ export default function AccountSettingsPage({
   }
 
   async function handleDeleteAccount() {
-    if (confirmText !== "DELETE") {
-      setError("Please type DELETE to confirm");
+    if (confirmEmail !== user.email) {
+      setError("Email does not match");
       return;
     }
 
@@ -97,7 +101,7 @@ export default function AccountSettingsPage({
         method: "DELETE",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirm: "DELETE" }),
+        body: JSON.stringify({ confirmEmail }),
       });
 
       if (!response.ok) {
@@ -105,12 +109,15 @@ export default function AccountSettingsPage({
           error?: string;
           message?: string;
         };
+
+        // Handle special case where user owns organizations
         if (data.error === "sole_owner") {
           throw new Error(
             data.message ||
-              "You must transfer ownership of your organizations before deleting your account"
+              "You must transfer ownership of your organizations first"
           );
         }
+
         throw new Error(data.error || "Failed to delete account");
       }
 
@@ -126,6 +133,12 @@ export default function AccountSettingsPage({
     }
   }
 
+  function handleCloseModal() {
+    setShowDeleteModal(false);
+    setConfirmEmail("");
+    setError(null);
+  }
+
   return (
     <AppLayout user={user} org={org} currentPath="/account/settings">
       <header className={styles.header}>
@@ -134,7 +147,7 @@ export default function AccountSettingsPage({
 
       {error && <div className={styles.error}>{error}</div>}
 
-      {/* Account Info */}
+      {/* Account Information Section */}
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Account</h2>
         <div className={styles.infoCard}>
@@ -149,7 +162,7 @@ export default function AccountSettingsPage({
         </div>
       </section>
 
-      {/* Danger Zone */}
+      {/* Danger Zone Section */}
       <section className={styles.section}>
         <h2 className={styles.sectionTitleDanger}>Danger Zone</h2>
         <div className={styles.dangerCard}>
@@ -169,9 +182,9 @@ export default function AccountSettingsPage({
         </div>
       </section>
 
-      {/* Delete Modal */}
+      {/* Delete Account Modal */}
       {showDeleteModal && deletionPreview && (
-        <div className={styles.modal} onClick={() => setShowDeleteModal(false)}>
+        <div className={styles.modal} onClick={handleCloseModal}>
           <div
             className={styles.modalContent}
             onClick={(e) => e.stopPropagation()}
@@ -193,27 +206,26 @@ export default function AccountSettingsPage({
                 </li>
               )}
               <li>All your conversations and messages</li>
-              <li>All associated data</li>
             </ul>
 
             {deletionPreview.orgsOwned > 0 && (
               <div className={styles.warning}>
-                Warning: You own {deletionPreview.orgsOwned} organization(s).
-                You must transfer ownership before deleting your account.
+                Warning: You must transfer ownership before deleting your
+                account.
               </div>
             )}
 
             <div className={styles.confirmSection}>
-              <label htmlFor="confirmText" className={styles.confirmLabel}>
-                Type <strong>DELETE</strong> to confirm:
+              <label htmlFor="confirmEmail" className={styles.confirmLabel}>
+                Type <strong>{user.email}</strong> to confirm:
               </label>
               <input
-                id="confirmText"
-                type="text"
-                value={confirmText}
-                onChange={(e) => setConfirmText(e.target.value)}
+                id="confirmEmail"
+                type="email"
+                value={confirmEmail}
+                onChange={(e) => setConfirmEmail(e.target.value)}
                 className={styles.confirmInput}
-                placeholder="DELETE"
+                placeholder="Your email"
               />
             </div>
 
@@ -221,18 +233,14 @@ export default function AccountSettingsPage({
 
             <div className={styles.modalActions}>
               <button
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setConfirmText("");
-                  setError(null);
-                }}
+                onClick={handleCloseModal}
                 className={styles.cancelButton}
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteAccount}
-                disabled={isDeleting || confirmText !== "DELETE"}
+                disabled={isDeleting || confirmEmail !== user.email}
                 className={styles.confirmDeleteButton}
               >
                 {isDeleting ? "Deleting..." : "Delete Account"}

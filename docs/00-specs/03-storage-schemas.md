@@ -25,7 +25,8 @@ These are guidelines, not final schemas. Implementation will reveal what's actua
 - Knowledge Base (shared, buildtime):
   - `kb_chunks` - text chunks for RAG
 - Org Context (per-org, runtime):
-  - `org_context_chunks` - firm-specific document chunks
+  - `org_context_documents` - uploaded document metadata (filename, size, mime type)
+  - `org_context_chunks` - firm-specific document chunks (linked to documents via file_id)
 
 **Indexes:** Add as query patterns emerge.
 

@@ -252,7 +252,7 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 
 - [ ] Web app wrangler config (determine origin: same-domain vs subdomain vs Pages URL)
 - [ ] CORS policy matching web app origin + Better Auth `trustedOrigins`
-- [ ] Auth UI (Better Auth signup/login, Google/Apple SSO)
+- [ ] Auth UI (Better Auth signup/login, Google SSO, maybe Apple SSO (oauth concern w/ Apple ID))
 - [ ] Email service (Resend: invitations, password reset, email verification)
 - [ ] Email verification flow (post-signup pending screen, verification callback, resend button)
 - [ ] Forgot password flow (request form, reset form with token)

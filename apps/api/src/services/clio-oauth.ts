@@ -1,3 +1,13 @@
+/**
+ * Clio OAuth Service
+ *
+ * Handles the OAuth 2.0 flow for connecting to Clio, including:
+ * - PKCE (Proof Key for Code Exchange) for secure authorization
+ * - HMAC-signed state parameters to prevent CSRF attacks
+ * - Encrypted token storage in Durable Object KV
+ * - Token refresh and expiration handling
+ */
+
 import {
   encrypt,
   decrypt,
@@ -10,23 +20,21 @@ import { createLogger } from "../lib/logger";
 
 const log = createLogger({ component: "clio-oauth" });
 
-// =============================================================================
-// Constants
-// =============================================================================
-
+// Clio OAuth endpoints
 const CLIO_OAUTH_AUTHORIZE = "https://app.clio.com/oauth/authorize";
 const CLIO_OAUTH_TOKEN = "https://app.clio.com/oauth/token";
 
-/** State tokens expire after 10 minutes */
+// How long the OAuth state parameter is valid (10 minutes)
 const STATE_EXPIRY_MS = 10 * 60 * 1000;
 
-/** Refresh tokens 5 minutes before they expire */
+// Refresh tokens 5 minutes before they expire to avoid race conditions
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
-// =============================================================================
-// Types
-// =============================================================================
-
+/**
+ * Clio OAuth tokens structure.
+ * We store expires_at (absolute time) instead of expires_in (relative)
+ * so we can easily check if the token has expired.
+ */
 export interface ClioTokens {
   access_token: string;
   refresh_token: string;
@@ -34,6 +42,9 @@ export interface ClioTokens {
   token_type: string;
 }
 
+/**
+ * Raw token response from Clio's OAuth endpoint.
+ */
 interface ClioTokenResponse {
   access_token: string;
   refresh_token: string;
@@ -41,6 +52,10 @@ interface ClioTokenResponse {
   token_type: string;
 }
 
+/**
+ * Data embedded in the state parameter.
+ * This allows us to recover the user context after Clio redirects back.
+ */
 interface StatePayload {
   userId: string;
   orgId: string;
@@ -48,11 +63,19 @@ interface StatePayload {
   timestamp: number;
 }
 
+/**
+ * Minimal interface for Durable Object storage.
+ * Allows this service to work with DO storage without tight coupling.
+ */
 interface DOStorage {
   get(key: string): Promise<unknown>;
   put(key: string, value: unknown): Promise<void>;
   delete(key: string): Promise<boolean>;
 }
+
+// ============================================================
+// Public Interfaces for OAuth Parameters
+// ============================================================
 
 export interface AuthorizationUrlParams {
   clientId: string;
@@ -75,82 +98,61 @@ export interface TokenRefreshParams {
   clientSecret: string;
 }
 
-// =============================================================================
-// Base64 URL Encoding (used for PKCE and state)
-// =============================================================================
+// ============================================================
+// PKCE (Proof Key for Code Exchange) Functions
+// ============================================================
 
 /**
- * Encode bytes to URL-safe base64 (no padding, - instead of +, _ instead of /)
- */
-function base64UrlEncode(data: Uint8Array): string {
-  // Convert bytes to binary string
-  let binary = "";
-  for (let i = 0; i < data.length; i++) {
-    binary += String.fromCharCode(data[i]);
-  }
-
-  // Convert to base64 and make URL-safe
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-/**
- * Decode URL-safe base64 back to bytes
- */
-function base64UrlDecode(str: string): Uint8Array {
-  // Add padding back
-  const paddingNeeded = (4 - (str.length % 4)) % 4;
-  const padded = str + "=".repeat(paddingNeeded);
-
-  // Convert from URL-safe to standard base64
-  const standardBase64 = padded.replace(/-/g, "+").replace(/_/g, "/");
-
-  // Decode to binary string, then to bytes
-  const binary = atob(standardBase64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  return bytes;
-}
-
-// =============================================================================
-// PKCE (Proof Key for Code Exchange)
-// =============================================================================
-
-/**
- * Generate a random code verifier for PKCE.
- * Returns a 43-character URL-safe string.
+ * Generates a random code verifier for PKCE.
+ *
+ * The verifier is a 32-byte random string that we keep secret during
+ * the authorization flow. When we exchange the code for tokens, we
+ * prove we initiated the flow by providing this verifier.
+ *
+ * @returns A URL-safe base64 encoded random string
  */
 export function generateCodeVerifier(): string {
-  const randomBytes = new Uint8Array(32);
-  crypto.getRandomValues(randomBytes);
-  return base64UrlEncode(randomBytes);
+  const randomBytes = crypto.getRandomValues(new Uint8Array(32));
+  return arrayBufferToBase64(randomBytes.buffer);
 }
 
 /**
- * Generate the code challenge from a verifier using SHA-256.
- * This is sent to Clio during authorization.
+ * Generates a code challenge from a verifier.
+ *
+ * The challenge is a SHA-256 hash of the verifier. We send the challenge
+ * to Clio during authorization, and they verify our verifier when we
+ * exchange the code for tokens.
+ *
+ * @param verifier - The code verifier to hash
+ * @returns A URL-safe base64 encoded SHA-256 hash
  */
 export async function generateCodeChallenge(verifier: string): Promise<string> {
-  const verifierBytes = new TextEncoder().encode(verifier);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", verifierBytes);
-  return base64UrlEncode(new Uint8Array(hashBuffer));
+  const hash = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(verifier)
+  );
+
+  return arrayBufferToBase64(hash);
 }
 
-// =============================================================================
-// State Parameter (CSRF protection)
-// =============================================================================
+// ============================================================
+// State Parameter Functions (CSRF Protection)
+// ============================================================
 
 /**
- * Sign data using HMAC-SHA256
+ * Signs data using HMAC-SHA256.
+ *
+ * Used to create tamper-proof state parameters. The signature proves
+ * that we generated the state and it hasn't been modified.
+ *
+ * @param data - The data to sign
+ * @param secret - The HMAC secret
+ * @returns A URL-safe base64 encoded signature
  */
 async function signWithHmac(data: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
 
+  // Import the secret as an HMAC key
   const key = await crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
@@ -159,13 +161,28 @@ async function signWithHmac(data: string, secret: string): Promise<string> {
     ["sign"]
   );
 
+  // Sign the data
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
-  return base64UrlEncode(new Uint8Array(signature));
+
+  return arrayBufferToBase64(signature);
 }
 
 /**
- * Generate a signed state parameter containing user info and PKCE verifier.
- * Format: base64(payload).signature
+ * Generates a signed state parameter for the OAuth flow.
+ *
+ * The state contains:
+ * - userId: The user initiating the connection
+ * - orgId: The organization being connected
+ * - verifier: The PKCE verifier (so we can recover it after redirect)
+ * - timestamp: When the state was created (for expiration)
+ *
+ * Format: "base64(payload).signature"
+ *
+ * @param userId - The user's ID
+ * @param orgId - The organization's ID
+ * @param verifier - The PKCE code verifier
+ * @param secret - Secret for HMAC signing
+ * @returns A signed state string
  */
 export async function generateState(
   userId: string,
@@ -181,43 +198,56 @@ export async function generateState(
   };
 
   const payloadJson = JSON.stringify(payload);
-  const payloadEncoded = base64UrlEncode(new TextEncoder().encode(payloadJson));
+  const payloadEncoded = arrayBufferToBase64(
+    new TextEncoder().encode(payloadJson).buffer as ArrayBuffer
+  );
+
   const signature = await signWithHmac(payloadEncoded, secret);
 
   return `${payloadEncoded}.${signature}`;
 }
 
 /**
- * Verify and decode a state parameter.
- * Returns null if invalid, tampered, or expired.
+ * Verifies and decodes a state parameter.
+ *
+ * Checks that:
+ * 1. The state has the correct format (payload.signature)
+ * 2. The signature is valid (state wasn't tampered with)
+ * 3. The state hasn't expired (within 10 minutes)
+ *
+ * @param state - The state string from the callback
+ * @param secret - Secret for HMAC verification
+ * @returns The decoded state payload, or null if invalid
  */
 export async function verifyState(
   state: string,
   secret: string
 ): Promise<{ userId: string; orgId: string; verifier: string } | null> {
-  // State should be: payload.signature
+  // State format: "payload.signature"
   const parts = state.split(".");
+
   if (parts.length !== 2) {
     return null;
   }
 
   const [payloadEncoded, signature] = parts;
 
-  // Verify signature matches (constant-time to prevent timing attacks)
+  // Verify the signature using constant-time comparison
   const expectedSignature = await signWithHmac(payloadEncoded, secret);
+
   if (!constantTimeEqual(signature, expectedSignature)) {
     return null;
   }
 
-  // Decode and validate payload
+  // Decode and validate the payload
   try {
-    const payloadJson = new TextDecoder().decode(
-      base64UrlDecode(payloadEncoded)
-    );
+    const payloadBytes = base64ToArrayBuffer(payloadEncoded);
+    const payloadJson = new TextDecoder().decode(payloadBytes);
     const payload = JSON.parse(payloadJson) as StatePayload;
 
-    // Check if state has expired
+    // Check if the state has expired
     const age = Date.now() - payload.timestamp;
+
     if (age > STATE_EXPIRY_MS) {
       return null;
     }
@@ -232,12 +262,17 @@ export async function verifyState(
   }
 }
 
-// =============================================================================
+// ============================================================
 // OAuth URL Building
-// =============================================================================
+// ============================================================
 
 /**
- * Build the Clio authorization URL for the OAuth flow
+ * Builds the Clio authorization URL.
+ *
+ * This is the URL we redirect users to when they want to connect Clio.
+ *
+ * @param params - Authorization parameters
+ * @returns The full authorization URL
  */
 export function buildAuthorizationUrl(params: AuthorizationUrlParams): string {
   const url = new URL(CLIO_OAUTH_AUTHORIZE);
@@ -252,22 +287,24 @@ export function buildAuthorizationUrl(params: AuthorizationUrlParams): string {
   return url.toString();
 }
 
-// =============================================================================
-// Token Exchange
-// =============================================================================
+// ============================================================
+// Token Exchange and Refresh
+// ============================================================
 
 /**
- * Exchange an authorization code for tokens
+ * Exchanges an authorization code for access and refresh tokens.
+ *
+ * This is called after Clio redirects back with an authorization code.
+ * We provide the code and our PKCE verifier to prove we're the same
+ * party that initiated the authorization.
+ *
+ * @param params - Token exchange parameters
+ * @returns The Clio tokens
+ * @throws Error if the exchange fails
  */
 export async function exchangeCodeForTokens(
   params: TokenExchangeParams
 ): Promise<ClioTokens> {
-  log.info("Exchanging authorization code for tokens", {
-    redirectUri: params.redirectUri,
-    hasCode: !!params.code,
-    hasVerifier: !!params.codeVerifier,
-  });
-
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: params.code,
@@ -294,11 +331,7 @@ export async function exchangeCodeForTokens(
 
   const data = (await response.json()) as ClioTokenResponse;
 
-  log.info("Token exchange successful", {
-    tokenType: data.token_type,
-    expiresIn: data.expires_in,
-  });
-
+  // Convert expires_in (seconds from now) to expires_at (absolute timestamp)
   return {
     access_token: data.access_token,
     refresh_token: data.refresh_token,
@@ -308,13 +341,19 @@ export async function exchangeCodeForTokens(
 }
 
 /**
- * Refresh an expired access token
+ * Refreshes an expired access token.
+ *
+ * Clio access tokens expire after a certain time. We use the refresh
+ * token to get a new access token without requiring the user to
+ * re-authorize.
+ *
+ * @param params - Token refresh parameters
+ * @returns New Clio tokens
+ * @throws Error if the refresh fails (e.g., refresh token revoked)
  */
 export async function refreshAccessToken(
   params: TokenRefreshParams
 ): Promise<ClioTokens> {
-  log.info("Refreshing access token");
-
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: params.refreshToken,
@@ -339,11 +378,6 @@ export async function refreshAccessToken(
 
   const data = (await response.json()) as ClioTokenResponse;
 
-  log.info("Token refresh successful", {
-    tokenType: data.token_type,
-    expiresIn: data.expires_in,
-  });
-
   return {
     access_token: data.access_token,
     refresh_token: data.refresh_token,
@@ -352,12 +386,21 @@ export async function refreshAccessToken(
   };
 }
 
-// =============================================================================
-// Token Storage (encrypted in Durable Object)
-// =============================================================================
+// ============================================================
+// Encrypted Token Storage
+// ============================================================
 
 /**
- * Store tokens encrypted in DO storage
+ * Stores Clio tokens in Durable Object KV with encryption.
+ *
+ * Tokens are encrypted using AES-GCM with a user-specific key derived
+ * from the environment's encryption key. This ensures tokens are
+ * protected at rest and each user's tokens use a different key.
+ *
+ * @param storage - The Durable Object storage
+ * @param userId - The user's ID (used as encryption salt)
+ * @param tokens - The Clio tokens to store
+ * @param encryptionKey - The encryption key from environment
  */
 export async function storeClioTokens(
   storage: DOStorage,
@@ -365,14 +408,22 @@ export async function storeClioTokens(
   tokens: ClioTokens,
   encryptionKey: string
 ): Promise<void> {
-  const tokenJson = JSON.stringify(tokens);
-  const encrypted = await encrypt(tokenJson, userId, encryptionKey);
+  // Serialize and encrypt the tokens
+  const plaintext = JSON.stringify(tokens);
+  const encrypted = await encrypt(plaintext, userId, encryptionKey);
   const encryptedBase64 = arrayBufferToBase64(encrypted);
+
+  // Store in KV
   await storage.put(`clio_token:${userId}`, encryptedBase64);
 }
 
 /**
- * Retrieve and decrypt tokens from DO storage
+ * Retrieves and decrypts Clio tokens from Durable Object KV.
+ *
+ * @param storage - The Durable Object storage
+ * @param userId - The user's ID
+ * @param env - Environment with encryption keys
+ * @returns The decrypted tokens, or null if not found
  */
 export async function getClioTokens(
   storage: DOStorage,
@@ -389,17 +440,25 @@ export async function getClioTokens(
 
   try {
     const encrypted = base64ToArrayBuffer(encryptedBase64);
-    const decrypted = await decrypt(encrypted, userId, env);
-    return JSON.parse(decrypted) as ClioTokens;
+    const plaintext = await decrypt(encrypted, userId, env);
+    return JSON.parse(plaintext) as ClioTokens;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    log.error("Failed to decrypt Clio tokens", { userId, error: message });
+    log.error("Failed to decrypt Clio tokens", {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }
 
 /**
- * Delete tokens from DO storage
+ * Deletes Clio tokens from Durable Object KV.
+ *
+ * Called when a user disconnects Clio or when their tokens
+ * are invalid and can't be refreshed.
+ *
+ * @param storage - The Durable Object storage
+ * @param userId - The user's ID
  */
 export async function deleteClioTokens(
   storage: DOStorage,
@@ -408,12 +467,14 @@ export async function deleteClioTokens(
   await storage.delete(`clio_token:${userId}`);
 }
 
-// =============================================================================
-// Token Utilities
-// =============================================================================
-
 /**
- * Check if a token needs to be refreshed (expires within 5 minutes)
+ * Checks if tokens need to be refreshed.
+ *
+ * We refresh tokens 5 minutes before they expire to avoid situations
+ * where a token expires during a request.
+ *
+ * @param tokens - The Clio tokens to check
+ * @returns true if the tokens should be refreshed
  */
 export function tokenNeedsRefresh(tokens: ClioTokens): boolean {
   const timeUntilExpiry = tokens.expires_at - Date.now();

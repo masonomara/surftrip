@@ -149,10 +149,10 @@ describe("Base64 Helpers", () => {
     const helloBytes = new Uint8Array([72, 101, 108, 108, 111]);
     const base64 = arrayBufferToBase64(helloBytes.buffer);
 
-    // Should match base64 pattern
-    expect(base64).toMatch(/^[A-Za-z0-9+/]*={0,2}$/);
+    // Should match URL-safe base64 pattern (no padding)
+    expect(base64).toMatch(/^[A-Za-z0-9_-]+$/);
 
-    // "Hello" in base64 is "SGVsbG8="
-    expect(base64).toBe("SGVsbG8=");
+    // "Hello" in URL-safe base64 without padding is "SGVsbG8"
+    expect(base64).toBe("SGVsbG8");
   });
 });
