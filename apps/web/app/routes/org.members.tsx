@@ -206,80 +206,87 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
           {members.length === 0 ? (
             <div className="empty-state">No members found</div>
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Role</th>
-                  <th>Joined</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((member) => {
-                  const isSelf = member.userId === user.id;
-                  const canEditRole = !member.isOwner && !isSelf;
-                  const canTransferOwnership =
-                    org.isOwner &&
-                    !member.isOwner &&
-                    !isSelf &&
-                    member.role === "admin";
+            <div className="tableWrapper">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Joined</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((member) => {
+                    const isSelf = member.userId === user.id;
+                    const canEditRole = !member.isOwner && !isSelf;
+                    const canTransferOwnership =
+                      org.isOwner &&
+                      !member.isOwner &&
+                      !isSelf &&
+                      member.role === "admin";
 
-                  return (
-                    <tr key={member.id}>
-                      <td>
-                        <div>
-                          {member.name}
-                          {isSelf && " (you)"}
-                        </div>
-                        <div className="text-secondary">{member.email}</div>
-                      </td>
-                      <td>
-                        {canEditRole ? (
-                          <select
-                            className="form-select"
-                            value={member.role}
-                            onChange={(e) =>
-                              handleRoleChange(member, e.target.value)
-                            }
-                            style={{ width: "auto", padding: "0.25rem 0.5rem" }}
-                          >
-                            <option value="admin">Admin</option>
-                            <option value="member">Member</option>
-                          </select>
-                        ) : (
-                          <RoleBadge
-                            role={member.role}
-                            isOwner={member.isOwner}
-                          />
-                        )}
-                      </td>
-                      <td>{new Date(member.createdAt).toLocaleDateString()}</td>
-                      <td>
-                        <div className="btn-group">
-                          {canTransferOwnership && (
-                            <button
-                              className="btn-primary"
-                              onClick={() => handleOpenTransferModal(member)}
+                    return (
+                      <tr key={member.id}>
+                        <td>
+                          <div>
+                            {member.name}
+                            {isSelf && " (you)"}
+                          </div>
+                          <div className="text-secondary">{member.email}</div>
+                        </td>
+                        <td>
+                          {canEditRole ? (
+                            <select
+                              className="form-select"
+                              value={member.role}
+                              onChange={(e) =>
+                                handleRoleChange(member, e.target.value)
+                              }
+                              style={{
+                                width: "auto",
+                                padding: "0.25rem 0.5rem",
+                              }}
                             >
-                              Transfer Ownership
-                            </button>
+                              <option value="admin">Admin</option>
+                              <option value="member">Member</option>
+                            </select>
+                          ) : (
+                            <RoleBadge
+                              role={member.role}
+                              isOwner={member.isOwner}
+                            />
                           )}
-                          {canEditRole && (
-                            <button
-                              className="btn-primary btn-primary-danger"
-                              onClick={() => handleRemoveMember(member)}
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td>
+                          {new Date(member.createdAt).toLocaleDateString()}
+                        </td>
+                        <td>
+                          <div className="btn-group">
+                            {canTransferOwnership && (
+                              <button
+                                className="btn-primary"
+                                onClick={() => handleOpenTransferModal(member)}
+                              >
+                                Transfer Ownership
+                              </button>
+                            )}
+                            {canEditRole && (
+                              <button
+                                className="btn-primary btn-primary-danger"
+                                onClick={() => handleRemoveMember(member)}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 
@@ -292,48 +299,50 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
               </h2>
             </div>
 
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Invited By</th>
-                  <th>Expires</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invitations.map((invitation) => {
-                  const expiresAt = new Date(invitation.expiresAt);
-                  const expiringsSoon =
-                    invitation.expiresAt - Date.now() < 24 * 60 * 60 * 1000;
+            <div className="tableWrapper">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Invited By</th>
+                    <th>Expires</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invitations.map((invitation) => {
+                    const expiresAt = new Date(invitation.expiresAt);
+                    const expiringsSoon =
+                      invitation.expiresAt - Date.now() < 24 * 60 * 60 * 1000;
 
-                  return (
-                    <tr key={invitation.id}>
-                      <td>{invitation.email}</td>
-                      <td>
-                        <span className="badge">{invitation.role}</span>
-                      </td>
-                      <td className="text-secondary">
-                        {invitation.inviterName}
-                      </td>
-                      <td className="text-secondary">
-                        {expiresAt.toLocaleDateString()}
-                        {expiringsSoon && " (soon)"}
-                      </td>
-                      <td>
-                        <button
-                          className="btn-primary btn-primary-danger"
-                          onClick={() => handleRevokeInvitation(invitation)}
-                        >
-                          Revoke
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                    return (
+                      <tr key={invitation.id}>
+                        <td>{invitation.email}</td>
+                        <td>
+                          <span className="badge">{invitation.role}</span>
+                        </td>
+                        <td className="text-secondary">
+                          {invitation.inviterName}
+                        </td>
+                        <td className="text-secondary">
+                          {expiresAt.toLocaleDateString()}
+                          {expiringsSoon && " (soon)"}
+                        </td>
+                        <td>
+                          <button
+                            className="btn-primary btn-primary-danger"
+                            onClick={() => handleRevokeInvitation(invitation)}
+                          >
+                            Revoke
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </section>
         )}
 
@@ -422,7 +431,11 @@ function InviteModal({ onClose, onSuccess }: InviteModalProps) {
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h2 className="modal-title">Invite a Team Member</h2>
 
-        {error && <div className="alert alert-error">{error}</div>}
+        {error && (
+          <div className="alert alert-error" style={{ marginBottom: "-11px" }}>
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -459,14 +472,14 @@ function InviteModal({ onClose, onSuccess }: InviteModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-lg btn-lg-fit"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="btn btn-primary"
+              className="btn btn-primary btn-lg btn-lg-fit"
             >
               {isSubmitting ? "Sending..." : "Send Invitation"}
             </button>
@@ -536,7 +549,7 @@ function TransferOwnershipModal({
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h2 className="modal-title">Transfer Ownership</h2>
 
-        <div className="alert alert-error">
+        <div className="alert alert-error" style={{ marginBottom: "-11px" }}>
           Transfer ownership to <strong>{targetMember.name}</strong> (
           {targetMember.email}). This action cannot be undone.
         </div>
@@ -563,14 +576,14 @@ function TransferOwnershipModal({
             <button
               type="button"
               onClick={onClose}
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-lg btn-lg-fit"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting || confirmName !== orgName}
-              className="btn btn-danger"
+              className="btn btn-danger btn-lg btn-lg-fit"
             >
               {isSubmitting ? "Transferring..." : "Transfer Ownership"}
             </button>

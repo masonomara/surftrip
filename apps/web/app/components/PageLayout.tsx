@@ -49,7 +49,7 @@ export function PageLayout({
           {context && (
             <button
               type="button"
-              className={`${styles.menuButton} btn-sm btn`}
+              className={`${styles.menuButton} btn-sm btn btn-secondary`}
               onClick={context.onMenuOpen}
               aria-label="Open menu"
             >

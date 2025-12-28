@@ -1,6 +1,6 @@
 .layout {
   display: flex;
-  min-height: 100vh;
+  min-height: 100svh;
 }
 
 .overlay {
@@ -108,15 +108,22 @@
 }
 
 .orgInfo {
-  margin-top: auto;
-  padding: 16px 8px 12px;
-  border-top: 1px solid var(--border-default);
+
+  padding: 8px 8px 8px;
   text-decoration: none;
   display: flex;
   align-items: center;
   gap: 10px;
   border-radius: 6px;
   transition: background 0.15s ease;
+}
+
+.orgInfoDivider {
+    margin-top: auto;
+  height: 1px;
+  width: 100%;
+  background-color: var(--border-default);
+
 }
 
 .orgAvatar {
@@ -142,7 +149,7 @@
 .orgName {
   font-size: 14px;
   line-height: 19px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -163,13 +170,18 @@
   color: var(--text-secondary);
 }
 
+.orgInfoActive {
+  background-color: var(--surface-3);
+}
+
 .content {
   flex: 1;
   background: var(--surface-1);
-  min-height: 100vh;
+  min-height: 100svh;
   overflow-y: auto;
   margin-left: 255px;
   overflow-x: hidden;
+  min-width: 0;
 }
 
 .contentInner {
@@ -177,6 +189,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
+  min-width: 0;
 }
 
 /* Mobile styles */
@@ -198,12 +211,14 @@
     right: 0;
     bottom: 0;
 
-    width: 280px;
+    min-width: 255px;
+    width: calc(100vw - 40px);
+    max-width: 355px;
     z-index: 100;
     border-right: none;
     border-left: 1px solid var(--border-default);
     transform: translateX(100%);
-    transition: transform 0.25s ease;
+    transition: transform 0.2s ease;
   }
 
   .sidebarOpen {

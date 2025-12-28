@@ -75,7 +75,7 @@ export interface InvitationDetails {
 
 /**
  * An organization context document.
- * Returned from /api/org/documents endpoint.
+ * Returned from /api/org/context endpoint.
  */
 export interface OrgContextDocument {
   id: string;

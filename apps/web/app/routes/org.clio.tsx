@@ -3,7 +3,7 @@ import { redirect, useSearchParams, useRevalidator } from "react-router";
 import type { Route } from "./+types/org.clio";
 import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
-import { Cable, Info, LockKeyhole, Plus } from "lucide-react";
+import { Cable, LockKeyhole, Plus } from "lucide-react";
 import type { SessionResponse, OrgMembership } from "~/lib/types";
 import { AppLayout } from "~/components/AppLayout";
 import { PageLayout } from "~/components/PageLayout";
@@ -78,6 +78,7 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
   // Action state
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
 
   // Feedback state
   const [error, setError] = useState<string | null>(null);
@@ -110,13 +111,6 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
   }
 
   async function handleDisconnect() {
-    const confirmed = confirm(
-      "Are you sure you want to disconnect your Clio account?"
-    );
-    if (!confirmed) {
-      return;
-    }
-
     setError(null);
     setSuccess(null);
     setIsDisconnecting(true);
@@ -133,6 +127,7 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
       }
 
       setSuccess("Clio account disconnected.");
+      setShowDisconnectModal(false);
       revalidator.revalidate();
     } catch (err) {
       const message =
@@ -176,24 +171,32 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
     ? `Loaded (v${clioStatus.schemaVersion || "?"})`
     : "Not Loaded";
 
-  const actionButtons = clioStatus.connected ? (
+  const statusIndicator = (
+    <div className="status-indicator btn btn-sm btn-secondaryƒ">
+      <span
+        className={`status-dot ${clioStatus.connected ? "status-dot-success" : "status-dot-error"}`}
+      />
+      <span className="text-secondary">
+        {clioStatus.connected ? "Connected" : "Not Connected"}
+      </span>
+    </div>
+  );
+
+  const actionButtons = (
     <>
-      <button
-        onClick={handleDisconnect}
-        disabled={isDisconnecting}
-        className="btn btn-danger-outline"
-      >
-        {isDisconnecting ? "Disconnecting..." : "Disconnect"}
-      </button>
-      <button onClick={handleConnect} className="btn btn-secondary">
-        Reconnect
-      </button>
+      {statusIndicator}
+      {!clioStatus.connected && (
+        <button onClick={handleConnect} className="btn btn-primary btn-sm">
+          <Plus strokeWidth={1.75} size={16} />
+          Connect to Clio
+        </button>
+      )}
+      {clioStatus.connected && (
+        <button onClick={handleConnect} className="btn btn-secondary btn-sm">
+          Reconnect
+        </button>
+      )}
     </>
-  ) : (
-    <button onClick={handleConnect} className="btn btn-primary btn-sm">
-      <Plus strokeWidth={1.75} size={16} />
-      Connect to Clio
-    </button>
   );
 
   return (
@@ -209,30 +212,23 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
         {/* Connection Status Section */}
         <section>
           <h2 className="text-title-3">Connection Status</h2>
-          <div className="card card-sm">
-            <div className="info-row">
-              <span className="info-label">Clio Account</span>
-              <span
-                className={
-                  clioStatus.connected ? "status-success" : "status-muted"
-                }
-              >
-                {clioStatus.connected ? "Connected" : "Not Connected"}
-              </span>
-            </div>
-
-            {clioStatus.connected && (
-              <div className="info-row">
-                <span className="info-label">Schema Cache</span>
-                <span
-                  className={
-                    clioStatus.schemaLoaded ? "status-success" : "status-muted"
-                  }
-                >
-                  {schemaVersionText}
-                </span>
-              </div>
-            )}
+          <div className="tableWrapper">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Clio Account</th>
+                  <th>Schema Cache</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    {clioStatus.connected ? "Connected" : "Not Connected"}
+                  </td>
+                  <td>{schemaVersionText}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </section>
 
@@ -246,7 +242,7 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
             <button
               onClick={handleRefreshSchema}
               disabled={isRefreshing}
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-sm"
             >
               {isRefreshing ? "Refreshing..." : "Refresh Schema"}
             </button>
@@ -284,7 +280,53 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
             </ul>
           </div>
         </section>
+
+        {/* Disconnect Section (only when connected) */}
+        {clioStatus.connected && (
+          <section className="dangerSection">
+            <h2 className="text-title-3">Disconnect Clio</h2>
+            <p className="section-description">
+              Disconnecting will revoke Docket&apos;s access to your Clio
+              account. You can reconnect at any time.
+            </p>
+            <button
+              onClick={() => setShowDisconnectModal(true)}
+              className="btn btn-danger-outline btn-sm"
+            >
+              Disconnect
+            </button>
+          </section>
+        )}
       </PageLayout>
+
+      {/* Disconnect Confirmation Modal */}
+      {showDisconnectModal && (
+        <div className="modal-overlay" onClick={() => setShowDisconnectModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-title-3">Disconnect Clio?</h2>
+            <p className="text-secondary">
+              This will revoke Docket&apos;s access to your Clio account. You
+              can reconnect at any time.
+            </p>
+            <div className="modal-actions">
+              <button
+                onClick={() => setShowDisconnectModal(false)}
+                className="btn btn-secondary btn-sm"
+                disabled={isDisconnecting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDisconnect}
+                className="btn btn-danger btn-sm"
+                disabled={isDisconnecting}
+              >
+                {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

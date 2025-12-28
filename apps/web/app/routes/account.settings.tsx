@@ -186,18 +186,6 @@ export default function AccountSettingsPage({
           <h2 className="text-title-3">Account</h2>
           <div className="form-card">
             <div className="form-group">
-              <label htmlFor="email" className="form-label">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={user.email}
-                disabled
-                className="form-input input-disabled"
-              />
-            </div>
-            <div className="form-group">
               <label htmlFor="name" className="form-label">
                 Name
               </label>
@@ -207,6 +195,18 @@ export default function AccountSettingsPage({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="form-input"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="email" className="form-label">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={user.email}
+                disabled
+                className="form-input input-disabled"
               />
             </div>
           </div>
@@ -277,21 +277,16 @@ export default function AccountSettingsPage({
         {showDeleteModal && deletionPreview && (
           <div className="modal-overlay" onClick={handleCloseModal}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <h2
-                className="modal-title"
-                style={{ color: "var(--error-primary)" }}
-              >
-                Delete Account
-              </h2>
+              <h2 className="modal-title">Delete Account</h2>
 
-              <div className="alert alert-error">
+              <div
+                className="alert alert-error"
+                style={{ marginBottom: "-11px" }}
+              >
                 This will permanently delete:
               </div>
 
-              <ul
-                className="text-secondary"
-                style={{ paddingLeft: "1.5rem", margin: "1rem 0" }}
-              >
+              <ul className="text-secondary text-callout">
                 <li>
                   Your account (<strong>{deletionPreview.user?.email}</strong>)
                 </li>
@@ -332,14 +327,14 @@ export default function AccountSettingsPage({
               <div className="modal-actions">
                 <button
                   onClick={handleCloseModal}
-                  className="btn btn-secondary"
+                  className="btn btn-secondary btn-lg btn-lg-fit"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDeleteAccount}
                   disabled={isDeleting || confirmEmail !== user.email}
-                  className="btn btn-danger"
+                  className="btn btn-danger btn-lg btn-lg-fit"
                 >
                   {isDeleting ? "Deleting..." : "Delete Account"}
                 </button>

@@ -209,7 +209,9 @@ export default function AuthPage() {
     return (
       <main className={styles.page}>
         <div className={styles.container}>
-          <h1 className="text-large-title" style={{ textAlign: "center" }}>Invitation Expired</h1>
+          <h1 className="text-large-title" style={{ textAlign: "center" }}>
+            Invitation Expired
+          </h1>
           <p className={styles.subtitle}>
             This invitation to join {invitation.orgName} has expired. Please
             contact your organization admin.
@@ -229,7 +231,9 @@ export default function AuthPage() {
     return (
       <main className={styles.page}>
         <div className={styles.container}>
-          <h1 className="text-large-title" style={{ textAlign: "center" }}>Already Accepted</h1>
+          <h1 className="text-large-title" style={{ textAlign: "center" }}>
+            Already Accepted
+          </h1>
           <p className={styles.subtitle}>
             This invitation has already been accepted.
           </p>
@@ -248,7 +252,9 @@ export default function AuthPage() {
     return (
       <main className={styles.page}>
         <div className={styles.container}>
-          <h1 className="text-large-title" style={{ textAlign: "center" }}>Check your email</h1>
+          <h1 className="text-large-title" style={{ textAlign: "center" }}>
+            Check your email
+          </h1>
           <p className={styles.subtitle}>
             We sent a verification link to <strong>{email}</strong>. Click the
             link to verify your account.
@@ -292,7 +298,12 @@ export default function AuthPage() {
     return (
       <main className={styles.page}>
         <div className={styles.container}>
-          <h1 className="text-large-title" style={{ textAlign: "center", maxWidth: "10em" }}>Work with Docket Case Management</h1>
+          <h1
+            className="text-large-title"
+            style={{ textAlign: "center", maxWidth: "10em" }}
+          >
+            Work with Docket Case Management
+          </h1>
           <p className={styles.subtitle}>
             {invitation
               ? `${invitation.inviterName} invited you to join ${invitation.orgName}. Sign in or create an account.`
@@ -355,7 +366,9 @@ export default function AuthPage() {
     return (
       <main className={styles.page}>
         <div className={styles.container}>
-          <h1 className="text-large-title" style={{ textAlign: "center" }}>Welcome back</h1>
+          <h1 className="text-large-title" style={{ textAlign: "center" }}>
+            Welcome back
+          </h1>
           <p className={styles.subtitle}>
             {invitation
               ? `Continue to Docket as a ${invitation.role} of ${invitation.orgName}.`
@@ -434,7 +447,9 @@ export default function AuthPage() {
     return (
       <main className={styles.page}>
         <div className={styles.container}>
-          <h1 className="text-large-title" style={{ textAlign: "center" }}>Welcome back</h1>
+          <h1 className="text-large-title" style={{ textAlign: "center" }}>
+            Welcome back
+          </h1>
           <p className={styles.subtitle}>
             This account uses Google sign-in. Continue with Google to access
             your account.
@@ -478,7 +493,9 @@ export default function AuthPage() {
   return (
     <main className={styles.page}>
       <div className={styles.container}>
-        <h1 className="text-large-title" style={{ textAlign: "center" }}>Create your account</h1>
+        <h1 className="text-large-title" style={{ textAlign: "center" }}>
+          Create your account
+        </h1>
         <p className={styles.subtitle}>
           {invitation ? (
             <>

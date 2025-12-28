@@ -245,7 +245,7 @@ async function fetchKBChunksFromDB(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Organization Context Retrieval
+// Org Context Retrieval
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function retrieveOrgChunks(

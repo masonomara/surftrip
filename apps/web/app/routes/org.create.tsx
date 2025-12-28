@@ -209,7 +209,12 @@ export default function OrgCreatePage(_props: Route.ComponentProps) {
         </div>
 
         <h1 className="text-title-2">{currentStepConfig.title}</h1>
-        <p className="text-secondary" style={{ marginTop: "0.5rem", marginBottom: "1.5rem" }}>{currentStepConfig.subtitle}</p>
+        <p
+          className="text-secondary"
+          style={{ marginTop: "0.5rem", marginBottom: "1.5rem" }}
+        >
+          {currentStepConfig.subtitle}
+        </p>
 
         {error && <div className="alert alert-error">{error}</div>}
 

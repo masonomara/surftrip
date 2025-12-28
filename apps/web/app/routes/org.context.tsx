@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { redirect } from "react-router";
-import type { Route } from "./+types/org.documents";
+import type { Route } from "./+types/org.context";
 import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
 import { validateFile, formatFileSize } from "~/lib/file-validation";
@@ -11,8 +11,8 @@ import type {
 } from "~/lib/types";
 import { AppLayout } from "~/components/AppLayout";
 import { PageLayout } from "~/components/PageLayout";
-import styles from "~/styles/org-documents.module.css";
-import { Info, Settings } from "lucide-react";
+import styles from "~/styles/org-context.module.css";
+import { Info, Plus, Settings } from "lucide-react";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const cookie = request.headers.get("cookie") || "";
@@ -49,7 +49,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   }
 
   // Fetch documents
-  const docsResponse = await apiFetch(context, "/api/org/documents", cookie);
+  const docsResponse = await apiFetch(context, "/api/org/context", cookie);
 
   const documents = docsResponse.ok
     ? ((await docsResponse.json()) as OrgContextDocument[])
@@ -99,7 +99,7 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch(`${API_URL}/api/org/documents`, {
+      const response = await fetch(`${API_URL}/api/org/context`, {
         method: "POST",
         body: formData,
         credentials: "include",
@@ -140,13 +140,10 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
     }
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/org/documents/${documentId}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-        }
-      );
+      const response = await fetch(`${API_URL}/api/org/context/${documentId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
 
       if (!response.ok) {
         throw new Error("Failed to delete document");
@@ -211,9 +208,9 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
   }
 
   return (
-    <AppLayout user={user} org={org} currentPath="/org/documents">
+    <AppLayout user={user} org={org} currentPath="/org/context">
       <PageLayout
-        title="Org Context Documents"
+        title="Org Context"
         subtitle="Upload your firm's internal documents for Docket to use when answering questions."
       >
         <section className="infoSection">
@@ -266,7 +263,10 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
                 </div>
               ) : (
                 <>
-                  <span className={styles.uploadIcon}>+</span>
+                  <Plus
+                    className={styles.uploadPlus}
+                    color={"var(--text-primary)"}
+                  />
                   <span className={styles.uploadText}>
                     Drop a file here or click to upload
                   </span>
@@ -288,35 +288,37 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
           {documents.length === 0 ? (
             <p className="empty-state">No documents uploaded yet.</p>
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Filename</th>
-                  <th>Size</th>
-                  <th>Chunks</th>
-                  <th>Uploaded</th>
-                  <th style={{ textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((doc) => (
-                  <tr key={doc.id}>
-                    <td>{doc.filename}</td>
-                    <td>{formatFileSize(doc.size)}</td>
-                    <td>{doc.chunkCount}</td>
-                    <td>{new Date(doc.uploadedAt).toLocaleDateString()}</td>
-                    <td style={{ textAlign: "right" }}>
-                      <button
-                        onClick={() => handleDelete(doc.id, doc.filename)}
-                        className="btn btn-danger-outline btn-sm"
-                      >
-                        Delete
-                      </button>
-                    </td>
+            <div className="tableWrapper">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Filename</th>
+                    <th>Size</th>
+                    <th>Chunks</th>
+                    <th>Uploaded</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {documents.map((doc) => (
+                    <tr key={doc.id}>
+                      <td>{doc.filename}</td>
+                      <td>{formatFileSize(doc.size)}</td>
+                      <td>{doc.chunkCount}</td>
+                      <td>{new Date(doc.uploadedAt).toLocaleDateString()}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <button
+                          onClick={() => handleDelete(doc.id, doc.filename)}
+                          className="btn btn-danger-outline btn-sm"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 

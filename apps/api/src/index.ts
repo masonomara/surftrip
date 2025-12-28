@@ -301,16 +301,16 @@ async function routeRequest(
   // Document Management (Org Context)
   // ============================================================
 
-  if (path === "/api/org/documents" && method === "GET") {
+  if (path === "/api/org/context" && method === "GET") {
     return handleGetDocuments(request, env);
   }
 
-  if (path === "/api/org/documents" && method === "POST") {
+  if (path === "/api/org/context" && method === "POST") {
     return handleUploadDocument(request, env);
   }
 
-  // Delete document: /api/org/documents/:documentId
-  const documentMatch = path.match(/^\/api\/org\/documents\/([^/]+)$/);
+  // Delete document: /api/org/context/:documentId
+  const documentMatch = path.match(/^\/api\/org\/context\/([^/]+)$/);
   if (documentMatch && method === "DELETE") {
     return handleDeleteDocument(request, env, documentMatch[1]);
   }

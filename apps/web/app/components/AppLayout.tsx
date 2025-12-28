@@ -74,7 +74,10 @@ export function AppLayout({ children, org, currentPath }: AppLayoutProps) {
                 to="/dashboard"
                 className={navItemClass("/dashboard", currentPath)}
               >
-                <LayoutDashboard className={styles.navIcon} strokeWidth={1.75} />
+                <LayoutDashboard
+                  className={styles.navIcon}
+                  strokeWidth={1.75}
+                />
                 Dashboard
               </Link>
             </li>
@@ -88,11 +91,11 @@ export function AppLayout({ children, org, currentPath }: AppLayoutProps) {
             <ul className={styles.navList}>
               <li>
                 <Link
-                  to="/org/members"
-                  className={navItemClass("/org/members", currentPath)}
+                  to="/org/context"
+                  className={navItemClass("/org/context", currentPath)}
                 >
-                  <Users className={styles.navIcon} />
-                  Members
+                  <FileText className={styles.navIcon} strokeWidth={1.75} />
+                  Organization Context
                 </Link>
               </li>
               <li>
@@ -106,11 +109,11 @@ export function AppLayout({ children, org, currentPath }: AppLayoutProps) {
               </li>
               <li>
                 <Link
-                  to="/org/documents"
-                  className={navItemClass("/org/documents", currentPath)}
+                  to="/org/members"
+                  className={navItemClass("/org/members", currentPath)}
                 >
-                  <FileText className={styles.navIcon} strokeWidth={1.75} />
-                  Documents
+                  <Users className={styles.navIcon} />
+                  Members
                 </Link>
               </li>
             </ul>
@@ -132,10 +135,13 @@ export function AppLayout({ children, org, currentPath }: AppLayoutProps) {
             </li>
           </ul>
         </nav>
-
+        <div className={styles.orgInfoDivider} />
         {/* Org info at bottom */}
         {org?.org?.name && (
-          <Link to="/org/settings" className={styles.orgInfo}>
+          <Link
+            to="/org/settings"
+            className={`${styles.orgInfo} ${currentPath === "/org/settings" ? styles.orgInfoActive : ""}`}
+          >
             <span className={styles.orgAvatar}>
               {org.org.name
                 .split(" ")
@@ -147,7 +153,11 @@ export function AppLayout({ children, org, currentPath }: AppLayoutProps) {
             <span className={styles.orgDetails}>
               <span className={styles.orgName}>{org.org.name}</span>
               <span className={styles.orgRole}>
-                {org.isOwner ? "Owner" : org.role === "admin" ? "Admin" : "Member"}
+                {org.isOwner
+                  ? "Owner"
+                  : org.role === "admin"
+                    ? "Admin"
+                    : "Member"}
               </span>
             </span>
           </Link>

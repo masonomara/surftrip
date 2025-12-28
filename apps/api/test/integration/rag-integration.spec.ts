@@ -559,10 +559,10 @@ describe.skipIf(!integrationEnabled)("RAG Integration", () => {
   });
 
   // ==========================================================================
-  // Organization Context Retrieval Tests
+  // Org Context Retrieval Tests
   // ==========================================================================
 
-  describe("Organization Context Retrieval", () => {
+  describe("Org Context Retrieval", () => {
     const noFilters = {
       jurisdictions: [],
       practiceTypes: [],

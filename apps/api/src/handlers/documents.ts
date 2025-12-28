@@ -43,7 +43,7 @@ async function getAdminMembership(
 }
 
 /**
- * GET /api/org/documents
+ * GET /api/org/context
  * Lists all documents uploaded to the organization's context.
  * Requires admin access.
  */
@@ -68,7 +68,7 @@ export async function handleGetDocuments(
 }
 
 /**
- * POST /api/org/documents
+ * POST /api/org/context
  * Uploads a new document to the organization's context.
  * The document is processed, chunked, and indexed for RAG retrieval.
  * Requires admin access.
@@ -161,7 +161,7 @@ export async function handleUploadDocument(
 }
 
 /**
- * DELETE /api/org/documents/:documentId
+ * DELETE /api/org/context/:documentId
  * Deletes a document from the organization's context.
  * Also removes all associated chunks and vector embeddings.
  * Requires admin access.

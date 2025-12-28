@@ -347,21 +347,16 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
         {showDeleteModal && deletionPreview && (
           <div className="modal-overlay" onClick={handleCloseDeleteModal}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <h2
-                className="modal-title"
-                style={{ color: "var(--error-primary)" }}
-              >
-                Delete Organization
-              </h2>
+              <h2 className="modal-title">Delete Organization</h2>
 
-              <div className="alert alert-error">
+              <div
+                className="alert alert-error"
+                style={{ marginBottom: "-11px" }}
+              >
                 This will permanently delete:
               </div>
 
-              <ul
-                className="text-secondary"
-                style={{ margin: "0 0 1.5rem 0", paddingLeft: "1.5rem" }}
-              >
+              <ul className="text-secondary text-callout">
                 <li>
                   <strong>{deletionPreview.org?.name}</strong> organization
                 </li>
@@ -390,14 +385,14 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
               <div className="modal-actions">
                 <button
                   onClick={handleCloseDeleteModal}
-                  className="btn btn-secondary"
+                  className="btn btn-secondary btn-lg btn-lg-fit"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDeleteOrg}
                   disabled={isDeleting || confirmName !== org.org.name}
-                  className="btn btn-danger"
+                  className="btn btn-danger btn-lg btn-lg-fit"
                 >
                   {isDeleting ? "Deleting..." : "Delete Organization"}
                 </button>
