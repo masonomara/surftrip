@@ -10,6 +10,10 @@ export default defineConfig(({ isSsrBuild }) => ({
   },
   server: {
     port: 5173,
+    watch: {
+      // Ignore editor temp files to prevent HMR errors
+      ignored: ["**/*.tmp*", "**/*~", "**/.#*"],
+    },
   },
   plugins: [cloudflareDevProxy(), reactRouter()],
 }));

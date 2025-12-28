@@ -53,10 +53,39 @@ npm run dev:web   # http://localhost:5173
 ## Running Tests
 
 ```bash
-npm test          # Unit tests
-npm run test:e2e  # End-to-end tests
-npm run test:all  # Both
+npm test                    # Unit tests (all packages)
+npm run test:e2e            # End-to-end tests
+npm run test:all            # Both
+
+# Web app specific
+cd apps/web
+npm test                    # Unit tests
+npm run test:integration    # Integration tests (requires API running)
+npm run test:e2e            # Playwright E2E tests
+npm run test:e2e:ui         # Playwright with interactive UI
 ```
+
+Integration tests require the API server running on `localhost:8787`.
+
+### E2E Testing with Authentication
+
+E2E tests use Playwright. Tests requiring authentication use **storage state** — a saved browser session that skips login:
+
+```bash
+cd apps/web
+
+# 1. Generate auth state (login manually, state saved to .auth/)
+npx playwright test --project=setup
+
+# 2. Run authenticated tests
+npm run test:e2e
+```
+
+The setup project logs in once and saves cookies/localStorage to `.auth/user.json`. Subsequent tests load this state to skip login.
+
+**Test structure:**
+- `test/e2e/auth-and-org.spec.ts` — Signup, org creation, member invitation flows
+- `playwright.config.ts` — Test configuration with setup project
 
 ## Deployment
 

@@ -56,6 +56,11 @@ export default function AccountSettingsPage({
   const { user, org } = loaderData;
   const navigate = useNavigate();
 
+  // Name editing state
+  const [name, setName] = useState(user.name);
+  const [isSaving, setIsSaving] = useState(false);
+  const nameChanged = name !== user.name;
+
   // Modal and deletion state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletionPreview, setDeletionPreview] =
@@ -63,6 +68,38 @@ export default function AccountSettingsPage({
   const [confirmEmail, setConfirmEmail] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleSaveName() {
+    setError(null);
+    setIsSaving(true);
+
+    try {
+      const response = await fetch(`${API_URL}/api/account`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        throw new Error(data.error || "Failed to update name");
+      }
+
+      // Reload to get fresh data
+      window.location.reload();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to update name";
+      setError(message);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function handleCancelName() {
+    setName(user.name);
+  }
 
   async function handleShowDeleteModal() {
     setError(null);
@@ -147,16 +184,50 @@ export default function AccountSettingsPage({
         {/* Account Information Section */}
         <section>
           <h2 className="text-title-3">Account</h2>
-          <div className="info-card">
-            <div className="info-row">
-              <span className="info-label">Email</span>
-              <span className="info-value">{user.email}</span>
+          <div className="form-card">
+            <div className="form-group">
+              <label htmlFor="email" className="form-label">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={user.email}
+                disabled
+                className="form-input input-disabled"
+              />
             </div>
-            <div className="info-row">
-              <span className="info-label">Name</span>
-              <span className="info-value">{user.name}</span>
+            <div className="form-group">
+              <label htmlFor="name" className="form-label">
+                Name
+              </label>
+              <input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="form-input"
+              />
             </div>
           </div>
+          {nameChanged && (
+            <div className="btn-group">
+              <button
+                onClick={handleCancelName}
+                disabled={isSaving}
+                className="btn btn-lg btn-secondary btn-lg-fit"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveName}
+                disabled={isSaving}
+                className="btn btn-lg btn-primary btn-lg-fit"
+              >
+                {isSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          )}
         </section>
 
         {/* Session Section */}
@@ -173,7 +244,7 @@ export default function AccountSettingsPage({
               onClick={() =>
                 signOut().then(() => (window.location.href = "/auth"))
               }
-              className="btn btn-secondary"
+              className="btn btn-sm btn-secondary"
             >
               Sign Out
             </button>
@@ -182,12 +253,7 @@ export default function AccountSettingsPage({
 
         {/* Danger Zone Section */}
         <section>
-          <h2
-            className="text-title-3"
-            style={{ color: "var(--error-primary)" }}
-          >
-            Danger Zone
-          </h2>
+          <h2 className="text-title-3">Danger Zone</h2>
 
           <div className="info-card">
             <div>
@@ -198,7 +264,10 @@ export default function AccountSettingsPage({
               </p>
             </div>
 
-            <button onClick={handleShowDeleteModal} className="btn btn-danger">
+            <button
+              onClick={handleShowDeleteModal}
+              className="btn btn-sm btn-danger"
+            >
               Delete Account
             </button>
           </div>

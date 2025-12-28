@@ -11,7 +11,7 @@ export const PageLayoutContext = createContext<PageLayoutContextValue | null>(
 );
 
 interface PageLayoutProps {
-  title: string;
+  title?: string;
   subtitle?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
@@ -29,19 +29,31 @@ export function PageLayout({
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerContent}>
-          <h1 className="text-title-2">{title}</h1>
-          {subtitle && <p className="text-body text-secondary" style={{ marginTop: "0.5rem" }}>{subtitle}</p>}
+          <h1 className="text-title-1">{title}</h1>
+          {subtitle && (
+            <p
+              className="text-body text-secondary"
+              style={{ marginTop: "0.5em", color: "var(--text-secondary)" }}
+            >
+              {subtitle}
+            </p>
+          )}
+          {actions && (
+            <div className={styles.actionsMobileWrapper}>{actions}</div>
+          )}
         </div>
         <div className={styles.headerActions}>
-          {actions}
+          {actions && (
+            <div className={styles.actionsDesktopWrapper}>{actions}</div>
+          )}
           {context && (
             <button
               type="button"
-              className={styles.menuButton}
+              className={`${styles.menuButton} btn-sm btn`}
               onClick={context.onMenuOpen}
               aria-label="Open menu"
             >
-              <Menu size={24} />
+              <span>Menu</span> <Menu size={16} />
             </button>
           )}
         </div>

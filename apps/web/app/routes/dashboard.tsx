@@ -52,30 +52,26 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
     <AppLayout user={user} org={org} currentPath="/dashboard">
       <PageLayout title="Dashboard" subtitle={`Welcome back, ${user.name}`}>
         {org === null ? (
-          <div className="card">
-            <h2 className="text-title-3" style={{ marginBottom: "0.5rem" }}>
-              Get Started
-            </h2>
-            <p className="text-secondary" style={{ marginBottom: "1rem" }}>
-              You're not part of an organization yet. Create one to start using
-              Docket, or wait for an invitation.
-            </p>
-            <Link to="/org/create" className="btn btn-primary">
-              Create an organization
-            </Link>
-          </div>
-        ) : (
-          <div className="card">
-            <div
-              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-            >
-              <h2 className="text-title-3">{org.org.name}</h2>
-              <span className="badge">{roleDisplay}</span>
+          <section>
+            <h2 className="text-title-3">Get Started</h2>
+            <div className="info-card">
+              <div>
+                <h3 className="text-headline">Your organization</h3>
+                <p className="text-secondary">
+                  You're not part of an organization yet. Create one to start
+                  using Docket, or wait for an invitation.
+                </p>
+              </div>
+              <button
+                onClick={() => (window.location.href = "/org/create")}
+                className="btn btn-sm btn-primary"
+              >
+                Create organization
+              </button>
             </div>
-            <p className="text-secondary" style={{ marginTop: "0.5rem" }}>
-              Your organization is set up and ready to use.
-            </p>
-          </div>
+          </section>
+        ) : (
+          <></>
         )}
       </PageLayout>
     </AppLayout>

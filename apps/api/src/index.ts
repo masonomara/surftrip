@@ -28,6 +28,7 @@ import {
 } from "./handlers/members";
 import {
   handleGetAccountDeletionPreview,
+  handleUpdateAccount,
   handleDeleteAccount,
 } from "./handlers/account";
 import { handleCheckEmail } from "./handlers/auth";
@@ -286,6 +287,10 @@ async function routeRequest(
 
   if (path === "/api/account/deletion-preview" && method === "GET") {
     return handleGetAccountDeletionPreview(request, env);
+  }
+
+  if (path === "/api/account" && method === "PATCH") {
+    return handleUpdateAccount(request, env);
   }
 
   if (path === "/api/account" && method === "DELETE") {

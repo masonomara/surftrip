@@ -77,3 +77,8 @@ CLAUDE.md
 
 .react-router/
 build/
+
+# Playwright
+test-results/
+playwright-report/
+**/test/e2e/.auth/user.json

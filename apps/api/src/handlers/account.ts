@@ -50,6 +50,60 @@ export async function handleGetAccountDeletionPreview(
 }
 
 /**
+ * PATCH /api/account
+ *
+ * Updates the authenticated user's account information.
+ * Currently supports updating the user's display name.
+ *
+ * Request body: { name?: string }
+ */
+export async function handleUpdateAccount(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  const session = await getAuthenticatedSession(request, env);
+
+  if (!session?.user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let body: { name?: string };
+
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  // Validate name if provided
+  if (body.name !== undefined) {
+    const trimmedName = body.name.trim();
+
+    if (trimmedName.length === 0) {
+      return Response.json({ error: "Name cannot be empty" }, { status: 400 });
+    }
+
+    if (trimmedName.length > 100) {
+      return Response.json(
+        { error: "Name must be 100 characters or less" },
+        { status: 400 }
+      );
+    }
+
+    // Update the user's name
+    await env.DB.prepare(
+      "UPDATE user SET name = ?, updated_at = ? WHERE id = ?"
+    )
+      .bind(trimmedName, Date.now(), session.user.id)
+      .run();
+
+    return Response.json({ success: true, name: trimmedName });
+  }
+
+  return Response.json({ error: "No fields to update" }, { status: 400 });
+}
+
+/**
  * DELETE /api/account
  *
  * Permanently deletes the user's account and all associated data.

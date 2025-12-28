@@ -3,6 +3,7 @@ import { redirect } from "react-router";
 import type { Route } from "./+types/org.documents";
 import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
+import { validateFile, formatFileSize } from "~/lib/file-validation";
 import type {
   SessionResponse,
   OrgMembership,
@@ -11,26 +12,7 @@ import type {
 import { AppLayout } from "~/components/AppLayout";
 import { PageLayout } from "~/components/PageLayout";
 import styles from "~/styles/org-documents.module.css";
-
-// Allowed MIME types for document upload
-const ALLOWED_MIME_TYPES = [
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.oasis.opendocument.text",
-  "application/vnd.oasis.opendocument.spreadsheet",
-  "application/vnd.apple.numbers",
-  "application/xml",
-  "text/markdown",
-  "text/plain",
-  "text/html",
-  "text/csv",
-  "text/xml",
-];
-
-// Maximum file size: 25MB
-const MAX_FILE_SIZE = 25 * 1024 * 1024;
+import { Info, Settings } from "lucide-react";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const cookie = request.headers.get("cookie") || "";
@@ -99,33 +81,13 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /**
-   * Format file size for display
-   */
-  function formatFileSize(bytes: number): string {
-    if (bytes < 1024) {
-      return `${bytes} B`;
-    }
-
-    if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(1)} KB`;
-    }
-
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  }
-
-  /**
    * Validate and upload a file
    */
   async function uploadFile(file: File) {
-    // Validate file type
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-      setError("File type not supported. Use PDF, DOCX, or text files.");
-      return;
-    }
-
-    // Validate file size
-    if (file.size > MAX_FILE_SIZE) {
-      setError("File too large (max 25MB).");
+    // Validate file
+    const validation = validateFile(file);
+    if (!validation.valid) {
+      setError(validation.error || "Invalid file");
       return;
     }
 
@@ -254,109 +216,131 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
         title="Org Context Documents"
         subtitle="Upload your firm's internal documents for Docket to use when answering questions."
       >
+        <section className="infoSection">
+          <Info
+            strokeWidth={2}
+            size={16}
+            style={{ marginTop: "1.5px", minHeight: "16px", minWidth: "16px" }}
+          />
+          <div>
+            <h3 className="text-headline">
+              Upload procedures, templates, and policies. Avoid sensitive client
+              data.
+            </h3>
+          </div>
+        </section>
         {error && <div className="alert alert-error">{error}</div>}
 
-      {/* Upload Area */}
-      <div
-        className={uploadAreaClass}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf,.docx,.xlsx,.pptx,.odt,.ods,.numbers,.md,.txt,.html,.csv,.xml"
-          onChange={handleFileInputChange}
-          disabled={isUploading}
-          id="file-input"
-          className={styles.hiddenInput}
-        />
+        <section>
+          <h2 className="text-title-3">Upload Documents</h2>
+          {/* Upload Area */}
+          <div
+            className={uploadAreaClass}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.xlsx,.pptx,.odt,.ods,.numbers,.md,.txt,.html,.csv,.xml"
+              onChange={handleFileInputChange}
+              disabled={isUploading}
+              id="file-input"
+              className={styles.hiddenInput}
+            />
 
-        <label
-          htmlFor="file-input"
-          className={`${styles.uploadLabel} ${isUploading ? styles.disabled : ""}`}
-        >
-          {isUploading ? (
-            <div className={styles.uploadProgress}>
-              <div className={styles.progressBar}>
-                <div
-                  className={styles.progressFill}
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-              <span className={styles.progressText}>Processing...</span>
-            </div>
-          ) : (
-            <>
-              <span className={styles.uploadIcon}>+</span>
-              <span className={styles.uploadText}>
-                Drop a file here or click to upload
-              </span>
-              <span className={styles.uploadHint}>
-                PDF, DOCX, XLSX, or text files (max 25MB)
-              </span>
-            </>
-          )}
-        </label>
-      </div>
+            <label
+              htmlFor="file-input"
+              className={`${styles.uploadLabel} ${isUploading ? styles.disabled : ""}`}
+            >
+              {isUploading ? (
+                <div className={styles.uploadProgress}>
+                  <div className={styles.progressBar}>
+                    <div
+                      className={styles.progressFill}
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                  <span className={styles.progressText}>Processing...</span>
+                </div>
+              ) : (
+                <>
+                  <span className={styles.uploadIcon}>+</span>
+                  <span className={styles.uploadText}>
+                    Drop a file here or click to upload
+                  </span>
+                  <span className={styles.uploadHint}>
+                    PDF, DOCX, XLSX, or text files (max 25MB)
+                  </span>
+                </>
+              )}
+            </label>
+          </div>
+        </section>
 
-      {/* Documents Table */}
-      <section>
-        <div className="section-header">
+        {/* Documents Table */}
+        <section>
           <h2 className="text-title-3">
-            Uploaded Documents ({documents.length})
+            Manage Documents ({documents.length})
           </h2>
-        </div>
 
-        {documents.length === 0 ? (
-          <p className="empty-state">No documents uploaded yet.</p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Filename</th>
-                <th>Size</th>
-                <th>Chunks</th>
-                <th>Uploaded</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {documents.map((doc) => (
-                <tr key={doc.id}>
-                  <td>{doc.filename}</td>
-                  <td>{formatFileSize(doc.size)}</td>
-                  <td>{doc.chunkCount}</td>
-                  <td>{new Date(doc.uploadedAt).toLocaleDateString()}</td>
-                  <td style={{ textAlign: "right" }}>
-                    <button
-                      onClick={() => handleDelete(doc.id, doc.filename)}
-                      className="btn btn-danger-outline btn-sm"
-                    >
-                      Delete
-                    </button>
-                  </td>
+          {documents.length === 0 ? (
+            <p className="empty-state">No documents uploaded yet.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Filename</th>
+                  <th>Size</th>
+                  <th>Chunks</th>
+                  <th>Uploaded</th>
+                  <th style={{ textAlign: "right" }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+              </thead>
+              <tbody>
+                {documents.map((doc) => (
+                  <tr key={doc.id}>
+                    <td>{doc.filename}</td>
+                    <td>{formatFileSize(doc.size)}</td>
+                    <td>{doc.chunkCount}</td>
+                    <td>{new Date(doc.uploadedAt).toLocaleDateString()}</td>
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        onClick={() => handleDelete(doc.id, doc.filename)}
+                        className="btn btn-danger-outline btn-sm"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
 
         {/* Information Section */}
-        <section>
-          <div className="info-card" style={{ marginTop: "2rem" }}>
-            <h3 className="text-headline" style={{ marginBottom: "0.75rem" }}>How Org Context works</h3>
-            <ol className="text-secondary" style={{ paddingLeft: "1.25rem", lineHeight: "1.75" }}>
+        <section className="infoSection">
+          <Settings
+            strokeWidth={2}
+            size={16}
+            style={{ marginTop: "1.5px", minHeight: "16px", minWidth: "16px" }}
+          />
+
+          <div>
+            <h3 className="text-headline">How Org Context works</h3>
+            <ol
+              className="text-secondary"
+              style={{ paddingLeft: "1.25rem", lineHeight: "1.75" }}
+            >
               <li>Upload a document (PDF, DOCX, Markdown, etc.)</li>
               <li>Docket extracts text and creates vector embeddings</li>
-              <li>When users ask questions, relevant chunks are included in context</li>
+              <li>
+                When users ask questions, relevant chunks are included in
+                context
+              </li>
             </ol>
-            <p className="text-secondary" style={{ marginTop: "1rem" }}>
-              <strong className="text-primary">Tip:</strong> Upload procedures, templates, and policies.
-              Avoid sensitive client data.
-            </p>
           </div>
         </section>
       </PageLayout>

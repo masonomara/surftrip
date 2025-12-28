@@ -3,6 +3,7 @@ import { redirect, useSearchParams, useRevalidator } from "react-router";
 import type { Route } from "./+types/org.clio";
 import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
+import { Cable, Info, LockKeyhole, Plus } from "lucide-react";
 import type { SessionResponse, OrgMembership } from "~/lib/types";
 import { AppLayout } from "~/components/AppLayout";
 import { PageLayout } from "~/components/PageLayout";
@@ -189,7 +190,8 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
       </button>
     </>
   ) : (
-    <button onClick={handleConnect} className="btn btn-primary">
+    <button onClick={handleConnect} className="btn btn-primary btn-sm">
+      <Plus strokeWidth={1.75} size={16} />
       Connect to Clio
     </button>
   );
@@ -252,24 +254,30 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
         )}
 
         {/* Information Section */}
-        <section>
-          <div className="info-card">
-            <h3 className="text-headline" style={{ marginBottom: "0.5rem" }}>
-              What Docket can do with Clio:
-            </h3>
-            <ul
-              className="text-secondary"
-              style={{ paddingLeft: "1.25rem", marginBottom: "1rem" }}
-            >
+        <section className="infoSection">
+          <Cable
+            strokeWidth={2}
+            size={16}
+            style={{ marginTop: "1.5px", minHeight: "16px", minWidth: "16px" }}
+          />
+          <div>
+            <h3 className="text-headline">What Docket can do with Clio</h3>
+            <ul className="text-secondary">
               <li>Query matters, contacts, tasks, and calendar entries</li>
               <li>Create and update records (Admin only, with confirmation)</li>
               <li>Search across your firm&apos;s case data</li>
             </ul>
-
-            <h3 className="text-headline" style={{ marginBottom: "0.5rem" }}>
-              Security:
-            </h3>
-            <ul className="text-secondary" style={{ paddingLeft: "1.25rem" }}>
+          </div>
+        </section>
+        <section className="infoSection">
+          <LockKeyhole
+            strokeWidth={2}
+            size={16}
+            style={{ marginTop: "1.5px", minHeight: "16px", minWidth: "16px" }}
+          />
+          <div>
+            <h3 className="text-headline">Security</h3>
+            <ul className="text-secondary">
               <li>Tokens are encrypted and stored securely</li>
               <li>Access is limited to your Clio permissions</li>
               <li>Write operations require explicit confirmation</li>

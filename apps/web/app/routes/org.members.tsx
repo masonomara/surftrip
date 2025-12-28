@@ -11,6 +11,7 @@ import type {
 } from "~/lib/types";
 import { AppLayout } from "~/components/AppLayout";
 import { PageLayout } from "~/components/PageLayout";
+import { Plus } from "lucide-react";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const cookie = request.headers.get("cookie") || "";
@@ -181,22 +182,25 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <AppLayout user={user} org={org} currentPath="/org/members">
-      <PageLayout title="Members">
+      <PageLayout
+        title="Members"
+        actions={
+          <button
+            onClick={() => setShowInviteModal(true)}
+            className="btn btn-primary btn-sm"
+          >
+            <Plus strokeWidth={1.75} size={16} />
+            Invite Member
+          </button>
+        }
+      >
         {error && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 
         {/* Current Members Section */}
         <section>
           <div className="section-header">
-            <h2 className="text-title-3">
-              Current Members ({members.length})
-            </h2>
-            <button
-              onClick={() => setShowInviteModal(true)}
-              className="btn btn-primary"
-            >
-              Invite Member
-            </button>
+            <h2 className="text-title-3">Current Members ({members.length})</h2>
           </div>
 
           {members.length === 0 ? (
@@ -255,7 +259,7 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
                         <div className="btn-group">
                           {canTransferOwnership && (
                             <button
-                              className="action-btn"
+                              className="btn-primary"
                               onClick={() => handleOpenTransferModal(member)}
                             >
                               Transfer Ownership
@@ -263,7 +267,7 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
                           )}
                           {canEditRole && (
                             <button
-                              className="action-btn action-btn-danger"
+                              className="btn-primary btn-primary-danger"
                               onClick={() => handleRemoveMember(member)}
                             >
                               Remove
@@ -280,16 +284,14 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
         </section>
 
         {/* Pending Invitations Section */}
-        <section>
-          <div className="section-header">
-            <h2 className="text-title-3">
-              Pending Invitations ({invitations.length})
-            </h2>
-          </div>
+        {invitations.length > 0 && (
+          <section>
+            <div className="section-header">
+              <h2 className="text-title-3">
+                Pending Invitations ({invitations.length})
+              </h2>
+            </div>
 
-          {invitations.length === 0 ? (
-            <div className="empty-state">No pending invitations</div>
-          ) : (
             <table className="table">
               <thead>
                 <tr>
@@ -321,7 +323,7 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
                       </td>
                       <td>
                         <button
-                          className="action-btn action-btn-danger"
+                          className="btn-primary btn-primary-danger"
                           onClick={() => handleRevokeInvitation(invitation)}
                         >
                           Revoke
@@ -332,8 +334,8 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
                 })}
               </tbody>
             </table>
-          )}
-        </section>
+          </section>
+        )}
 
         {/* Invite Modal */}
         {showInviteModal && (

@@ -5,7 +5,6 @@ import {
   Users,
   Plug,
   FileText,
-  Settings,
   CircleUser,
   X,
 } from "lucide-react";
@@ -23,7 +22,9 @@ interface AppLayoutProps {
 /** Helper to build nav item class names */
 function navItemClass(path: string, currentPath: string): string {
   const isActive = currentPath === path;
-  return isActive ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem;
+  return isActive
+    ? `${styles.navItem} ${styles.navItemActive}`
+    : styles.navItem;
 }
 
 export function AppLayout({ children, org, currentPath }: AppLayoutProps) {
@@ -45,67 +46,71 @@ export function AppLayout({ children, org, currentPath }: AppLayoutProps) {
         />
       )}
 
-      <aside className={`${styles.sidebar} ${menuOpen ? styles.sidebarOpen : ""}`}>
+      <aside
+        className={`${styles.sidebar} ${menuOpen ? styles.sidebarOpen : ""}`}
+      >
         <div className={styles.sidebarHeader}>
           <div className={styles.logo}>
             <img src="/docket-logo.svg" alt="Docket" />
           </div>
           <button
             type="button"
-            className={styles.closeButton}
+            className={`${styles.closeButton} btn-sm btn`}
             onClick={handleCloseMenu}
             aria-label="Close menu"
           >
-            <X size={20} />
+            <span>Close</span> <X size={16} />
           </button>
         </div>
 
         {/* Work section - always visible */}
         <nav className={styles.section}>
-          <div className={styles.sectionLabel}>Work</div>
+          <div className={styles.sectionLabel} style={{ borderTop: "none" }}>
+            Work
+          </div>
           <ul className={styles.navList}>
             <li>
-              <Link to="/dashboard" className={navItemClass("/dashboard", currentPath)}>
-                <LayoutDashboard className={styles.navIcon} />
+              <Link
+                to="/dashboard"
+                className={navItemClass("/dashboard", currentPath)}
+              >
+                <LayoutDashboard className={styles.navIcon} strokeWidth={1.75} />
                 Dashboard
               </Link>
             </li>
           </ul>
         </nav>
 
-        {/* Manage section - only if user belongs to an org */}
-        {org && (
+        {/* Manage section - admin only */}
+        {isAdmin && (
           <nav className={styles.section}>
             <div className={styles.sectionLabel}>Manage</div>
             <ul className={styles.navList}>
-              {/* Admin-only links */}
-              {isAdmin && (
-                <>
-                  <li>
-                    <Link to="/org/members" className={navItemClass("/org/members", currentPath)}>
-                      <Users className={styles.navIcon} />
-                      Members
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/org/clio" className={navItemClass("/org/clio", currentPath)}>
-                      <Plug className={styles.navIcon} />
-                      Clio Connection
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/org/documents" className={navItemClass("/org/documents", currentPath)}>
-                      <FileText className={styles.navIcon} />
-                      Documents
-                    </Link>
-                  </li>
-                </>
-              )}
-              {/* Org settings - visible to all org members */}
               <li>
-                <Link to="/org/settings" className={navItemClass("/org/settings", currentPath)}>
-                  <Settings className={styles.navIcon} />
-                  Org Settings
+                <Link
+                  to="/org/members"
+                  className={navItemClass("/org/members", currentPath)}
+                >
+                  <Users className={styles.navIcon} />
+                  Members
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/org/clio"
+                  className={navItemClass("/org/clio", currentPath)}
+                >
+                  <Plug className={styles.navIcon} strokeWidth={1.75} />
+                  Clio Connection
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/org/documents"
+                  className={navItemClass("/org/documents", currentPath)}
+                >
+                  <FileText className={styles.navIcon} strokeWidth={1.75} />
+                  Documents
                 </Link>
               </li>
             </ul>
@@ -117,18 +122,43 @@ export function AppLayout({ children, org, currentPath }: AppLayoutProps) {
           <div className={styles.sectionLabel}>Account</div>
           <ul className={styles.navList}>
             <li>
-              <Link to="/account/settings" className={navItemClass("/account/settings", currentPath)}>
-                <CircleUser className={styles.navIcon} />
+              <Link
+                to="/account/settings"
+                className={navItemClass("/account/settings", currentPath)}
+              >
+                <CircleUser className={styles.navIcon} strokeWidth={1.75} />
                 User Settings
               </Link>
             </li>
           </ul>
         </nav>
+
+        {/* Org info at bottom */}
+        {org?.org?.name && (
+          <Link to="/org/settings" className={styles.orgInfo}>
+            <span className={styles.orgAvatar}>
+              {org.org.name
+                .split(" ")
+                .slice(0, 2)
+                .map((word: string) => word[0])
+                .join("")
+                .toUpperCase()}
+            </span>
+            <span className={styles.orgDetails}>
+              <span className={styles.orgName}>{org.org.name}</span>
+              <span className={styles.orgRole}>
+                {org.isOwner ? "Owner" : org.role === "admin" ? "Admin" : "Member"}
+              </span>
+            </span>
+          </Link>
+        )}
       </aside>
 
       <main className={styles.content}>
         <div className={styles.contentInner}>
-          <PageLayoutContext.Provider value={{ onMenuOpen: () => setMenuOpen(true) }}>
+          <PageLayoutContext.Provider
+            value={{ onMenuOpen: () => setMenuOpen(true) }}
+          >
             {children}
           </PageLayoutContext.Provider>
         </div>

@@ -3,13 +3,7 @@ import { redirect, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/org.settings";
 import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
-import {
-  FIRM_SIZES,
-  US_STATES,
-  PRACTICE_AREAS,
-  getFirmSizeLabel,
-  getPracticeAreaLabel,
-} from "~/lib/org-constants";
+import { FIRM_SIZES, US_STATES, PRACTICE_AREAS } from "~/lib/org-constants";
 import type { SessionResponse, OrgMembership } from "~/lib/types";
 import { AppLayout } from "~/components/AppLayout";
 import { PageLayout } from "~/components/PageLayout";
@@ -70,7 +64,6 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
   const isOwner = org.isOwner;
 
   // Edit form state
-  const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(org.org.name);
   const [editFirmSize, setEditFirmSize] = useState(org.org.firmSize || "");
   const [editJurisdictions, setEditJurisdictions] = useState<string[]>(
@@ -80,6 +73,17 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
     org.org.practiceTypes || []
   );
   const [isSaving, setIsSaving] = useState(false);
+
+  // Check if any field has changed
+  const originalJurisdictions = org.org.jurisdictions || [];
+  const originalPracticeTypes = org.org.practiceTypes || [];
+  const hasChanges =
+    editName !== org.org.name ||
+    editFirmSize !== (org.org.firmSize || "") ||
+    editJurisdictions.length !== originalJurisdictions.length ||
+    editJurisdictions.some((j) => !originalJurisdictions.includes(j)) ||
+    editPracticeTypes.length !== originalPracticeTypes.length ||
+    editPracticeTypes.some((p) => !originalPracticeTypes.includes(p));
 
   // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -126,7 +130,6 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
       }
 
       setSuccess("Organization updated");
-      setIsEditing(false);
       revalidator.revalidate();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to save";
@@ -142,7 +145,6 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
     setEditFirmSize(org.org.firmSize || "");
     setEditJurisdictions(org.org.jurisdictions || []);
     setEditPracticeTypes(org.org.practiceTypes || []);
-    setIsEditing(false);
     setError(null);
   }
 
@@ -205,17 +207,6 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
     setError(null);
   }
 
-  // Build display values for read-only view
-  const jurisdictionsDisplay = org.org.jurisdictions?.length
-    ? org.org.jurisdictions.join(", ")
-    : "Not set";
-
-  const practiceAreasDisplay = org.org.practiceTypes?.length
-    ? org.org.practiceTypes.map(getPracticeAreaLabel).join(", ")
-    : "Not set";
-
-  const roleDisplay = org.isOwner ? "Owner" : org.role;
-
   return (
     <AppLayout user={user} org={org} currentPath="/org/settings">
       <PageLayout title="Organization Settings">
@@ -224,148 +215,108 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
 
         {/* Organization Information Section */}
         <section>
-          <div className="section-header">
-            <h2 className="text-title-3">Organization</h2>
-            {isAdmin && !isEditing && (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="btn btn-secondary"
+          <h2 className="text-title-3">Organization</h2>
+          <div className="form-card">
+            <div className="form-group">
+              <label htmlFor="orgName" className="form-label">
+                Organization Name
+              </label>
+              <input
+                id="orgName"
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                disabled={!isAdmin}
+                className={`form-input${!isAdmin ? " input-disabled" : ""}`}
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="firmSize" className="form-label">
+                Firm Size
+              </label>
+              <select
+                id="firmSize"
+                value={editFirmSize}
+                onChange={(e) => setEditFirmSize(e.target.value)}
+                disabled={!isAdmin}
+                className={`form-select${!isAdmin ? " input-disabled" : ""}`}
               >
-                Edit
-              </button>
-            )}
-          </div>
+                <option value="">Select size...</option>
+                {FIRM_SIZES.map((size) => (
+                  <option key={size.id} value={size.id}>
+                    {size.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {isEditing ? (
-            <div className="card">
-              <div className="form-group">
-                <label htmlFor="orgName" className="form-label">
-                  Organization Name
-                </label>
-                <input
-                  id="orgName"
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="firmSize" className="form-label">
-                  Firm Size
-                </label>
-                <select
-                  id="firmSize"
-                  value={editFirmSize}
-                  onChange={(e) => setEditFirmSize(e.target.value)}
-                  className="form-select"
-                >
-                  <option value="">Select size...</option>
-                  {FIRM_SIZES.map((size) => (
-                    <option key={size.id} value={size.id}>
-                      {size.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Jurisdictions</label>
-                <div className="chip-grid">
-                  {US_STATES.map((state) => {
-                    const isSelected = editJurisdictions.includes(state);
-                    return (
-                      <button
-                        key={state}
-                        type="button"
-                        onClick={() =>
-                          setEditJurisdictions(
-                            toggleArrayItem(editJurisdictions, state)
-                          )
-                        }
-                        className={`chip ${isSelected ? "chip-selected" : ""}`}
-                      >
-                        {state}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Practice Areas</label>
-                <div className="chip-grid">
-                  {PRACTICE_AREAS.map((area) => {
-                    const isSelected = editPracticeTypes.includes(area.id);
-                    return (
-                      <button
-                        key={area.id}
-                        type="button"
-                        onClick={() =>
-                          setEditPracticeTypes(
-                            toggleArrayItem(editPracticeTypes, area.id)
-                          )
-                        }
-                        className={`chip ${isSelected ? "chip-selected" : ""}`}
-                      >
-                        {area.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div
-                className="modal-actions"
-                style={{
-                  marginTop: "1.5rem",
-                  paddingTop: "1rem",
-                  borderTop: "1px solid var(--border-default)",
-                }}
-              >
-                <button
-                  onClick={handleCancelEdit}
-                  className="btn btn-secondary"
-                  disabled={isSaving}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  className="btn btn-primary"
-                  disabled={isSaving}
-                >
-                  {isSaving ? "Saving..." : "Save Changes"}
-                </button>
+            <div className="form-group" style={{ gridColumn: "span 2" }}>
+              <label className="form-label">Jurisdictions</label>
+              <div className="chip-grid">
+                {US_STATES.map((state) => {
+                  const isSelected = editJurisdictions.includes(state);
+                  return (
+                    <button
+                      key={state}
+                      type="button"
+                      onClick={() =>
+                        isAdmin &&
+                        setEditJurisdictions(
+                          toggleArrayItem(editJurisdictions, state)
+                        )
+                      }
+                      disabled={!isAdmin}
+                      className={`chip ${isSelected ? "chip-selected" : ""}`}
+                    >
+                      {state}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          ) : (
-            <div className="info-card">
-              <div className="info-row">
-                <span className="info-label">Name</span>
-                <span className="info-value">{org.org.name}</span>
+
+            <div className="form-group" style={{ gridColumn: "span 2" }}>
+              <label className="form-label">Practice Areas</label>
+              <div className="chip-grid">
+                {PRACTICE_AREAS.map((area) => {
+                  const isSelected = editPracticeTypes.includes(area.id);
+                  return (
+                    <button
+                      key={area.id}
+                      type="button"
+                      onClick={() =>
+                        isAdmin &&
+                        setEditPracticeTypes(
+                          toggleArrayItem(editPracticeTypes, area.id)
+                        )
+                      }
+                      disabled={!isAdmin}
+                      className={`chip ${isSelected ? "chip-selected" : ""}`}
+                    >
+                      {area.label}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="info-row">
-                <span className="info-label">Firm Size</span>
-                <span className="info-value">
-                  {org.org.firmSize
-                    ? getFirmSizeLabel(org.org.firmSize)
-                    : "Not set"}
-                </span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Jurisdictions</span>
-                <span className="info-value">{jurisdictionsDisplay}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Practice Areas</span>
-                <span className="info-value">{practiceAreasDisplay}</span>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Your Role</span>
-                <span className="info-value">{roleDisplay}</span>
-              </div>
+            </div>
+          </div>
+          {hasChanges && (
+            <div className="btn-group">
+              <button
+                onClick={handleCancelEdit}
+                disabled={isSaving}
+                className="btn btn-lg btn-secondary btn-lg-fit"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="btn btn-lg btn-primary btn-lg-fit"
+              >
+                {isSaving ? "Saving..." : "Save Changes"}
+              </button>
             </div>
           )}
         </section>
@@ -373,22 +324,22 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
         {/* Danger Zone Section (Owner only) */}
         {isOwner && (
           <section>
-            <h2
-              className="text-title-3"
-              style={{ color: "var(--error-primary)" }}
-            >
-              Danger Zone
-            </h2>
-            <div>
-              <h3 className="text-headline">Delete Organization</h3>
-              <p className="text-secondary">
-                Permanently delete this organization and all its data. This
-                action cannot be undone.
-              </p>
+            <h2 className="text-title-3">Danger Zone</h2>
+            <div className="info-card">
+              <div>
+                <h3 className="text-headline">Delete Organization</h3>
+                <p className="text-secondary">
+                  Permanently delete this organization and all its data. This
+                  action cannot be undone.
+                </p>
+              </div>
+              <button
+                onClick={handleShowDeleteModal}
+                className="btn btn-sm btn-danger"
+              >
+                Delete Organization
+              </button>
             </div>
-            <button onClick={handleShowDeleteModal} className="btn btn-danger">
-              Delete Organization
-            </button>
           </section>
         )}
 

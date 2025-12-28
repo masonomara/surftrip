@@ -1,61 +1,39 @@
 /* :root {
-  --container: #ffffff;
-  --surface-1: #f9f9f9;
-  --surface-2: #f4f4f5;
-  --surface-3: #e7e7e9;
-  --brand-primary: #3872DCeb;
-  --brand-secondary: #3872DCc2;
-  --brand-tertiary: #3872DC61;
-  --brand-highlight: #3872DC1a;
-  --border-dark: #32333947;
-  --border-default: #3233391c;
-  --text-primary: #323339eb;
-  --text-secondary: #323339c2;
-  --text-tertiary: #32333961;
-    --container: rgba(34, 81, 191, 1);
-
+    --base-brand: rgba(34, 81, 191, 1);
 } */
 
 :root {
   --container: #ffffff;
 
   --surface-1: #f9f8f6;
-  --surface-2: #f5f3f0;
-  --surface-3: #e8e5de;
+  --surface-2: #f4f3f0;
+  --surface-3: #e8e5dd;
 
-  --text-primary: rgba(0, 0, 0, 0.92);
-  --text-secondary: rgba(0, 0, 0, 0.76);
-  --text-tertiary: rgba(0, 0, 0, 0.38);
-  --text-highlight: rgba(0, 0, 0, 0.11);
+  --text-primary: #131416;
+  --text-secondary: #3c3d43;
+  --text-tertiary: #6f717a;
 
-  --border-solid: rgba(0, 0, 0, 0.92);
-  --border-dark: rgba(0, 0, 0, 0.28);
-  --border-default: rgba(0, 0, 0, 0.11);
+  --border-solid: rgba(29, 29, 35, 1);
+  --border-dark: rgba(29, 29, 35, 0.3);
+  --border-default: rgba(29, 29, 35, 0.15);
 
-  --brand-primary: rgba(0, 0, 0, 0.92);
-  --brand-secondary: rgba(0, 0, 0, 0.76);
-  --brand-tertiary: rgba(0, 0, 0, 0.38);
-  --brand-highlight: rgba(0, 0, 0, 0.11);
+  --brand-primary: #2053b9;
+  --brand-secondary: #255ccc;
+  --brand-highlight: rgba(32, 83, 185, 0.15);
 
-  --error-primary: rgba(0, 0, 0, 0.92);
-  --error-secondary: rgba(0, 0, 0, 0.76);
-  --error-tertiary: rgba(0, 0, 0, 0.38);
-  --error-highlight: rgba(0, 0, 0, 0.11);
+  --error-primary: #a82639;
+  --error-secondary: #b92b40;
+  --error-highlight: rgba(168, 38, 57, 0.15);
 
-  --success-primary: rgba(0, 0, 0, 0.92);
-  --success-secondary: rgba(0, 0, 0, 0.76);
-  --success-tertiary: rgba(0, 0, 0, 0.38);
-  --success-highlight: rgba(0, 0, 0, 0.11);
+  --overlay: rgba(29, 29, 35, 0.6);
 
-  --overlay: rgba(0, 0, 0, 0.6);
-
-  --button-primary: rgba(0, 0, 0, 0.92);
+  --button-primary: #131416;
   --button-primary-text: #ffffff;
-  --button-primary-border: rgba(0, 0, 0, 0.11);
+  --button-primary-border: rgba(29, 29, 35, 0.15);
 
   --button-secondary: rgba(0, 0, 0, 0);
-  --button-secondary-text: rgba(0, 0, 0, 0.92);
-  --button-secondary-border: rgba(0, 0, 0, 0.92);
+  --button-secondary-text: #131416;
+  --button-secondary-border: rgba(29, 29, 35, 0.15);
 }
 
 *,
@@ -79,12 +57,40 @@ body {
 
 section {
   margin-bottom: 16px !important;
-  padding: 24px;
+  padding: 22px;
   border-radius: 12px;
-  gap: 24px;
+  gap: 22px;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-default);
+}
+
+.infoSection {
+  background-color: var(--surface-2);
+  border: 1px solid var(--border-default);
+  gap: 0px;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.infoSection * {
+  font-size: 14px !important;
+  line-height: 19px !important;
+}
+.infoSection ul {
+  padding-left: 1.2em;
+}
+
+header {
+  margin-bottom: 22px !important;
+  margin-top: 27px !important;
+}
+
+:focus-visible {
+  outline: #2053b9 auto 0.5px;
 }
 
 /* Typography */
@@ -154,42 +160,44 @@ section {
 
 /* Buttons - uses subhead with 500 weight (14/19/600) */
 .btn {
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
   line-height: 19px;
   font-weight: 500;
   transition: background 0.15s ease;
-  white-space: nowrap
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .btn-primary {
-  background: var(--text-primary);
+  background: var(--text-primary) !important;
   color: var(--container);
   border: none;
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--text-secondary);
+  background: var(--text-secondary) !important;
 }
 .btn-secondary {
   background: transparent;
   color: var(--text-primary);
-  border: 1px solid var(--border-dark);
+  border: 1px solid var(--border-default);
 }
 .btn-secondary:hover:not(:disabled) {
   background: var(--surface-2);
 }
 .btn-danger {
-  background: var(--error-primary);
+  background: var(--error-primary) !important;
   color: var(--container);
-  border: none;
+  border: 1px solid var(--error-highlight);
 }
 .btn-danger:hover:not(:disabled) {
-  background: var(--error-secondary);
+  background: var(--error-secondary) !important;
 }
 .btn-danger-outline {
   background: transparent;
@@ -202,16 +210,23 @@ section {
 /* btn-sm uses footnote with 500 weight (12/16/600) */
 .btn-sm {
   padding: 0px 10px;
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 500;
+  gap: 6px;
+  font-size: 15px !important;
+  line-height: 20px !important;
+  font-weight: 400;
   height: 32px;
   border-radius: 6px;
   white-space: nowrap;
+  border: 1px solid var(--border-default);
+  background: transparent;
 }
+.btn-sm:hover {
+  background: var(--surface-2);
+}
+
 /* btn-lg uses body with 500 weight (16/21/600) */
 .btn-lg {
-  padding: 0px 16px;
+  padding: 0px 20px;
   font-size: 16px;
   line-height: 21px;
   height: 44px;
@@ -219,10 +234,17 @@ section {
   font-weight: 500;
   width: 100%;
   gap: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
+}
+
+.btn-lg-fit {
+  padding: 0px 20px;
+  font-size: 16px;
+  line-height: 21px;
+  height: 44px;
+  border-radius: 8px;
+  font-weight: 500;
+  width: fit-content !important;
+  gap: 10px;
 }
 
 /* Modal */
@@ -260,29 +282,33 @@ section {
 
 /* Forms */
 .form-group {
-  margin-bottom: 1rem;
+  width: 100%;
 }
 /* form-label uses subhead (14/19/600) */
 .form-label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: 8px;
   font-size: 14px;
   line-height: 19px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-secondary);
 }
 /* form-input uses body (16/21/400) */
 .form-input,
 .form-select {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: 0px 12px;
   border: 1px solid var(--border-default);
-  border-radius: 4px;
-  background: var(--surface-2);
+  border-radius: 8px;
+  background: var(--container);
   color: var(--text-primary);
   font-size: 16px;
   line-height: 21px;
   font-weight: 400;
+  height: 42px;
+}
+.form-input:hover {
+  border: 1px solid var(--border-dark);
 }
 .form-input::placeholder {
   color: var(--text-tertiary);
@@ -306,13 +332,6 @@ section {
   color: var(--success-primary);
 }
 
-/* Sections */
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
 /* section-description uses subhead (14/19/400) */
 .section-description {
   color: var(--text-secondary);
@@ -364,9 +383,23 @@ section {
   gap: 24px;
   width: 100%;
 }
+.form-card {
+  display: grid;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 768px) {
+  .form-card {
+    grid-template-columns: 1fr;
+  }
+}
 .info-card * {
-  font-size: 15px;
-  line-height: 20px;
+  font-size: 14px;
+  line-height: 19px;
 }
 .danger-card {
   background: var(--error-highlight);
@@ -379,21 +412,19 @@ section {
 .table {
   width: 100%;
   border-collapse: collapse;
-  background: var(--surface-2);
-  border-radius: 8px;
   overflow: hidden;
 }
 .table th,
 .table td {
-  padding: 0.75rem 1rem;
   text-align: left;
 }
 .table th {
-  background: var(--surface-3);
   color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 19px;
-  font-weight: 400;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  padding: 10px 0px;
+  text-transform: uppercase;
 }
 .table tbody tr {
   border-top: 1px solid var(--border-default);
@@ -405,6 +436,9 @@ section {
   font-size: 14px;
   line-height: 19px;
   font-weight: 400;
+  border-top: 1px solid var(--border-default);
+  min-height: 32px;
+  padding: 11px 0px;
 }
 
 /* Badges */
@@ -428,24 +462,37 @@ section {
 
 /* Chips (selectable tags) */
 .chip {
-  padding: 0.375rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0px 8px;
+  height: 36px;
   font-size: 14px;
   line-height: 19px;
-  font-weight: 400;
-  background: var(--container);
+  background: transparent;
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  color: var(--text-secondary);
   transition: all 0.15s ease;
+  color: var(--text-secondary);
 }
 .chip:hover {
-  border-color: var(--text-secondary);
+  border: 1px solid var(--border-dark);
+  color: var(--text-primary);
+  background: var(--surface-1);
+  transition: all 0.15s ease;
 }
 .chip-selected {
-  background: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--container);
+  border-color: var(--border-solid);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+}
+.chip-selected:hover {
+  border-color: var(--border-solid);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  transition: all 0.15s ease;
 }
 
 /* Status colors */
@@ -497,40 +544,24 @@ section {
   gap: 0.5rem;
 }
 
-/* Action buttons (small inline actions) */
-.action-btn {
-  padding: 0.25rem 0.5rem;
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 400;
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: 4px;
-  cursor: pointer;
-  color: var(--text-secondary);
-}
-.action-btn:hover {
-  background: var(--surface-3);
-}
-.action-btn-danger {
-  color: var(--error-primary);
-  border-color: var(--error-primary);
-}
-.action-btn-danger:hover {
-  background: var(--error-highlight);
-}
-
 /* Button group (inline button container) */
 .btn-group {
   display: flex;
-  gap: 0.5rem;
+  gap: 8px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  width: 100%;
 }
 
 /* Disabled input styling */
 .input-disabled {
-  background-color: var(--surface-3);
+  background-color: var(--container);
   cursor: not-allowed;
-  opacity: 0.7;
+  color: var(--text-tertiary);
+}
+.input-disabled:hover {
+  border: 1px solid var(--border-default);
 }
 
 /* Button styled as link */
