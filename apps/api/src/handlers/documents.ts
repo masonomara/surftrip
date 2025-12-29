@@ -1,4 +1,4 @@
-import { getAuth } from "../lib/auth";
+import { getSession, getMembership } from "../lib/session";
 import { createLogger, generateRequestId } from "../lib/logger";
 import type { Env } from "../types/env";
 import {
@@ -8,100 +8,98 @@ import {
   getOrgContextDocument,
 } from "../services/org-context";
 
+// ============================================================================
+// Types
+// ============================================================================
+
+interface AuthenticatedUser {
+  userId: string;
+  orgId: string;
+}
+
+// ============================================================================
+// Authentication Helper
+// ============================================================================
+
 /**
- * Attempts to get the authenticated user session from the request.
- * Returns null if authentication fails or no session exists.
+ * Checks if the request is from an authenticated admin user.
+ * Returns the user info if authenticated, or an error Response if not.
  */
-async function getAuthenticatedSession(request: Request, env: Env) {
-  try {
-    return await getAuth(env).api.getSession({ headers: request.headers });
-  } catch {
-    return null;
+async function requireAdmin(
+  request: Request,
+  env: Env
+): Promise<AuthenticatedUser | Response> {
+  const session = await getSession(request, env);
+
+  if (!session?.user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const membership = await getMembership(env.DB, session.user.id, true);
+
+  if (!membership) {
+    return Response.json({ error: "Admin access required" }, { status: 403 });
+  }
+
+  return {
+    userId: session.user.id,
+    orgId: membership.org_id,
+  };
 }
 
 /**
- * Checks if the user is an admin of any organization.
- * Returns the org ID if they are, null otherwise.
+ * Type guard to check if the auth result is an error response.
  */
-async function getAdminMembership(
-  db: D1Database,
-  userId: string
-): Promise<{ orgId: string } | null> {
-  const row = await db
-    .prepare(
-      `SELECT org_id, role FROM org_members WHERE user_id = ? AND role = 'admin'`
-    )
-    .bind(userId)
-    .first<{ org_id: string; role: string }>();
-
-  if (!row) {
-    return null;
-  }
-
-  return { orgId: row.org_id };
+function isAuthError(result: AuthenticatedUser | Response): result is Response {
+  return result instanceof Response;
 }
 
+// ============================================================================
+// Route Handlers
+// ============================================================================
+
 /**
- * GET /api/org/context
- * Lists all documents uploaded to the organization's context.
- * Requires admin access.
+ * GET /api/documents
+ * Lists all documents for the authenticated user's organization.
  */
 export async function handleGetDocuments(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getAuthenticatedSession(request, env);
+  const auth = await requireAdmin(request, env);
 
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (isAuthError(auth)) {
+    return auth;
   }
 
-  const membership = await getAdminMembership(env.DB, session.user.id);
-
-  if (!membership) {
-    return Response.json({ error: "Admin access required" }, { status: 403 });
-  }
-
-  const documents = await listOrgContext(env, membership.orgId);
+  const documents = await listOrgContext(env, auth.orgId);
   return Response.json(documents);
 }
 
 /**
- * POST /api/org/context
+ * POST /api/documents
  * Uploads a new document to the organization's context.
- * The document is processed, chunked, and indexed for RAG retrieval.
- * Requires admin access.
  */
 export async function handleUploadDocument(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const requestId = generateRequestId();
-  const log = createLogger({ requestId, handler: "uploadDocument" });
-
-  // Authenticate the user
-  const session = await getAuthenticatedSession(request, env);
-
-  if (!session?.user) {
-    log.warn("Upload rejected: unauthorized");
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Verify admin access
-  const membership = await getAdminMembership(env.DB, session.user.id);
-
-  if (!membership) {
-    log.warn("Upload rejected: not admin", { userId: session.user.id });
-    return Response.json({ error: "Admin access required" }, { status: 403 });
-  }
-
-  const orgLog = log.child({
-    orgId: membership.orgId,
-    userId: session.user.id,
+  const log = createLogger({
+    requestId: generateRequestId(),
+    handler: "uploadDocument",
   });
 
-  // Parse the multipart form data
+  // Check authentication
+  const auth = await requireAdmin(request, env);
+
+  if (isAuthError(auth)) {
+    log.warn("Upload rejected: unauthorized");
+    return auth;
+  }
+
+  const orgLog = log.child({ orgId: auth.orgId, userId: auth.userId });
+
+  // Parse the form data
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -110,11 +108,10 @@ export async function handleUploadDocument(
     return Response.json({ error: "Invalid form data" }, { status: 400 });
   }
 
-  // Extract and validate the file
+  // Validate the file
   const file = formData.get("file");
-  const isValidFile = file && file instanceof File;
 
-  if (!isValidFile) {
+  if (!(file instanceof File)) {
     orgLog.warn("Upload rejected: no file provided");
     return Response.json({ error: "No file provided" }, { status: 400 });
   }
@@ -125,15 +122,15 @@ export async function handleUploadDocument(
     size: file.size,
   });
 
-  // Process the upload (validates, stores, chunks, and indexes the file)
-  const fileContent = await file.arrayBuffer();
+  // Process the upload
+  const fileBuffer = await file.arrayBuffer();
   const result = await uploadOrgContext(
     env,
-    membership.orgId,
+    auth.orgId,
     file.name,
     file.type,
-    fileContent,
-    session.user.id,
+    fileBuffer,
+    auth.userId,
     orgLog
   );
 
@@ -150,43 +147,30 @@ export async function handleUploadDocument(
     chunksCreated: result.chunksCreated,
   });
 
-  // Return the full document metadata
-  const document = await getOrgContextDocument(
-    env,
-    membership.orgId,
-    result.fileId!
-  );
-
+  // Return the newly created document
+  const document = await getOrgContextDocument(env, auth.orgId, result.fileId!);
   return Response.json(document, { status: 201 });
 }
 
 /**
- * DELETE /api/org/context/:documentId
+ * DELETE /api/documents/:documentId
  * Deletes a document from the organization's context.
- * Also removes all associated chunks and vector embeddings.
- * Requires admin access.
  */
 export async function handleDeleteDocument(
   request: Request,
   env: Env,
   documentId: string
 ): Promise<Response> {
-  const session = await getAuthenticatedSession(request, env);
+  const auth = await requireAdmin(request, env);
 
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (isAuthError(auth)) {
+    return auth;
   }
 
-  const membership = await getAdminMembership(env.DB, session.user.id);
-
-  if (!membership) {
-    return Response.json({ error: "Admin access required" }, { status: 403 });
-  }
-
-  // Verify the document exists and belongs to this org
+  // Check if the document exists and belongs to this org
   const existingDocument = await getOrgContextDocument(
     env,
-    membership.orgId,
+    auth.orgId,
     documentId
   );
 
@@ -194,8 +178,8 @@ export async function handleDeleteDocument(
     return Response.json({ error: "Document not found" }, { status: 404 });
   }
 
-  // Delete the document and all associated data
-  const result = await deleteOrgContext(env, membership.orgId, documentId);
+  // Delete the document
+  const result = await deleteOrgContext(env, auth.orgId, documentId);
 
   if (!result.success) {
     return Response.json(
