@@ -1,4 +1,4 @@
-import { getSession, getMembership } from "../lib/session";
+import { requireAdmin, isAuthError } from "../lib/session";
 import { createLogger, generateRequestId } from "../lib/logger";
 import type { Env } from "../types/env";
 import {
@@ -7,52 +7,6 @@ import {
   deleteOrgContext,
   getOrgContextDocument,
 } from "../services/org-context";
-
-// ============================================================================
-// Types
-// ============================================================================
-
-interface AuthenticatedUser {
-  userId: string;
-  orgId: string;
-}
-
-// ============================================================================
-// Authentication Helper
-// ============================================================================
-
-/**
- * Checks if the request is from an authenticated admin user.
- * Returns the user info if authenticated, or an error Response if not.
- */
-async function requireAdmin(
-  request: Request,
-  env: Env
-): Promise<AuthenticatedUser | Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const membership = await getMembership(env.DB, session.user.id, true);
-
-  if (!membership) {
-    return Response.json({ error: "Admin access required" }, { status: 403 });
-  }
-
-  return {
-    userId: session.user.id,
-    orgId: membership.org_id,
-  };
-}
-
-/**
- * Type guard to check if the auth result is an error response.
- */
-function isAuthError(result: AuthenticatedUser | Response): result is Response {
-  return result instanceof Response;
-}
 
 // ============================================================================
 // Route Handlers

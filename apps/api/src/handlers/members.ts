@@ -11,7 +11,7 @@
  * - Public invitation routes (view/accept)
  */
 
-import { getSession, getMembership } from "../lib/session";
+import { getSession, requireAdmin, isAuthError } from "../lib/session";
 import type { Env } from "../types/env";
 import type { OrgRole } from "../types";
 import {
@@ -27,21 +27,6 @@ import {
   getInvitationById,
   acceptInvitationById,
 } from "../services/invitations";
-
-async function requireAdmin(db: D1Database, userId: string) {
-  const membership = await getMembership(db, userId, true);
-  if (!membership) {
-    return {
-      ok: false as const,
-      res: Response.json({ error: "Admin access required" }, { status: 403 }),
-    };
-  }
-  return {
-    ok: true as const,
-    orgId: membership.org_id,
-    isOwner: membership.is_owner === 1,
-  };
-}
 
 /**
  * GET /api/org/members
@@ -122,15 +107,9 @@ export async function handleSendInvitation(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const admin = await requireAdmin(env.DB, session.user.id);
-  if (!admin.ok) {
-    return admin.res;
+  const admin = await requireAdmin(request, env);
+  if (isAuthError(admin)) {
+    return admin;
   }
 
   // Parse request body
@@ -196,8 +175,8 @@ export async function handleSendInvitation(
     orgId: admin.orgId,
     orgName: org.name,
     role: body.role,
-    invitedBy: session.user.id,
-    inviterName: session.user.name,
+    invitedBy: admin.userId,
+    inviterName: admin.userName,
   });
 
   return Response.json({
@@ -221,15 +200,9 @@ export async function handleGetInvitations(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const admin = await requireAdmin(env.DB, session.user.id);
-  if (!admin.ok) {
-    return admin.res;
+  const admin = await requireAdmin(request, env);
+  if (isAuthError(admin)) {
+    return admin;
   }
 
   // Get pending invitations
@@ -278,15 +251,9 @@ export async function handleRevokeInvitation(
   env: Env,
   invitationId: string
 ): Promise<Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const admin = await requireAdmin(env.DB, session.user.id);
-  if (!admin.ok) {
-    return admin.res;
+  const admin = await requireAdmin(request, env);
+  if (isAuthError(admin)) {
+    return admin;
   }
 
   // Verify invitation belongs to this org
@@ -327,19 +294,13 @@ export async function handleRemoveMember(
   env: Env,
   targetUserId: string
 ): Promise<Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const admin = await requireAdmin(env.DB, session.user.id);
-  if (!admin.ok) {
-    return admin.res;
+  const admin = await requireAdmin(request, env);
+  if (isAuthError(admin)) {
+    return admin;
   }
 
   // Cannot remove yourself
-  if (targetUserId === session.user.id) {
+  if (targetUserId === admin.userId) {
     return Response.json(
       { error: "Cannot remove yourself. Use leave organization instead." },
       { status: 400 }
@@ -385,15 +346,9 @@ export async function handleUpdateMemberRole(
   env: Env,
   targetUserId: string
 ): Promise<Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const admin = await requireAdmin(env.DB, session.user.id);
-  if (!admin.ok) {
-    return admin.res;
+  const admin = await requireAdmin(request, env);
+  if (isAuthError(admin)) {
+    return admin;
   }
 
   // Parse request body
@@ -452,15 +407,9 @@ export async function handleTransferOwnership(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const admin = await requireAdmin(env.DB, session.user.id);
-  if (!admin.ok) {
-    return admin.res;
+  const admin = await requireAdmin(request, env);
+  if (isAuthError(admin)) {
+    return admin;
   }
 
   // Must be the owner to transfer ownership
@@ -508,7 +457,7 @@ export async function handleTransferOwnership(
   const result = await transferOwnership(
     env.DB,
     admin.orgId,
-    session.user.id,
+    admin.userId,
     body.toUserId
   );
 
