@@ -71,6 +71,9 @@ type DeleteOrgResult =
 
 /**
  * Counts records in a table for a specific org.
+ *
+ * SECURITY: Table name is interpolated directly into SQL. Only call with
+ * hardcoded table names - never pass user input as the table parameter.
  */
 async function countRecords(
   db: D1Database,

@@ -236,7 +236,9 @@ export async function handleUpdateOrg(
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  // Build the update query dynamically based on provided fields
+  // SECURITY: Dynamic query construction with parameterized values.
+  // Column names are hardcoded - never interpolate user input as column names.
+  // All values use ? placeholders and .bind() to prevent SQL injection.
   const updates: string[] = [];
   const values: (string | null)[] = [];
 
