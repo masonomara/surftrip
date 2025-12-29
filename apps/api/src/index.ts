@@ -1,6 +1,7 @@
 import { getAuth } from "./lib/auth";
 import { withAuth, withMember, withAdmin, withOwner } from "./lib/session";
 import { TenantDO } from "./do/tenant";
+import { generateRequestId } from "./lib/logger";
 import { handleTeamsMessage } from "./handlers/teams";
 import {
   handleClioCallback,
@@ -62,16 +63,22 @@ function getCorsHeaders(request: Request): HeadersInit {
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-Id",
+    "Access-Control-Expose-Headers": "X-Request-Id",
     "Access-Control-Allow-Credentials": "true",
   };
 }
 
-function withCors(response: Response, request: Request): Response {
+function withCors(
+  response: Response,
+  request: Request,
+  requestId: string
+): Response {
   const headers = new Headers(response.headers);
   for (const [key, value] of Object.entries(getCorsHeaders(request))) {
     headers.set(key, value);
   }
+  headers.set("X-Request-Id", requestId);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -216,12 +223,15 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
+    // Extract request ID from header or generate one
+    const requestId =
+      request.headers.get("X-Request-Id") || generateRequestId();
+
     // Handle CORS preflight
     if (method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: getCorsHeaders(request),
-      });
+      const headers = getCorsHeaders(request) as Record<string, string>;
+      headers["X-Request-Id"] = requestId;
+      return new Response(null, { status: 204, headers });
     }
 
     // Health check endpoints (no CORS needed)
@@ -245,7 +255,7 @@ export default {
     if (path.startsWith("/api/auth")) {
       try {
         const authResponse = await getAuth(env).handler(request);
-        return withCors(authResponse, request);
+        return withCors(authResponse, request, requestId);
       } catch (error) {
         const message =
           error instanceof Error
@@ -271,7 +281,7 @@ export default {
       const handler = methodHandlers[method];
       if (handler) {
         const response = await handler(request, env);
-        return withCors(response, request);
+        return withCors(response, request, requestId);
       }
     }
 
@@ -279,13 +289,14 @@ export default {
     const dynamicResponse = matchDynamicRoute(path, method, request, env);
     if (dynamicResponse) {
       const response = await dynamicResponse;
-      return withCors(response, request);
+      return withCors(response, request, requestId);
     }
 
     // Not found
     return withCors(
       Response.json({ error: "Not found" }, { status: 404 }),
-      request
+      request,
+      requestId
     );
   },
 };

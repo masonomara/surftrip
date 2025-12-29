@@ -1,5 +1,12 @@
 import { API_URL } from "./auth-client";
 
+/**
+ * Generates a short request ID for tracing.
+ */
+export function generateRequestId(): string {
+  return crypto.randomUUID().slice(0, 8);
+}
+
 const MAX_RETRIES = 2;
 const BASE_DELAY_MS = 500;
 
@@ -68,15 +75,19 @@ export const ENDPOINTS = {
  * @param context - The loader/action context from React Router
  * @param path - API path like "/api/auth/get-session"
  * @param cookie - The cookie header from the incoming request
+ * @param requestId - Request ID for tracing (passed in X-Request-Id header)
  */
 export async function apiFetch(
   context: unknown,
   path: string,
-  cookie: string
+  cookie: string,
+  requestId?: string
 ): Promise<Response> {
-  const requestOptions = {
-    headers: { Cookie: cookie },
-  };
+  const headers: Record<string, string> = { Cookie: cookie };
+  if (requestId) {
+    headers["X-Request-Id"] = requestId;
+  }
+  const requestOptions = { headers };
 
   // Try to use the Cloudflare service binding if available (server-side)
   const cloudflareContext = context as {

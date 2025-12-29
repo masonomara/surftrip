@@ -12,52 +12,6 @@ This review consolidates findings from four distinct perspectives analyzing the 
 
 ---
 
-## Items to Complete
-
-### 34. No Retry Logic in Web API Client
-
-**Impact:** Medium
-**File:** `apps/web/app/lib/api.ts`
-
-No retry logic for network failures.
-
-**Recommendation:** Add exponential backoff for 5xx errors (1-2 retries).
-
----
-
-### 35. Repetitive Loader Auth Pattern
-
-**Impact:** Medium
-**File:** `apps/web/app/lib/loader-auth.ts`
-
-Every protected route manually calls `requireAuth` and handles redirects.
-
-**Recommendation:** Create `protectedLoader` higher-order function.
-
----
-
-### 36. No Request ID Propagation
-
-**Impact:** Medium
-**Files:** `apps/api/src/lib/logger.ts`, `apps/web/`
-
-API generates `requestId` but web app doesn't pass or receive it.
-
-**Recommendation:** Generate requestId in web loader, pass in headers, return in response headers.
-
----
-
-### 37. CSS Modules Without Design Tokens
-
-**Impact:** Medium
-**Files:** `apps/web/app/styles/*.css`
-
-Colors, spacing, typography hardcoded in each file.
-
-**Recommendation:** Create `tokens.css` with CSS variables.
-
----
-
 ## Items Phase 10 Backlog
 
 ### 3. Teams Webhook Authentication Missing

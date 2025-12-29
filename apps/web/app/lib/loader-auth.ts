@@ -1,5 +1,5 @@
 import { redirect } from "react-router";
-import { apiFetch } from "./api";
+import { apiFetch, generateRequestId } from "./api";
 import type { SessionResponse, OrgMembership } from "./types";
 
 // -----------------------------------------------------------------------------
@@ -25,6 +25,7 @@ type LoaderArgs = { request: Request; context: unknown };
 type AuthenticatedLoaderContext<T extends OptionalOrgResult | AuthResult> =
   T & {
     cookie: string;
+    requestId: string;
     fetch: (path: string) => Promise<Response>;
   };
 
@@ -40,12 +41,14 @@ export function protectedLoader<T>(
   loader: (ctx: AuthenticatedLoaderContext<OptionalOrgResult>) => Promise<T> | T
 ) {
   return async ({ request, context }: LoaderArgs): Promise<T> => {
-    const auth = await requireAuth(request, context);
+    const requestId = generateRequestId();
     const cookie = request.headers.get("cookie") || "";
+    const auth = await requireAuth(request, context, cookie, requestId);
     return loader({
       ...auth,
       cookie,
-      fetch: (path: string) => apiFetch(context, path, cookie),
+      requestId,
+      fetch: (path: string) => apiFetch(context, path, cookie, requestId),
     });
   };
 }
@@ -59,12 +62,20 @@ export function orgLoader<T>(
   options: AuthOptions = {}
 ) {
   return async ({ request, context }: LoaderArgs): Promise<T> => {
-    const auth = await requireOrgAuth(request, context, options);
+    const requestId = generateRequestId();
     const cookie = request.headers.get("cookie") || "";
+    const auth = await requireOrgAuth(
+      request,
+      context,
+      cookie,
+      requestId,
+      options
+    );
     return loader({
       ...auth,
       cookie,
-      fetch: (path: string) => apiFetch(context, path, cookie),
+      requestId,
+      fetch: (path: string) => apiFetch(context, path, cookie, requestId),
     });
   };
 }
@@ -76,21 +87,27 @@ export function orgLoader<T>(
 export async function requireOrgAuth(
   request: Request,
   context: unknown,
+  cookie: string,
+  requestId: string,
   options: AuthOptions = {}
 ): Promise<AuthResult> {
-  const cookie = request.headers.get("cookie") || "";
-
   const sessionResponse = await apiFetch(
     context,
     "/api/auth/get-session",
-    cookie
+    cookie,
+    requestId
   );
   if (!sessionResponse.ok) throw redirect("/auth");
 
   const sessionData = (await sessionResponse.json()) as SessionResponse | null;
   if (!sessionData?.user) throw redirect("/auth");
 
-  const orgResponse = await apiFetch(context, "/api/user/org", cookie);
+  const orgResponse = await apiFetch(
+    context,
+    "/api/user/org",
+    cookie,
+    requestId
+  );
   if (!orgResponse.ok) throw redirect("/dashboard");
 
   const orgMembership = (await orgResponse.json()) as OrgMembership | null;
@@ -105,21 +122,27 @@ export async function requireOrgAuth(
 
 export async function requireAuth(
   request: Request,
-  context: unknown
+  context: unknown,
+  cookie: string,
+  requestId: string
 ): Promise<OptionalOrgResult> {
-  const cookie = request.headers.get("cookie") || "";
-
   const sessionResponse = await apiFetch(
     context,
     "/api/auth/get-session",
-    cookie
+    cookie,
+    requestId
   );
   if (!sessionResponse.ok) throw redirect("/auth");
 
   const sessionData = (await sessionResponse.json()) as SessionResponse | null;
   if (!sessionData?.user) throw redirect("/auth");
 
-  const orgResponse = await apiFetch(context, "/api/user/org", cookie);
+  const orgResponse = await apiFetch(
+    context,
+    "/api/user/org",
+    cookie,
+    requestId
+  );
   let org: OrgMembership | null = null;
   if (orgResponse.ok) {
     const orgData = (await orgResponse.json()) as OrgMembership | null;
