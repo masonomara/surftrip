@@ -80,3 +80,22 @@ export function generateRequestId(): string {
  * Default logger instance for convenience.
  */
 export const logger = createLogger();
+
+/**
+ * Logs an authorization failure for security auditing.
+ */
+export function logAuthzFailure(
+  handler: string,
+  reason: string,
+  context: { userId?: string; email?: string; path?: string; orgId?: string }
+): void {
+  const log = createLogger({
+    requestId: generateRequestId(),
+    handler,
+  });
+
+  log.warn("Authorization failed", {
+    reason,
+    ...context,
+  });
+}

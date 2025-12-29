@@ -9,7 +9,7 @@
  * - Deleting an organization
  */
 
-import { getSession } from "../lib/session";
+import { getSession, requireAdmin, requireOwner, isAuthError } from "../lib/session";
 import type { Env } from "../types/env";
 import type { OrgMemberRow } from "../types";
 import { orgMemberRowToEntity } from "../types";
@@ -201,25 +201,9 @@ export async function handleUpdateOrg(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Get user's membership and verify admin access
-  const membership = await env.DB.prepare(
-    `SELECT org_id, role FROM org_members WHERE user_id = ?`
-  )
-    .bind(session.user.id)
-    .first<{ org_id: string; role: string }>();
-
-  if (!membership) {
-    return Response.json({ error: "No organization found" }, { status: 404 });
-  }
-
-  if (membership.role !== "admin") {
-    return Response.json({ error: "Admin access required" }, { status: 403 });
+  const admin = await requireAdmin(request, env);
+  if (isAuthError(admin)) {
+    return admin;
   }
 
   // Parse request body
@@ -275,7 +259,7 @@ export async function handleUpdateOrg(
   values.push(String(Date.now()));
 
   // Add org_id as the WHERE clause parameter
-  values.push(membership.org_id);
+  values.push(admin.orgId);
 
   try {
     await env.DB.prepare(`UPDATE org SET ${updates.join(", ")} WHERE id = ?`)
@@ -308,31 +292,12 @@ export async function handleGetOrgDeletionPreview(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const owner = await requireOwner(request, env);
+  if (isAuthError(owner)) {
+    return owner;
   }
 
-  // Get user's membership and verify ownership
-  const membership = await env.DB.prepare(
-    `SELECT org_id, is_owner FROM org_members WHERE user_id = ?`
-  )
-    .bind(session.user.id)
-    .first<{ org_id: string; is_owner: number }>();
-
-  if (!membership) {
-    return Response.json({ error: "No organization found" }, { status: 404 });
-  }
-
-  if (!membership.is_owner) {
-    return Response.json(
-      { error: "Only the owner can delete the organization" },
-      { status: 403 }
-    );
-  }
-
-  const preview = await getOrgDeletionPreview(env.DB, membership.org_id);
+  const preview = await getOrgDeletionPreview(env.DB, owner.orgId);
   return Response.json(preview);
 }
 
@@ -350,28 +315,9 @@ export async function handleDeleteOrg(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Get user's membership and verify ownership
-  const membership = await env.DB.prepare(
-    `SELECT org_id, is_owner FROM org_members WHERE user_id = ?`
-  )
-    .bind(session.user.id)
-    .first<{ org_id: string; is_owner: number }>();
-
-  if (!membership) {
-    return Response.json({ error: "No organization found" }, { status: 404 });
-  }
-
-  if (!membership.is_owner) {
-    return Response.json(
-      { error: "Only the owner can delete the organization" },
-      { status: 403 }
-    );
+  const owner = await requireOwner(request, env);
+  if (isAuthError(owner)) {
+    return owner;
   }
 
   // Parse request body
@@ -385,7 +331,7 @@ export async function handleDeleteOrg(
 
   // Get the org name for confirmation
   const org = await env.DB.prepare(`SELECT name FROM org WHERE id = ?`)
-    .bind(membership.org_id)
+    .bind(owner.orgId)
     .first<{ name: string }>();
 
   if (!org) {
@@ -404,8 +350,8 @@ export async function handleDeleteOrg(
   const result = await deleteOrg(
     env.DB,
     env.R2,
-    membership.org_id,
-    session.user.id,
+    owner.orgId,
+    owner.userId,
     env.TENANT
   );
 

@@ -12,6 +12,7 @@
  */
 
 import { getSession, requireAdmin, isAuthError } from "../lib/session";
+import { logAuthzFailure } from "../lib/logger";
 import type { Env } from "../types/env";
 import type { OrgRole } from "../types";
 import {
@@ -414,6 +415,10 @@ export async function handleTransferOwnership(
 
   // Must be the owner to transfer ownership
   if (!admin.isOwner) {
+    logAuthzFailure("transferOwnership", "Not owner", {
+      userId: admin.userId,
+      orgId: admin.orgId,
+    });
     return Response.json(
       { error: "Only the owner can transfer ownership" },
       { status: 403 }
@@ -570,6 +575,10 @@ export async function handleAcceptInvitation(
 
   // Verify email matches
   if (session.user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+    logAuthzFailure("acceptInvitation", "Email mismatch", {
+      userId: session.user.id,
+      email: session.user.email,
+    });
     return Response.json(
       {
         error:

@@ -8,6 +8,7 @@ import {
   sendPasswordResetEmail,
   sendVerificationEmail,
 } from "../services/email";
+import { createLogger, generateRequestId } from "./logger";
 
 /**
  * Number of PBKDF2 iterations for password hashing.
@@ -250,6 +251,41 @@ export function getAuth(env: AuthEnv) {
 
         if (isEmailAuthPath && hasEmail) {
           ctx.body.email = ctx.body.email.toLowerCase();
+        }
+      }),
+      after: createAuthMiddleware(async (ctx) => {
+        // Log failed authentication attempts for security auditing
+        const returned = ctx.context.returned;
+        if (!returned) return;
+
+        const isAuthPath =
+          ctx.path === "/sign-in/email" ||
+          ctx.path === "/sign-in/social" ||
+          ctx.path.startsWith("/callback/");
+
+        if (!isAuthPath) return;
+
+        // Check if response indicates failure (APIError or non-2xx status)
+        const isError =
+          returned instanceof Error ||
+          (returned instanceof Response && !returned.ok);
+
+        if (isError) {
+          const log = createLogger({
+            requestId: generateRequestId(),
+            handler: "auth",
+          });
+
+          const email =
+            typeof ctx.body?.email === "string" ? ctx.body.email : undefined;
+
+          log.warn("Authentication failed", {
+            path: ctx.path,
+            email,
+            statusCode:
+              returned instanceof Response ? returned.status : undefined,
+            error: returned instanceof Error ? returned.message : undefined,
+          });
         }
       }),
     },
