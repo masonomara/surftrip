@@ -2,7 +2,7 @@
 
 Each phase needs to have simple unit, integration (if applicable), and end-to-end testing, as well as a verbose component/example that demonstrates what was accomplished in each phase for shareholder demonstration.
 
-**Overall Progress:** Phases 2-8 complete (100%). Phase 9 next.
+**Overall Progress:** Phases 2-9 complete. Phase 9b (web chat interface) in progress.
 
 ## Phase 1: Validate Plan
 
@@ -273,6 +273,51 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 - [x] MVP deployed
 
 **Note:** Required before Teams adapter (OAuth redirects, signup, Org Context upload).
+
+## Phase 9b: Web Chat Interface
+
+**Note:** Read and refer to `docs/00-specs/12-web-chat-interface.md`
+
+**Checklist:**
+
+API (`apps/api`):
+
+- [ ] Create `src/handlers/chat.ts`:
+  - `handleChatMessage` — SSE streaming
+  - `handleGetConversations` — List user's conversations
+  - `handleGetConversation` — Get conversation with messages
+  - `handleDeleteConversation` — Delete conversation
+- [ ] Update `src/do/tenant.ts`:
+  - `GET /conversations` — List by updatedAt desc, limit 50
+  - `GET /conversation/:id` — Conversation + messages
+  - `DELETE /conversation/:id`
+  - Modify `handleProcessMessage` to yield SSE events
+  - Add step events: `rag_lookup`, `llm_thinking`, `clio_call`, `clio_result`
+  - `handleAcceptConfirmation`
+  - `handleRejectConfirmation`
+- [ ] Update `src/index.ts`:
+  - Routes: `POST /api/chat`, `GET /api/conversations`, `GET /api/conversations/:id`, `DELETE /api/conversations/:id`
+  - Routes: `POST /api/confirmations/:id/accept`, `POST /api/confirmations/:id/reject`
+  - Use `withMember` middleware
+- [ ] Add `conversationScope: "personal"` for web channel messages
+
+Web (`apps/web`):
+
+- [ ] `app/routes/chat.tsx` — Main interface
+- [ ] `app/routes/chat.$conversationId.tsx` — Conversation view
+- [ ] `app/routes/dashboard.tsx` — Redirect to `/chat` if user has org
+- [ ] `app/components/ChatSidebar.tsx` — Conversation list
+- [ ] `app/components/ChatMessages.tsx` — Message display
+- [ ] `app/components/ChatInput.tsx` — Input with submit
+- [ ] `app/components/ProcessLog.tsx` — Step visibility
+- [ ] `app/lib/use-chat.ts` — SSE hook and state
+
+Testing:
+
+- [ ] Unit: `handleChatMessage` SSE format
+- [ ] Unit: Conversation CRUD
+- [ ] Integration: Full message flow with mocked AI
+- [ ] Manual: Multi-tab behavior
 
 ## Phase 10: Teams Adapter
 

@@ -2,37 +2,38 @@
 
 ## Overview
 
-We need to build a chat interface for Docketbot. We were prepared to buidl the Micossoft Teams chat channel first, but now we are doing the "web channel" first on the web app.
+Build a web chat interface for Docketbot. The "web" channel storage (conversations, messages, pending_confirmations) exists in DO SQLite. Add API endpoints and frontend.
 
-The "web" channel type already exists in 'ChannelMessage' storage (conversations, messages, pending_conversations) already exists in SQLite. We need to add the API endpoint and frontend.
-
-## Storage Strategy
+## Storage
 
 Conversations:
 
-- UUID generated client-side
-- Use DO SQLite `conversations`
-- Teams equivalent: `conversation.id`
+- Client generates UUID
+- Stored in DO SQLite `conversations`
+- Title: first user message, truncated to 50 characters
+  - `title = userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : '')`
+- Per-user, not per-org (matches Teams behavior)
+  - `SELECT * FROM conversations WHERE userId = ? AND channel = 'web'`
 
 Messages:
 
-- Per conversation
-- Use DO SQLite `messages`
+- Stored in DO SQLite `messages`
+- Save user message before streaming starts
+- Save assistant message after stream completes
+- On error, save partial content with error flag
+- Add `status: 'complete' | 'partial' | 'error'` column
 
 Confirmations:
 
-- Per conversation
-- Use DO SQLite `pending_confirmations`
+- Stored in DO SQLite `pending_confirmations`
+- Clio writes (create, update, delete) require confirmation; reads do not
+- No timeout; load pending confirmations with conversation history on return
+- Process multiple confirmations sequentially
+- Columns should include: `id`, `conversationId`, `action`, `objectType`, `params`, `status`, `createdAt`
 
-Conversation List:
+## Frontend
 
-- Query by user, only query "web" conversations
-- Need to build `GET /conversations` endpoint
-- Not applicable to Teams, they manage
-
-## Frontend Wireframe
-
-Chat page layout (three columns):
+Three-column layout:
 
 ```text
 +------------------+------------------------+------------------+
@@ -44,89 +45,84 @@ Chat page layout (three columns):
 +------------------+------------------------+------------------+
 ```
 
-On Styling:
+Styling:
 
-- Use existing CSS classes as much as possible.
-- No needless design system components.
+- Use existing CSS classes.
 
-On Conversations:
+Conversations:
 
-- Client generates UUID for new conversations (`const newConversationId = crypto.randomUUID(); navigate(`/chat/${newConversationId}`);`).
-- First message to a new `conversationId` creates the conversation record in DO SQLite (existing behaivior `ensureConversationExsits`)
+- Client generates UUID and navigates to `/chat/${id}`.
+- First message creates the conversation record via `ensureConversationExists`.
 
-On Process Log:
+Process Log:
 
-- "Under-the-hood stream of conciousness"
-- Example steps:
-  - `rag_lookup` - `{ chunks: [{ text, source }] }`
-  - `llm_thinking` - `{ content: string }`
-  - `clio_call` - `{ operation, objectType, filters? }`
-  - `clio_result` - `{ count, preview }`
-  - `confirmation_required` - `{ action, objectType, params }`
+- Example internal steps:
+  - `rag_lookup` — `{ chunks: [{ text, source }] }`
+  - `llm_thinking` — `{ content: string }`
+  - `clio_call` — `{ operation, objectType, filters? }`
+  - `clio_result` — `{ count, preview }`
+  - `confirmation_required` — `{ action, objectType, params }`
 
-On Chat:
+Confirmations:
 
-- "ChatGPT"
-- Consider confirmations on Clio actions
+- Appear inline as message cards.
+- Input disabled while pending.
 
-## API Design
+```text
++------------------------------------------+
+| Docketbot wants to create a Task         |
+|                                          |
+| Matter: Smith v. Jones                   |
+| Due: Tomorrow                            |
+| Description: Draft motion                |
+|                                          |
+| [Cancel]                    [Confirm]    |
++------------------------------------------+
+```
 
-Chat message endpoint (SSE streaming):
+## API
 
-- POST `/api/chat`
-- conversationId: string (UUD, client-generated for new chats)
-- message: string
+POST `/api/chat` — Send message (SSE streaming)
 
-Chat message response (SSE stream with events):
+- Body: `{ conversationId: string, message: string }`
 
-- content: "here are your open matters..."
+GET `/api/conversations` — List conversations
 
-Process log steps example responses (SSE stream with events):
+- Response: `{ conversations: [{ id, title, updatedAt, messageCount }] }`
 
-- type: "rag_lookup" | "llm_thinking" | "clio_call"
-- chunks: [...]
-- content: "Analyzing your question..."
-- operation: "read"
-- objectType: "Matter"
+GET `/api/conversations/:id` — Get conversation with messages
 
-Conversation list endpoint:
+- Response: `{ conversation: { id, createdAt, updatedAt }, messages: [{ id, role, content, createdAt, status }] }`
 
-- GET `api/conversations`
-- conversations: { id: string, title: string, updatedAt: number, messageCount: number }
+DELETE `/api/conversations/:id` — Delete conversation
 
-Conversation history endpoint:
+- Response: `{ success: true }`
 
-- GET `/api/conversations/:conversationId`
-- conversation: {id, createdAt, updatedAt}
-- messages: [{ id, role, content, createdAt }]
+POST `/api/confirmations/:id/accept` — Accept confirmation
 
-Delete conversation endpoint:
+- Response: SSE stream with operation result
 
-- DELETE `api/conversations/:conversationId`
-- Response: { success: true }
+POST `/api/confirmations/:id/reject` — Reject confirmation
 
-_need to add confirmatuions/clio actions considerations_
+- Response: `{ success: true }`
 
-## Authenticaion
+## SSE Events
 
-All endpoints can use existong Better Auth session middleware which provides `userId`, `orgId`, and `role`.
+Flow:
 
-## Testing
+1. Stream emits `confirmation_required` with details
+2. Stream emits `done`
+3. User accepts or rejects via API
+4. If accepted, new SSE stream returns result
 
-- [ ] Unit test: `handleChatMessage` SSE format
-- [ ] Unit test: Conversation CRUD operations
-- [ ] Integration test: Full message flow with mocked AI
-- [ ] Manual test: Multi-tab behavior (each tab can have different conversation)
+Event types:
 
-## Dev Plan
+- `content` — `{ text: "Here are your open matters..." }`
+- `process` — `{ type: "rag_lookup" | "llm_thinking" | "clio_call", ... }`
+- `confirmation_required` — `{ confirmationId, action, objectType, params }`
+- `error` — `{ message: "Clio API unavailable" }`
+- `done`
 
-Web:
+## Authentication
 
-- [ ] Create `app/routes/chat.tsx` - Main chat interface (replaces dashboard for orgs)
-- [ ] Create `app/routes/chat.$conversationId.tsx` - Specific conversation view
-- [ ] Update `app/routes/dashboard.tsx` - Redirect to `/chat` if user has org
-- [ ] Create `app/components/ChatSidebar.tsx` - Left column, conversation list
-- [ ] Create `app/components/ChatMessages.tsx` - Middle column, message display
-- [ ] Create `app/components/ChatInput.tsx` - Message input with submit
-- [ ] Create `app/components/ProcessLog.tsx` - Right column, step visibility
-- [ ] Create `app/lib/use-chat.ts` - Hook for SSE connection and state management
+All endpoints use existing Better Auth session middleware (`userId`, `orgId`, `role`).

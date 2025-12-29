@@ -1,6 +1,6 @@
 # Docket
 
-An AI assistant for law firms that use Clio. Users chat through Microsoft Teams, Slack, or MCP clients. The bot can answer questions about cases, look up firm procedures, and execute operations in Clio.
+An AI assistant for law firms that use Clio. Users chat through the web interface, Microsoft Teams, Slack, or MCP clients. The bot can answer questions about cases, look up firm procedures, and execute operations in Clio.
 
 ## How It Works
 
@@ -130,6 +130,8 @@ Detailed specs are in `/docs/00-specs/`:
 - `07-knowledge-base` — RAG implementation
 - `08-workers-ai` — LLM integration
 - `09-clio-integration` — Clio API
+- `10-development-plan` — Development phases
+- `12-web-chat-interface` — Web chat interface
 
 ## Tech Stack
 
