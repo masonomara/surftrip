@@ -250,27 +250,27 @@ Each phase needs to have simple unit, integration (if applicable), and end-to-en
 
 **Checklist:**
 
-- [ ] Web app wrangler config (determine origin: same-domain vs subdomain vs Pages URL)
-- [ ] CORS policy matching web app origin + Better Auth `trustedOrigins`
-- [ ] Auth UI (Better Auth signup/login, Google SSO, maybe Apple SSO (oauth concern w/ Apple ID))
-- [ ] Email service (Resend: invitations, password reset, email verification)
-- [ ] Email verification flow (post-signup pending screen, verification callback, resend button)
-- [ ] Forgot password flow (request form, reset form with token)
-- [ ] Logout functionality
-- [ ] Invitation signup flow (check `invitations` table, link to org)
-- [ ] Org creation flow (type, practice areas, location, name, logo)
-- [ ] Creator becomes Owner (`is_owner: true`)
-- [ ] Org settings dashboard
-- [ ] Member invitation UI (email + role)
-- [ ] Ownership transfer (select Admin, password re-entry)
-- [ ] Clio connect flow (OAuth redirect)
-- [ ] Clio schema refresh button (Admin only)
-- [ ] Org Context upload UI (MIME validation, 25MB limit, filename sanitization)
-- [ ] Org Context management (list, delete)
-- [ ] Audit log PII redaction (sanitize `params` field before logging)
-- [ ] Unit tests passing
-- [ ] Integration tests passing
-- [ ] MVP deployed
+- [x] Web app wrangler config (determine origin: same-domain vs subdomain vs Pages URL)
+- [x] CORS policy matching web app origin + Better Auth `trustedOrigins`
+- [x] Auth UI (Better Auth signup/login, Google SSO, maybe Apple SSO (oauth concern w/ Apple ID))
+- [x] Email service (Resend: invitations, password reset, email verification)
+- [x] Email verification flow (post-signup pending screen, verification callback, resend button)
+- [x] Forgot password flow (request form, reset form with token)
+- [x] Logout functionality
+- [x] Invitation signup flow (check `invitations` table, link to org)
+- [x] Org creation flow (type, practice areas, location, name, logo)
+- [x] Creator becomes Owner (`is_owner: true`)
+- [x] Org settings dashboard
+- [x] Member invitation UI (email + role)
+- [x] Ownership transfer (select Admin, password re-entry)
+- [x] Clio connect flow (OAuth redirect)
+- [x] Clio schema refresh button (Admin only)
+- [x] Org Context upload UI (MIME validation, 25MB limit, filename sanitization)
+- [x] Org Context management (list, delete)
+- [x] Audit log PII redaction (sanitize `params` field before logging)
+- [x] Unit tests passing
+- [x] Integration tests passing
+- [x] MVP deployed
 
 **Note:** Required before Teams adapter (OAuth redirects, signup, Org Context upload).
 

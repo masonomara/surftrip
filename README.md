@@ -84,6 +84,7 @@ npm run test:e2e
 The setup project logs in once and saves cookies/localStorage to `.auth/user.json`. Subsequent tests load this state to skip login.
 
 **Test structure:**
+
 - `test/e2e/auth-and-org.spec.ts` — Signup, org creation, member invitation flows
 - `playwright.config.ts` — Test configuration with setup project
 
