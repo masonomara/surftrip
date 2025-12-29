@@ -1,53 +1,25 @@
 import { useState } from "react";
-import { redirect, useRevalidator } from "react-router";
+import { useRevalidator } from "react-router";
 import type { Route } from "./+types/org.members";
 import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
-import type {
-  SessionResponse,
-  OrgMembership,
-  OrgMember,
-  PendingInvitation,
-} from "~/lib/types";
+import { requireOrgAuth } from "~/lib/loader-auth";
+import type { OrgMember, PendingInvitation } from "~/lib/types";
 import { AppLayout } from "~/components/AppLayout";
 import { PageLayout } from "~/components/PageLayout";
 import { Plus } from "lucide-react";
 
+// -----------------------------------------------------------------------------
+// Loader
+// -----------------------------------------------------------------------------
+
 export async function loader({ request, context }: Route.LoaderArgs) {
+  const { user, org } = await requireOrgAuth(request, context, {
+    requireAdmin: true,
+  });
+
   const cookie = request.headers.get("cookie") || "";
 
-  // Check if user is logged in
-  const sessionResponse = await apiFetch(
-    context,
-    "/api/auth/get-session",
-    cookie
-  );
-
-  if (!sessionResponse.ok) {
-    throw redirect("/auth");
-  }
-
-  const sessionData = (await sessionResponse.json()) as SessionResponse | null;
-
-  if (!sessionData?.user) {
-    throw redirect("/auth");
-  }
-
-  // Fetch user's organization membership
-  const orgResponse = await apiFetch(context, "/api/user/org", cookie);
-
-  if (!orgResponse.ok) {
-    throw redirect("/dashboard");
-  }
-
-  const orgMembership = (await orgResponse.json()) as OrgMembership | null;
-
-  // Only admins can access this page
-  if (!orgMembership?.org || orgMembership.role !== "admin") {
-    throw redirect("/dashboard");
-  }
-
-  // Fetch members and invitations in parallel
   const [membersResponse, invitationsResponse] = await Promise.all([
     apiFetch(context, "/api/org/members", cookie),
     apiFetch(context, "/api/org/invitations", cookie),
@@ -61,13 +33,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     ? ((await invitationsResponse.json()) as PendingInvitation[])
     : [];
 
-  return {
-    user: sessionData.user,
-    org: orgMembership,
-    members,
-    invitations,
-  };
+  return { user, org, members, invitations };
 }
+
+// -----------------------------------------------------------------------------
+// Page Component
+// -----------------------------------------------------------------------------
 
 export default function MembersPage({ loaderData }: Route.ComponentProps) {
   const { user, org, members, invitations } = loaderData;
@@ -82,9 +53,10 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  /**
-   * Make an API request to the given URL
-   */
+  // ---------------------------------------------------------------------------
+  // API Helpers
+  // ---------------------------------------------------------------------------
+
   async function makeApiRequest(
     url: string,
     method: string,
@@ -103,10 +75,7 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
     }
   }
 
-  /**
-   * Execute an action and handle success/error states
-   */
-  async function executeAction(
+  async function runAction(
     action: () => Promise<void>,
     successMessage: string
   ): Promise<void> {
@@ -118,13 +87,16 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
       setSuccess(successMessage);
       revalidator.revalidate();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Action failed";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Action failed");
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Event Handlers
+  // ---------------------------------------------------------------------------
+
   async function handleRoleChange(member: OrgMember, newRole: string) {
-    await executeAction(
+    await runAction(
       () =>
         makeApiRequest(`/api/org/members/${member.userId}`, "PATCH", {
           role: newRole,
@@ -135,11 +107,9 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
 
   async function handleRemoveMember(member: OrgMember) {
     const confirmed = confirm(`Remove ${member.name} from the firm?`);
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
-    await executeAction(
+    await runAction(
       () => makeApiRequest(`/api/org/members/${member.userId}`, "DELETE"),
       "Member removed"
     );
@@ -147,22 +117,20 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
 
   async function handleRevokeInvitation(invitation: PendingInvitation) {
     const confirmed = confirm(`Revoke invitation to ${invitation.email}?`);
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
-    await executeAction(
+    await runAction(
       () => makeApiRequest(`/api/org/invitations/${invitation.id}`, "DELETE"),
       "Invitation revoked"
     );
   }
 
-  function handleOpenTransferModal(member: OrgMember) {
+  function openTransferModal(member: OrgMember) {
     setTransferTarget(member);
     setShowTransferModal(true);
   }
 
-  function handleCloseTransferModal() {
+  function closeTransferModal() {
     setShowTransferModal(false);
     setTransferTarget(null);
   }
@@ -174,14 +142,17 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
   }
 
   function handleTransferSuccess() {
-    setShowTransferModal(false);
-    setTransferTarget(null);
+    closeTransferModal();
     setSuccess("Ownership transferred");
     revalidator.revalidate();
   }
 
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
   return (
-    <AppLayout user={user} org={org} currentPath="/org/members">
+    <AppLayout org={org} currentPath="/org/members">
       <PageLayout
         title="Members"
         actions={
@@ -197,8 +168,8 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
         {error && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 
-        {/* Current Members Section */}
-        <section>
+        {/* Current Members */}
+        <section className="section">
           <div className="section-header">
             <h2 className="text-title-3">Current Members ({members.length})</h2>
           </div>
@@ -217,82 +188,26 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {members.map((member) => {
-                    const isSelf = member.userId === user.id;
-                    const canEditRole = !member.isOwner && !isSelf;
-                    const canTransferOwnership =
-                      org.isOwner &&
-                      !member.isOwner &&
-                      !isSelf &&
-                      member.role === "admin";
-
-                    return (
-                      <tr key={member.id}>
-                        <td>
-                          <div>
-                            {member.name}
-                            {isSelf && " (you)"}
-                          </div>
-                          <div className="text-secondary">{member.email}</div>
-                        </td>
-                        <td>
-                          {canEditRole ? (
-                            <select
-                              className="form-select"
-                              value={member.role}
-                              onChange={(e) =>
-                                handleRoleChange(member, e.target.value)
-                              }
-                              style={{
-                                width: "auto",
-                                padding: "0.25rem 0.5rem",
-                              }}
-                            >
-                              <option value="admin">Admin</option>
-                              <option value="member">Member</option>
-                            </select>
-                          ) : (
-                            <RoleBadge
-                              role={member.role}
-                              isOwner={member.isOwner}
-                            />
-                          )}
-                        </td>
-                        <td>
-                          {new Date(member.createdAt).toLocaleDateString()}
-                        </td>
-                        <td>
-                          <div className="btn-group">
-                            {canTransferOwnership && (
-                              <button
-                                className="btn-primary"
-                                onClick={() => handleOpenTransferModal(member)}
-                              >
-                                Transfer Ownership
-                              </button>
-                            )}
-                            {canEditRole && (
-                              <button
-                                className="btn btn-sm btn-danger"
-                                onClick={() => handleRemoveMember(member)}
-                              >
-                                Remove
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {members.map((member) => (
+                    <MemberRow
+                      key={member.id}
+                      member={member}
+                      currentUserId={user.id}
+                      isCurrentUserOwner={org.isOwner}
+                      onRoleChange={handleRoleChange}
+                      onRemove={handleRemoveMember}
+                      onTransferOwnership={openTransferModal}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
           )}
         </section>
 
-        {/* Pending Invitations Section */}
+        {/* Pending Invitations */}
         {invitations.length > 0 && (
-          <section>
+          <section className="section">
             <h2 className="text-title-3">
               Pending Invitations ({invitations.length})
             </h2>
@@ -309,42 +224,20 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {invitations.map((invitation) => {
-                    const expiresAt = new Date(invitation.expiresAt);
-                    const expiringsSoon =
-                      invitation.expiresAt - Date.now() < 24 * 60 * 60 * 1000;
-
-                    return (
-                      <tr key={invitation.id}>
-                        <td>{invitation.email}</td>
-                        <td>
-                          <span className="badge">{invitation.role}</span>
-                        </td>
-                        <td className="text-secondary">
-                          {invitation.inviterName}
-                        </td>
-                        <td className="text-secondary">
-                          {expiresAt.toLocaleDateString()}
-                          {expiringsSoon && " (soon)"}
-                        </td>
-                        <td>
-                          <button
-                            className="btn-primary btn-primary-danger"
-                            onClick={() => handleRevokeInvitation(invitation)}
-                          >
-                            Revoke
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {invitations.map((invitation) => (
+                    <InvitationRow
+                      key={invitation.id}
+                      invitation={invitation}
+                      onRevoke={handleRevokeInvitation}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
           </section>
         )}
 
-        {/* Invite Modal */}
+        {/* Modals */}
         {showInviteModal && (
           <InviteModal
             onClose={() => setShowInviteModal(false)}
@@ -352,12 +245,11 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
           />
         )}
 
-        {/* Transfer Ownership Modal */}
         {showTransferModal && transferTarget && (
           <TransferOwnershipModal
             targetMember={transferTarget}
             orgName={org.org.name}
-            onClose={handleCloseTransferModal}
+            onClose={closeTransferModal}
             onSuccess={handleTransferSuccess}
           />
         )}
@@ -366,24 +258,144 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
   );
 }
 
-interface RoleBadgeProps {
-  role: string;
-  isOwner: boolean;
+// -----------------------------------------------------------------------------
+// Member Row Component
+// -----------------------------------------------------------------------------
+
+interface MemberRowProps {
+  member: OrgMember;
+  currentUserId: string;
+  isCurrentUserOwner: boolean;
+  onRoleChange: (member: OrgMember, role: string) => void;
+  onRemove: (member: OrgMember) => void;
+  onTransferOwnership: (member: OrgMember) => void;
 }
 
-function RoleBadge({ role, isOwner }: RoleBadgeProps) {
+function MemberRow({
+  member,
+  currentUserId,
+  isCurrentUserOwner,
+  onRoleChange,
+  onRemove,
+  onTransferOwnership,
+}: MemberRowProps) {
+  const isSelf = member.userId === currentUserId;
+  const canEditRole = !member.isOwner && !isSelf;
+  const canTransferOwnership =
+    isCurrentUserOwner && !member.isOwner && !isSelf && member.role === "admin";
+
+  const joinedDate = new Date(member.createdAt).toLocaleDateString();
+
+  return (
+    <tr>
+      {/* Name & Email */}
+      <td>
+        <div>
+          {member.name}
+          {isSelf && " (you)"}
+        </div>
+        <div className="text-secondary">{member.email}</div>
+      </td>
+
+      {/* Role */}
+      <td>
+        {canEditRole ? (
+          <select
+            className="form-select"
+            value={member.role}
+            onChange={(e) => onRoleChange(member, e.target.value)}
+            style={{ width: "auto", padding: "0.25rem 0.5rem" }}
+          >
+            <option value="admin">Admin</option>
+            <option value="member">Member</option>
+          </select>
+        ) : (
+          <RoleBadge member={member} />
+        )}
+      </td>
+
+      {/* Joined Date */}
+      <td>{joinedDate}</td>
+
+      {/* Actions */}
+      <td>
+        <div className="btn-group">
+          {canTransferOwnership && (
+            <button
+              className="btn-primary"
+              onClick={() => onTransferOwnership(member)}
+            >
+              Transfer Ownership
+            </button>
+          )}
+          {canEditRole && (
+            <button
+              className="btn btn-sm btn-danger"
+              onClick={() => onRemove(member)}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function RoleBadge({ member }: { member: OrgMember }) {
   let badgeClass = "badge";
 
-  if (isOwner) {
-    badgeClass = "badge badge-owner";
-  } else if (role === "admin") {
-    badgeClass = "badge badge-admin";
+  if (member.isOwner) {
+    badgeClass += " badge-owner";
+  } else if (member.role === "admin") {
+    badgeClass += " badge-admin";
   }
 
-  const displayText = isOwner ? "Owner" : role;
+  const label = member.isOwner ? "Owner" : member.role;
 
-  return <span className={badgeClass}>{displayText}</span>;
+  return <span className={badgeClass}>{label}</span>;
 }
+
+// -----------------------------------------------------------------------------
+// Invitation Row Component
+// -----------------------------------------------------------------------------
+
+interface InvitationRowProps {
+  invitation: PendingInvitation;
+  onRevoke: (invitation: PendingInvitation) => void;
+}
+
+function InvitationRow({ invitation, onRevoke }: InvitationRowProps) {
+  const expiresDate = new Date(invitation.expiresAt).toLocaleDateString();
+  const isExpiringSoon =
+    invitation.expiresAt - Date.now() < 24 * 60 * 60 * 1000;
+
+  return (
+    <tr>
+      <td>{invitation.email}</td>
+      <td>
+        <span className="badge">{invitation.role}</span>
+      </td>
+      <td className="text-secondary">{invitation.inviterName}</td>
+      <td className="text-secondary">
+        {expiresDate}
+        {isExpiringSoon && " (soon)"}
+      </td>
+      <td>
+        <button
+          className="btn-primary btn-primary-danger"
+          onClick={() => onRevoke(invitation)}
+        >
+          Revoke
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Invite Modal
+// -----------------------------------------------------------------------------
 
 interface InviteModalProps {
   onClose: () => void;
@@ -416,9 +428,9 @@ function InviteModal({ onClose, onSuccess }: InviteModalProps) {
 
       onSuccess();
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to send invitation";
-      setError(message);
+      setError(
+        err instanceof Error ? err.message : "Failed to send invitation"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -488,6 +500,10 @@ function InviteModal({ onClose, onSuccess }: InviteModalProps) {
   );
 }
 
+// -----------------------------------------------------------------------------
+// Transfer Ownership Modal
+// -----------------------------------------------------------------------------
+
 interface TransferOwnershipModalProps {
   targetMember: OrgMember;
   orgName: string;
@@ -505,15 +521,17 @@ function TransferOwnershipModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isNameMatch = confirmName === orgName;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
 
-    if (confirmName !== orgName) {
+    if (!isNameMatch) {
       setError("Name does not match");
       return;
     }
 
+    setError(null);
     setIsSubmitting(true);
 
     try {
@@ -534,9 +552,9 @@ function TransferOwnershipModal({
 
       onSuccess();
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to transfer ownership";
-      setError(message);
+      setError(
+        err instanceof Error ? err.message : "Failed to transfer ownership"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -580,7 +598,7 @@ function TransferOwnershipModal({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || confirmName !== orgName}
+              disabled={isSubmitting || !isNameMatch}
               className="btn btn-danger btn-lg btn-lg-fit"
             >
               {isSubmitting ? "Transferring..." : "Transfer Ownership"}

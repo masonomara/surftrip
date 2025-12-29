@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { redirect, useNavigate, useRevalidator } from "react-router";
+import { useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/org.settings";
-import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
 import { FIRM_SIZES, US_STATES, PRACTICE_AREAS } from "~/lib/org-constants";
-import type { SessionResponse, OrgMembership } from "~/lib/types";
+import { requireOrgAuth } from "~/lib/loader-auth";
 import { AppLayout } from "~/components/AppLayout";
 import { PageLayout } from "~/components/PageLayout";
+
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
 
 interface DeletionPreview {
   org: { id: string; name: string } | null;
@@ -15,55 +18,28 @@ interface DeletionPreview {
   orgContextChunks: number;
 }
 
+// -----------------------------------------------------------------------------
+// Loader
+// -----------------------------------------------------------------------------
+
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const cookie = request.headers.get("cookie") || "";
-
-  // Check if user is logged in
-  const sessionResponse = await apiFetch(
-    context,
-    "/api/auth/get-session",
-    cookie
-  );
-
-  if (!sessionResponse.ok) {
-    throw redirect("/auth");
-  }
-
-  const sessionData = (await sessionResponse.json()) as SessionResponse | null;
-
-  if (!sessionData?.user) {
-    throw redirect("/auth");
-  }
-
-  // Fetch user's organization membership
-  const orgResponse = await apiFetch(context, "/api/user/org", cookie);
-
-  if (!orgResponse.ok) {
-    throw redirect("/dashboard");
-  }
-
-  const orgMembership = (await orgResponse.json()) as OrgMembership | null;
-
-  if (!orgMembership?.org) {
-    throw redirect("/dashboard");
-  }
-
-  return {
-    user: sessionData.user,
-    org: orgMembership,
-  };
+  return requireOrgAuth(request, context);
 }
+
+// -----------------------------------------------------------------------------
+// Page Component
+// -----------------------------------------------------------------------------
 
 export default function SettingsPage({ loaderData }: Route.ComponentProps) {
   const { user, org } = loaderData;
   const navigate = useNavigate();
   const revalidator = useRevalidator();
 
-  // Permission flags
+  // Permissions
   const isAdmin = org.role === "admin";
   const isOwner = org.isOwner;
 
-  // Edit form state
+  // Form state
   const [editName, setEditName] = useState(org.org.name);
   const [editFirmSize, setEditFirmSize] = useState(org.org.firmSize || "");
   const [editJurisdictions, setEditJurisdictions] = useState<string[]>(
@@ -73,17 +49,6 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
     org.org.practiceTypes || []
   );
   const [isSaving, setIsSaving] = useState(false);
-
-  // Check if any field has changed
-  const originalJurisdictions = org.org.jurisdictions || [];
-  const originalPracticeTypes = org.org.practiceTypes || [];
-  const hasChanges =
-    editName !== org.org.name ||
-    editFirmSize !== (org.org.firmSize || "") ||
-    editJurisdictions.length !== originalJurisdictions.length ||
-    editJurisdictions.some((j) => !originalJurisdictions.includes(j)) ||
-    editPracticeTypes.length !== originalPracticeTypes.length ||
-    editPracticeTypes.some((p) => !originalPracticeTypes.includes(p));
 
   // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -96,15 +61,42 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  /**
-   * Toggle an item in a string array (add if not present, remove if present)
-   */
+  // ---------------------------------------------------------------------------
+  // Change Detection
+  // ---------------------------------------------------------------------------
+
+  const originalJurisdictions = org.org.jurisdictions || [];
+  const originalPracticeTypes = org.org.practiceTypes || [];
+
+  const hasNameChanged = editName !== org.org.name;
+  const hasFirmSizeChanged = editFirmSize !== (org.org.firmSize || "");
+  const hasJurisdictionsChanged =
+    editJurisdictions.length !== originalJurisdictions.length ||
+    editJurisdictions.some((j) => !originalJurisdictions.includes(j));
+  const hasPracticeTypesChanged =
+    editPracticeTypes.length !== originalPracticeTypes.length ||
+    editPracticeTypes.some((p) => !originalPracticeTypes.includes(p));
+
+  const hasChanges =
+    hasNameChanged ||
+    hasFirmSizeChanged ||
+    hasJurisdictionsChanged ||
+    hasPracticeTypesChanged;
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
   function toggleArrayItem(array: string[], item: string): string[] {
     if (array.includes(item)) {
       return array.filter((i) => i !== item);
     }
     return [...array, item];
   }
+
+  // ---------------------------------------------------------------------------
+  // Event Handlers
+  // ---------------------------------------------------------------------------
 
   async function handleSave() {
     setError(null);
@@ -132,15 +124,13 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
       setSuccess("Firm updated");
       revalidator.revalidate();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to save";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setIsSaving(false);
     }
   }
 
   function handleCancelEdit() {
-    // Reset form to original values
     setEditName(org.org.name);
     setEditFirmSize(org.org.firmSize || "");
     setEditJurisdictions(org.org.jurisdictions || []);
@@ -165,8 +155,7 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
       setDeletionPreview(preview);
       setShowDeleteModal(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to load");
     }
   }
 
@@ -194,8 +183,7 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
 
       navigate("/dashboard");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to delete";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to delete");
     } finally {
       setIsDeleting(false);
     }
@@ -207,16 +195,22 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
     setError(null);
   }
 
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
   return (
-    <AppLayout user={user} org={org} currentPath="/org/settings">
+    <AppLayout org={org} currentPath="/org/settings">
       <PageLayout title="Firm Settings">
         {error && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 
-        {/* Firm Information Section */}
-        <section>
+        {/* Firm Details Section */}
+        <section className="section">
           <h2 className="text-title-3">Firm</h2>
+
           <div className="form-card">
+            {/* Firm Name */}
             <div className="form-group">
               <label htmlFor="orgName" className="form-label">
                 Firm Name
@@ -231,6 +225,7 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
               />
             </div>
 
+            {/* Firm Size */}
             <div className="form-group">
               <label htmlFor="firmSize" className="form-label">
                 Firm Size
@@ -251,6 +246,7 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
               </select>
             </div>
 
+            {/* Jurisdictions */}
             <div className="form-group" style={{ gridColumn: "span 2" }}>
               <label className="form-label">Jurisdictions</label>
               <div className="chip-grid">
@@ -276,6 +272,7 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
               </div>
             </div>
 
+            {/* Practice Areas */}
             <div className="form-group" style={{ gridColumn: "span 2" }}>
               <label className="form-label">Practice Areas</label>
               <div className="chip-grid">
@@ -301,6 +298,8 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
               </div>
             </div>
           </div>
+
+          {/* Save/Cancel Buttons */}
           {hasChanges && (
             <div className="btn-group">
               <button
@@ -321,10 +320,11 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
           )}
         </section>
 
-        {/* Danger Zone Section (Owner only) */}
+        {/* Danger Zone - Only visible to owners */}
         {isOwner && (
-          <section>
+          <section className="section">
             <h2 className="text-title-3">Danger Zone</h2>
+
             <div className="info-card">
               <div>
                 <h3 className="text-headline">Delete Firm</h3>
@@ -343,64 +343,102 @@ export default function SettingsPage({ loaderData }: Route.ComponentProps) {
           </section>
         )}
 
-        {/* Delete Firm Modal */}
+        {/* Delete Confirmation Modal */}
         {showDeleteModal && deletionPreview && (
-          <div className="modal-overlay" onClick={handleCloseDeleteModal}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <h2 className="modal-title">Delete Firm</h2>
-
-              <div
-                className="alert alert-error"
-                style={{ marginBottom: "-11px" }}
-              >
-                This will permanently delete:
-              </div>
-
-              <ul className="text-secondary text-callout">
-                <li>
-                  <strong>{deletionPreview.org?.name}</strong>
-                </li>
-                <li>{deletionPreview.members} member(s)</li>
-                <li>{deletionPreview.invitations} pending invitation(s)</li>
-                <li>{deletionPreview.orgContextChunks} document(s)</li>
-                <li>All conversations, Clio connections, and audit logs</li>
-              </ul>
-
-              <div className="form-group">
-                <label htmlFor="confirmName" className="form-label">
-                  Type <strong>{org.org.name}</strong> to confirm:
-                </label>
-                <input
-                  id="confirmName"
-                  type="text"
-                  value={confirmName}
-                  onChange={(e) => setConfirmName(e.target.value)}
-                  className="form-input"
-                  placeholder="Firm name"
-                />
-              </div>
-
-              {error && <div className="alert alert-error">{error}</div>}
-
-              <div className="modal-actions">
-                <button
-                  onClick={handleCloseDeleteModal}
-                  className="btn btn-secondary btn-lg btn-lg-fit"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteOrg}
-                  disabled={isDeleting || confirmName !== org.org.name}
-                  className="btn btn-danger btn-lg btn-lg-fit"
-                >
-                  {isDeleting ? "Deleting..." : "Delete Firm"}
-                </button>
-              </div>
-            </div>
-          </div>
+          <DeleteFirmModal
+            orgName={org.org.name}
+            deletionPreview={deletionPreview}
+            confirmName={confirmName}
+            onConfirmNameChange={setConfirmName}
+            isDeleting={isDeleting}
+            error={error}
+            onDelete={handleDeleteOrg}
+            onClose={handleCloseDeleteModal}
+          />
         )}
       </PageLayout>
     </AppLayout>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Delete Firm Modal
+// -----------------------------------------------------------------------------
+
+interface DeleteFirmModalProps {
+  orgName: string;
+  deletionPreview: DeletionPreview;
+  confirmName: string;
+  onConfirmNameChange: (value: string) => void;
+  isDeleting: boolean;
+  error: string | null;
+  onDelete: () => void;
+  onClose: () => void;
+}
+
+function DeleteFirmModal({
+  orgName,
+  deletionPreview,
+  confirmName,
+  onConfirmNameChange,
+  isDeleting,
+  error,
+  onDelete,
+  onClose,
+}: DeleteFirmModalProps) {
+  const isNameMatch = confirmName === orgName;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2 className="modal-title">Delete Firm</h2>
+
+        <div className="alert alert-error" style={{ marginBottom: "-11px" }}>
+          This will permanently delete:
+        </div>
+
+        <ul className="text-secondary text-callout">
+          <li>
+            <strong>{deletionPreview.org?.name}</strong>
+          </li>
+          <li>{deletionPreview.members} member(s)</li>
+          <li>{deletionPreview.invitations} pending invitation(s)</li>
+          <li>{deletionPreview.orgContextChunks} document(s)</li>
+          <li>All conversations, Clio connections, and audit logs</li>
+        </ul>
+
+        <div className="form-group">
+          <label htmlFor="confirmName" className="form-label">
+            Type <strong>{orgName}</strong> to confirm:
+          </label>
+          <input
+            id="confirmName"
+            type="text"
+            value={confirmName}
+            onChange={(e) => onConfirmNameChange(e.target.value)}
+            className="form-input"
+            placeholder="Firm name"
+          />
+        </div>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <div className="modal-actions">
+          <button
+            onClick={onClose}
+            className="btn btn-secondary btn-lg btn-lg-fit"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onDelete}
+            disabled={isDeleting || !isNameMatch}
+            className="btn btn-danger btn-lg btn-lg-fit"
+          >
+            {isDeleting ? "Deleting..." : "Delete Firm"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -11,7 +11,7 @@
  * - Public invitation routes (view/accept)
  */
 
-import { getAuth } from "../lib/auth";
+import { getSession, getMembership } from "../lib/session";
 import type { Env } from "../types/env";
 import type { OrgRole } from "../types";
 import {
@@ -28,45 +28,14 @@ import {
   acceptInvitationById,
 } from "../services/invitations";
 
-/**
- * Attempts to get the authenticated user session from the request.
- * Returns null if authentication fails or no session exists.
- */
-async function getSession(request: Request, env: Env) {
-  try {
-    return await getAuth(env).api.getSession({ headers: request.headers });
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Verifies that a user is an admin of their organization.
- * Returns their org context if successful, or an error response if not.
- */
 async function requireAdmin(db: D1Database, userId: string) {
-  const membership = await db
-    .prepare(`SELECT org_id, role, is_owner FROM org_members WHERE user_id = ?`)
-    .bind(userId)
-    .first<{ org_id: string; role: OrgRole; is_owner: number }>();
-
+  const membership = await getMembership(db, userId, true);
   if (!membership) {
-    return {
-      ok: false as const,
-      res: Response.json(
-        { error: "Not a member of any organization" },
-        { status: 403 }
-      ),
-    };
-  }
-
-  if (membership.role !== "admin") {
     return {
       ok: false as const,
       res: Response.json({ error: "Admin access required" }, { status: 403 }),
     };
   }
-
   return {
     ok: true as const,
     orgId: membership.org_id,

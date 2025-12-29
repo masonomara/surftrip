@@ -1,12 +1,16 @@
 import { useState, useEffect } from "react";
-import { redirect, useSearchParams, useRevalidator } from "react-router";
+import { useSearchParams, useRevalidator } from "react-router";
 import type { Route } from "./+types/org.clio";
 import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
 import { Plus, RotateCw } from "lucide-react";
-import type { SessionResponse, OrgMembership } from "~/lib/types";
+import { requireOrgAuth } from "~/lib/loader-auth";
 import { AppLayout } from "~/components/AppLayout";
 import { PageLayout } from "~/components/PageLayout";
+
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
 
 interface ClioStatus {
   connected: boolean;
@@ -15,7 +19,10 @@ interface ClioStatus {
   lastSyncedAt?: number;
 }
 
-// Error messages for OAuth error codes
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
+
 const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   denied: "Authorization denied.",
   invalid_request: "Invalid request.",
@@ -23,72 +30,50 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   exchange_failed: "Authorization failed.",
 };
 
+// -----------------------------------------------------------------------------
+// Loader
+// -----------------------------------------------------------------------------
+
 export async function loader({ request, context }: Route.LoaderArgs) {
+  const { user, org } = await requireOrgAuth(request, context);
   const cookie = request.headers.get("cookie") || "";
 
-  // Check if user is logged in
-  const sessionResponse = await apiFetch(
-    context,
-    "/api/auth/get-session",
-    cookie
-  );
-
-  if (!sessionResponse.ok) {
-    throw redirect("/auth");
-  }
-
-  const sessionData = (await sessionResponse.json()) as SessionResponse | null;
-
-  if (!sessionData?.user) {
-    throw redirect("/auth");
-  }
-
-  // Fetch user's organization membership
-  const orgResponse = await apiFetch(context, "/api/user/org", cookie);
-
-  if (!orgResponse.ok) {
-    throw redirect("/dashboard");
-  }
-
-  const orgMembership = (await orgResponse.json()) as OrgMembership | null;
-
-  if (!orgMembership?.org) {
-    throw redirect("/dashboard");
-  }
-
-  // Fetch Clio connection status
   const clioResponse = await apiFetch(context, "/api/clio/status", cookie);
 
-  let clioStatus: ClioStatus = { connected: false, schemaLoaded: false };
-  if (clioResponse.ok) {
-    clioStatus = (await clioResponse.json()) as ClioStatus;
-  }
+  const clioStatus: ClioStatus = clioResponse.ok
+    ? ((await clioResponse.json()) as ClioStatus)
+    : { connected: false, schemaLoaded: false };
 
-  return {
-    user: sessionData.user,
-    org: orgMembership,
-    clioStatus,
-  };
+  return { user, org, clioStatus };
 }
+
+// -----------------------------------------------------------------------------
+// Page Component
+// -----------------------------------------------------------------------------
 
 export default function ClioPage({ loaderData }: Route.ComponentProps) {
   const { user, org, clioStatus } = loaderData;
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
 
-  // Action state
+  // Loading states
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+
+  // Modal state
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
 
   // Feedback state
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Permission flags
+  // Permissions
   const isAdmin = org.role === "admin";
 
-  // Handle URL parameters from OAuth callback
+  // ---------------------------------------------------------------------------
+  // Handle URL Parameters (OAuth callback results)
+  // ---------------------------------------------------------------------------
+
   useEffect(() => {
     const successParam = searchParams.get("success");
     const errorParam = searchParams.get("error");
@@ -106,6 +91,10 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  // ---------------------------------------------------------------------------
+  // Event Handlers
+  // ---------------------------------------------------------------------------
 
   function handleConnect() {
     window.location.href = `${API_URL}/api/clio/connect`;
@@ -131,9 +120,7 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
       setShowDisconnectModal(false);
       revalidator.revalidate();
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to disconnect";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to disconnect");
     } finally {
       setIsDisconnecting(false);
     }
@@ -158,54 +145,64 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
       setSuccess("Clio configuration synced.");
       revalidator.revalidate();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to sync";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to sync");
     } finally {
       setIsRefreshing(false);
     }
   }
 
-  // Format last synced date
+  // ---------------------------------------------------------------------------
+  // Derived Values
+  // ---------------------------------------------------------------------------
+
   const lastSyncedText = clioStatus.lastSyncedAt
     ? `Last synced ${new Date(clioStatus.lastSyncedAt).toLocaleDateString()}`
     : null;
 
-  const statusIndicator = (
-    <div className="status-indicator btn btn-sm btn-secondary">
-      <span
-        className={`status-dot ${clioStatus.connected ? "status-dot-success" : "status-dot-error"}`}
-      />
-
-      {clioStatus.connected ? "Connected" : "Not Connected"}
-    </div>
-  );
-
-  const actionButtons = (
-    <>
-      {statusIndicator}
-      {clioStatus.connected && (
-        <button onClick={handleConnect} className="btn btn-secondary btn-sm">
-          <RotateCw strokeWidth={1.75} size={16} />
-          Reconnect
-        </button>
-      )}
-    </>
-  );
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
-    <AppLayout user={user} org={org} currentPath="/org/clio">
+    <AppLayout org={org} currentPath="/org/clio">
       <PageLayout
         title="Clio Connection"
         subtitle="Connect your Clio account to query matters, contacts, and calendar data."
-        actions={actionButtons}
+        actions={
+          <>
+            {/* Connection Status Indicator */}
+            <div className="status-indicator btn btn-sm btn-secondary">
+              <span
+                className={`status-dot ${
+                  clioStatus.connected
+                    ? "status-dot-success"
+                    : "status-dot-error"
+                }`}
+              />
+              {clioStatus.connected ? "Connected" : "Not Connected"}
+            </div>
+
+            {/* Reconnect Button (only when connected) */}
+            {clioStatus.connected && (
+              <button
+                onClick={handleConnect}
+                className="btn btn-secondary btn-sm"
+              >
+                <RotateCw strokeWidth={1.75} size={16} />
+                Reconnect
+              </button>
+            )}
+          </>
+        }
       >
         {error && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 
-        {/* Connect to Clio - show only when not connected */}
+        {/* Connect Section (only when not connected) */}
         {!clioStatus.connected && (
-          <section>
+          <section className="section">
             <h2 className="text-title-3">Connect to Clio</h2>
+
             <div className="info-card">
               <div>
                 <h3 className="text-headline">What Docket does with Clio</h3>
@@ -221,6 +218,7 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
                   </li>
                 </ul>
               </div>
+
               <button
                 onClick={handleConnect}
                 className="btn btn-sm btn-primary"
@@ -232,9 +230,9 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
           </section>
         )}
 
-        {/* Sync Section (Admin only, when connected) */}
+        {/* Sync Section (only for admins when connected) */}
         {isAdmin && clioStatus.connected && (
-          <section>
+          <section className="section">
             <h2 className="text-title-3">Sync Clio Configuration</h2>
 
             <div className="info-card">
@@ -247,6 +245,7 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
                   sync to update Docket. Auto-syncs hourly.
                 </p>
               </div>
+
               <button
                 onClick={handleSync}
                 disabled={isRefreshing}
@@ -258,9 +257,9 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
           </section>
         )}
 
-        {/* Disconnect Section (only when connected) */}
+        {/* Danger Zone (only when connected) */}
         {clioStatus.connected && (
-          <section>
+          <section className="section">
             <h2 className="text-title-3">Danger Zone</h2>
 
             <div className="info-card">
@@ -270,6 +269,7 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
                   Revokes Docket&apos;s access. You can reconnect anytime.
                 </p>
               </div>
+
               <button
                 onClick={() => setShowDisconnectModal(true)}
                 className="btn btn-sm btn-danger"
@@ -283,35 +283,58 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
 
       {/* Disconnect Confirmation Modal */}
       {showDisconnectModal && (
-        <div
-          className="modal-overlay"
-          onClick={() => setShowDisconnectModal(false)}
-        >
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-title-3">Disconnect Clio?</h2>
-            <p className="text-secondary">
-              This will revoke Docket&apos;s access to your Clio account. You
-              can reconnect anytime.
-            </p>
-            <div className="modal-actions">
-              <button
-                onClick={() => setShowDisconnectModal(false)}
-                className="btn btn-secondary btn-sm"
-                disabled={isDisconnecting}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDisconnect}
-                className="btn btn-danger btn-sm"
-                disabled={isDisconnecting}
-              >
-                {isDisconnecting ? "Disconnecting..." : "Disconnect"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DisconnectModal
+          isDisconnecting={isDisconnecting}
+          onDisconnect={handleDisconnect}
+          onClose={() => setShowDisconnectModal(false)}
+        />
       )}
     </AppLayout>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Disconnect Modal
+// -----------------------------------------------------------------------------
+
+interface DisconnectModalProps {
+  isDisconnecting: boolean;
+  onDisconnect: () => void;
+  onClose: () => void;
+}
+
+function DisconnectModal({
+  isDisconnecting,
+  onDisconnect,
+  onClose,
+}: DisconnectModalProps) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-title-3">Disconnect Clio?</h2>
+
+        <p className="text-secondary">
+          This will revoke Docket&apos;s access to your Clio account. You can
+          reconnect anytime.
+        </p>
+
+        <div className="modal-actions">
+          <button
+            onClick={onClose}
+            className="btn btn-secondary btn-sm"
+            disabled={isDisconnecting}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onDisconnect}
+            className="btn btn-danger btn-sm"
+            disabled={isDisconnecting}
+          >
+            {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { redirect, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import type { Route } from "./+types/account.settings";
-import { apiFetch } from "~/lib/api";
-import { API_URL, authClient, signOut } from "~/lib/auth-client";
-import type { SessionResponse, OrgMembership } from "~/lib/types";
+import { API_URL, signOut } from "~/lib/auth-client";
+import { requireAuth } from "~/lib/loader-auth";
 import { AppLayout } from "~/components/AppLayout";
 import { PageLayout } from "~/components/PageLayout";
+
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
 
 interface DeletionPreview {
   user: { id: string; email: string } | null;
@@ -13,42 +16,17 @@ interface DeletionPreview {
   orgMemberships: number;
 }
 
+// -----------------------------------------------------------------------------
+// Loader
+// -----------------------------------------------------------------------------
+
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const cookie = request.headers.get("cookie") || "";
-
-  // Check if user is logged in
-  const sessionResponse = await apiFetch(
-    context,
-    "/api/auth/get-session",
-    cookie
-  );
-
-  if (!sessionResponse.ok) {
-    throw redirect("/auth");
-  }
-
-  const sessionData = (await sessionResponse.json()) as SessionResponse | null;
-
-  if (!sessionData?.user) {
-    throw redirect("/auth");
-  }
-
-  // Fetch user's organization membership
-  const orgResponse = await apiFetch(context, "/api/user/org", cookie);
-
-  let orgMembership: OrgMembership | null = null;
-  if (orgResponse.ok) {
-    const orgData = (await orgResponse.json()) as OrgMembership | null;
-    if (orgData?.org) {
-      orgMembership = orgData;
-    }
-  }
-
-  return {
-    user: sessionData.user,
-    org: orgMembership,
-  };
+  return requireAuth(request, context);
 }
+
+// -----------------------------------------------------------------------------
+// Page Component
+// -----------------------------------------------------------------------------
 
 export default function AccountSettingsPage({
   loaderData,
@@ -56,18 +34,24 @@ export default function AccountSettingsPage({
   const { user, org } = loaderData;
   const navigate = useNavigate();
 
-  // Name editing state
+  // Form state
   const [name, setName] = useState(user.name);
   const [isSaving, setIsSaving] = useState(false);
-  const nameChanged = name !== user.name;
+  const nameHasChanged = name !== user.name;
 
-  // Modal and deletion state
+  // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletionPreview, setDeletionPreview] =
     useState<DeletionPreview | null>(null);
   const [confirmEmail, setConfirmEmail] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Feedback state
   const [error, setError] = useState<string | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Event Handlers
+  // ---------------------------------------------------------------------------
 
   async function handleSaveName() {
     setError(null);
@@ -86,19 +70,13 @@ export default function AccountSettingsPage({
         throw new Error(data.error || "Failed to update name");
       }
 
-      // Reload to get fresh data
+      // Reload the page to reflect the updated name
       window.location.reload();
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to update name";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to update name");
     } finally {
       setIsSaving(false);
     }
-  }
-
-  function handleCancelName() {
-    setName(user.name);
   }
 
   async function handleShowDeleteModal() {
@@ -118,9 +96,7 @@ export default function AccountSettingsPage({
       setDeletionPreview(preview);
       setShowDeleteModal(true);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to load preview";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to load preview");
     }
   }
 
@@ -147,7 +123,7 @@ export default function AccountSettingsPage({
           message?: string;
         };
 
-        // Handle special case where user owns firms
+        // Handle the special case where user is sole owner of an org
         if (data.error === "sole_owner") {
           throw new Error(
             data.message || "You must transfer ownership of your firm first"
@@ -157,33 +133,41 @@ export default function AccountSettingsPage({
         throw new Error(data.error || "Failed to delete account");
       }
 
-      // Sign out and redirect to auth
-      await authClient.signOut();
+      await signOut();
       navigate("/auth");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to delete account";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to delete account");
     } finally {
       setIsDeleting(false);
     }
   }
 
-  function handleCloseModal() {
+  function handleCloseDeleteModal() {
     setShowDeleteModal(false);
     setConfirmEmail("");
     setError(null);
   }
 
+  async function handleSignOut() {
+    await signOut();
+    window.location.href = "/auth";
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
   return (
-    <AppLayout user={user} org={org} currentPath="/account/settings">
+    <AppLayout org={org} currentPath="/account/settings">
       <PageLayout title="Account Settings">
         {error && <div className="alert alert-error">{error}</div>}
 
-        {/* Account Information Section */}
-        <section>
+        {/* Account Details Section */}
+        <section className="section">
           <h2 className="text-title-3">Account</h2>
+
           <div className="form-card">
+            {/* Name Field */}
             <div className="form-group">
               <label htmlFor="name" className="form-label">
                 Name
@@ -196,6 +180,8 @@ export default function AccountSettingsPage({
                 className="form-input"
               />
             </div>
+
+            {/* Email Field (read-only) */}
             <div className="form-group">
               <label htmlFor="email" className="form-label">
                 Email
@@ -209,10 +195,12 @@ export default function AccountSettingsPage({
               />
             </div>
           </div>
-          {nameChanged && (
+
+          {/* Save/Cancel Buttons */}
+          {nameHasChanged && (
             <div className="btn-group">
               <button
-                onClick={handleCancelName}
+                onClick={() => setName(user.name)}
                 disabled={isSaving}
                 className="btn btn-lg btn-secondary btn-lg-fit"
               >
@@ -230,8 +218,9 @@ export default function AccountSettingsPage({
         </section>
 
         {/* Session Section */}
-        <section>
+        <section className="section">
           <h2 className="text-title-3">Session</h2>
+
           <div className="info-card">
             <div>
               <h3 className="text-headline">Sign Out</h3>
@@ -239,10 +228,9 @@ export default function AccountSettingsPage({
                 Sign out of your account on this device.
               </p>
             </div>
+
             <button
-              onClick={() =>
-                signOut().then(() => (window.location.href = "/auth"))
-              }
+              onClick={handleSignOut}
               className="btn btn-sm btn-secondary"
             >
               Sign Out
@@ -251,7 +239,7 @@ export default function AccountSettingsPage({
         </section>
 
         {/* Danger Zone Section */}
-        <section>
+        <section className="section">
           <h2 className="text-title-3">Danger Zone</h2>
 
           <div className="info-card">
@@ -274,72 +262,109 @@ export default function AccountSettingsPage({
 
         {/* Delete Account Modal */}
         {showDeleteModal && deletionPreview && (
-          <div className="modal-overlay" onClick={handleCloseModal}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <h2 className="modal-title">Delete Account</h2>
-
-              <div
-                className="alert alert-error"
-                style={{ marginBottom: "-11px" }}
-              >
-                This will permanently delete:
-              </div>
-
-              <ul className="text-secondary text-callout">
-                <li>
-                  Your account (<strong>{deletionPreview.user?.email}</strong>)
-                </li>
-                {deletionPreview.orgsOwned > 0 && (
-                  <li>{deletionPreview.orgsOwned} firm(s) you own</li>
-                )}
-                {deletionPreview.orgMemberships > 0 && (
-                  <li>{deletionPreview.orgMemberships} firm membership(s)</li>
-                )}
-                <li>All your conversations and messages</li>
-              </ul>
-
-              {deletionPreview.orgsOwned > 0 && (
-                <div className="alert alert-error">
-                  Warning: You must transfer ownership before deleting your
-                  account.
-                </div>
-              )}
-
-              <div className="form-group">
-                <label htmlFor="confirmEmail" className="form-label">
-                  Type <strong>{user.email}</strong> to confirm:
-                </label>
-                <input
-                  id="confirmEmail"
-                  type="email"
-                  value={confirmEmail}
-                  onChange={(e) => setConfirmEmail(e.target.value)}
-                  className="form-input"
-                  placeholder="Your email"
-                />
-              </div>
-
-              {error && <div className="alert alert-error">{error}</div>}
-
-              <div className="modal-actions">
-                <button
-                  onClick={handleCloseModal}
-                  className="btn btn-secondary btn-lg btn-lg-fit"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteAccount}
-                  disabled={isDeleting || confirmEmail !== user.email}
-                  className="btn btn-danger btn-lg btn-lg-fit"
-                >
-                  {isDeleting ? "Deleting..." : "Delete Account"}
-                </button>
-              </div>
-            </div>
-          </div>
+          <DeleteAccountModal
+            userEmail={user.email}
+            deletionPreview={deletionPreview}
+            confirmEmail={confirmEmail}
+            onConfirmEmailChange={setConfirmEmail}
+            isDeleting={isDeleting}
+            error={error}
+            onDelete={handleDeleteAccount}
+            onClose={handleCloseDeleteModal}
+          />
         )}
       </PageLayout>
     </AppLayout>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Delete Account Modal
+// -----------------------------------------------------------------------------
+
+interface DeleteAccountModalProps {
+  userEmail: string;
+  deletionPreview: DeletionPreview;
+  confirmEmail: string;
+  onConfirmEmailChange: (value: string) => void;
+  isDeleting: boolean;
+  error: string | null;
+  onDelete: () => void;
+  onClose: () => void;
+}
+
+function DeleteAccountModal({
+  userEmail,
+  deletionPreview,
+  confirmEmail,
+  onConfirmEmailChange,
+  isDeleting,
+  error,
+  onDelete,
+  onClose,
+}: DeleteAccountModalProps) {
+  const isEmailMatch = confirmEmail === userEmail;
+  const hasOrgsOwned = deletionPreview.orgsOwned > 0;
+  const hasOrgMemberships = deletionPreview.orgMemberships > 0;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2 className="modal-title">Delete Account</h2>
+
+        <div className="alert alert-error" style={{ marginBottom: "-11px" }}>
+          This will permanently delete:
+        </div>
+
+        <ul className="text-secondary text-callout">
+          <li>
+            Your account (<strong>{deletionPreview.user?.email}</strong>)
+          </li>
+          {hasOrgsOwned && <li>{deletionPreview.orgsOwned} firm(s) you own</li>}
+          {hasOrgMemberships && (
+            <li>{deletionPreview.orgMemberships} firm membership(s)</li>
+          )}
+          <li>All your conversations and messages</li>
+        </ul>
+
+        {hasOrgsOwned && (
+          <div className="alert alert-error">
+            Warning: You must transfer ownership before deleting your account.
+          </div>
+        )}
+
+        <div className="form-group">
+          <label htmlFor="confirmEmail" className="form-label">
+            Type <strong>{userEmail}</strong> to confirm:
+          </label>
+          <input
+            id="confirmEmail"
+            type="email"
+            value={confirmEmail}
+            onChange={(e) => onConfirmEmailChange(e.target.value)}
+            className="form-input"
+            placeholder="Your email"
+          />
+        </div>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <div className="modal-actions">
+          <button
+            onClick={onClose}
+            className="btn btn-secondary btn-lg btn-lg-fit"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onDelete}
+            disabled={isDeleting || !isEmailMatch}
+            className="btn btn-danger btn-lg btn-lg-fit"
+          >
+            {isDeleting ? "Deleting..." : "Delete Account"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

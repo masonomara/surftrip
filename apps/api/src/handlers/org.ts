@@ -9,32 +9,17 @@
  * - Deleting an organization
  */
 
-import { getAuth } from "../lib/auth";
+import { getSession } from "../lib/session";
 import type { Env } from "../types/env";
 import type { OrgMemberRow } from "../types";
 import { orgMemberRowToEntity } from "../types";
 import { getOrgDeletionPreview, deleteOrg } from "../services/org-deletion";
 
-/**
- * Request body for creating an organization.
- */
 interface CreateOrgBody {
   name?: string;
   firmSize?: string;
   jurisdictions?: string[];
   practiceTypes?: string[];
-}
-
-/**
- * Attempts to get the authenticated user session from the request.
- * Returns null if authentication fails or no session exists.
- */
-async function getAuthenticatedSession(request: Request, env: Env) {
-  try {
-    return await getAuth(env).api.getSession({ headers: request.headers });
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -69,7 +54,7 @@ export async function handleCreateOrg(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getAuthenticatedSession(request, env);
+  const session = await getSession(request, env);
 
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -151,7 +136,7 @@ export async function handleGetUserOrg(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getAuthenticatedSession(request, env);
+  const session = await getSession(request, env);
 
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -216,7 +201,7 @@ export async function handleUpdateOrg(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getAuthenticatedSession(request, env);
+  const session = await getSession(request, env);
 
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -321,7 +306,7 @@ export async function handleGetOrgDeletionPreview(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getAuthenticatedSession(request, env);
+  const session = await getSession(request, env);
 
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -363,7 +348,7 @@ export async function handleDeleteOrg(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const session = await getAuthenticatedSession(request, env);
+  const session = await getSession(request, env);
 
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
