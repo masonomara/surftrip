@@ -11,7 +11,6 @@
     "kb:manifest": "npx tsx scripts/generate-kb-manifest.ts"
   },
   "dependencies": {
-    "@docket/shared": "*",
     "better-auth": "^1.4.7",
     "drizzle-orm": "^0.41.0",
     "resend": "^6.6.0",
