@@ -1,4 +1,5 @@
 import { getAuth } from "./lib/auth";
+import { withAuth, withMember, withAdmin, withOwner } from "./lib/session";
 import { TenantDO } from "./do/tenant";
 import { handleTeamsMessage } from "./handlers/teams";
 import {
@@ -90,48 +91,48 @@ const staticRoutes: Record<string, Record<string, RouteHandler>> = {
     POST: handleCheckEmail,
   },
   "/api/org": {
-    POST: handleCreateOrg,
-    PATCH: handleUpdateOrg,
-    DELETE: handleDeleteOrg,
+    POST: withAuth(handleCreateOrg),
+    PATCH: withAdmin(handleUpdateOrg),
+    DELETE: withOwner(handleDeleteOrg),
   },
   "/api/org/deletion-preview": {
-    GET: handleGetOrgDeletionPreview,
+    GET: withOwner(handleGetOrgDeletionPreview),
   },
   "/api/user/org": {
-    GET: handleGetUserOrg,
+    GET: withAuth(handleGetUserOrg),
   },
   "/api/clio/connect": {
-    GET: handleClioConnectAuth,
+    GET: withMember(handleClioConnectAuth),
   },
   "/api/clio/status": {
-    GET: handleClioStatus,
+    GET: withMember(handleClioStatus),
   },
   "/api/clio/disconnect": {
-    POST: handleClioDisconnect,
+    POST: withMember(handleClioDisconnect),
   },
   "/api/org/clio/refresh-schema": {
-    POST: handleClioRefreshSchema,
+    POST: withAdmin(handleClioRefreshSchema),
   },
   "/api/org/members": {
-    GET: handleGetMembers,
+    GET: withMember(handleGetMembers),
   },
   "/api/org/invitations": {
-    GET: handleGetInvitations,
-    POST: handleSendInvitation,
+    GET: withAdmin(handleGetInvitations),
+    POST: withAdmin(handleSendInvitation),
   },
   "/api/org/transfer-ownership": {
-    POST: handleTransferOwnership,
+    POST: withAdmin(handleTransferOwnership),
   },
   "/api/account/deletion-preview": {
-    GET: handleGetAccountDeletionPreview,
+    GET: withAuth(handleGetAccountDeletionPreview),
   },
   "/api/account": {
-    PATCH: handleUpdateAccount,
-    DELETE: handleDeleteAccount,
+    PATCH: withAuth(handleUpdateAccount),
+    DELETE: withAuth(handleDeleteAccount),
   },
   "/api/org/context": {
-    GET: handleGetDocuments,
-    POST: handleUploadDocument,
+    GET: withAdmin(handleGetDocuments),
+    POST: withAdmin(handleUploadDocument),
   },
 };
 
@@ -150,10 +151,14 @@ function matchDynamicRoute(
   if (memberMatch) {
     const memberId = memberMatch[1];
     if (method === "DELETE") {
-      return handleRemoveMember(request, env, memberId);
+      return withAdmin((req, e, ctx) =>
+        handleRemoveMember(req, e, ctx, memberId)
+      )(request, env);
     }
     if (method === "PATCH") {
-      return handleUpdateMemberRole(request, env, memberId);
+      return withAdmin((req, e, ctx) =>
+        handleUpdateMemberRole(req, e, ctx, memberId)
+      )(request, env);
     }
     return Promise.resolve(
       Response.json({ error: "Method not allowed" }, { status: 405 })
@@ -166,7 +171,9 @@ function matchDynamicRoute(
   );
   if (revokeInvitationMatch && method === "DELETE") {
     const invitationId = revokeInvitationMatch[1];
-    return handleRevokeInvitation(request, env, invitationId);
+    return withAdmin((req, e, ctx) =>
+      handleRevokeInvitation(req, e, ctx, invitationId)
+    )(request, env);
   }
 
   // /api/invitations/:invitationId (public, no auth)
@@ -182,14 +189,18 @@ function matchDynamicRoute(
   );
   if (acceptInvitationMatch && method === "POST") {
     const invitationId = acceptInvitationMatch[1];
-    return handleAcceptInvitation(request, env, invitationId);
+    return withAuth((req, e, ctx) =>
+      handleAcceptInvitation(req, e, ctx, invitationId)
+    )(request, env);
   }
 
   // /api/org/context/:documentId
   const documentMatch = path.match(/^\/api\/org\/context\/([^/]+)$/);
   if (documentMatch && method === "DELETE") {
     const documentId = documentMatch[1];
-    return handleDeleteDocument(request, env, documentId);
+    return withAdmin((req, e, ctx) =>
+      handleDeleteDocument(req, e, ctx, documentId)
+    )(request, env);
   }
 
   return null;

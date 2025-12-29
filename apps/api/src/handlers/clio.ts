@@ -1,4 +1,4 @@
-import { getSession, getMembership } from "../lib/session";
+import type { MemberContext, AdminContext } from "../lib/session";
 import {
   generateCodeVerifier,
   generateCodeChallenge,
@@ -31,38 +31,23 @@ interface SchemaRefreshResponse {
 
 export async function handleClioConnectAuth(
   request: Request,
-  env: Env
+  env: Env,
+  ctx: MemberContext
 ): Promise<Response> {
   const requestId = generateRequestId();
   const log = createLogger({ requestId, handler: "clio-connect" });
   const url = new URL(request.url);
 
-  // Verify user is authenticated
-  const session = await getSession(request, env);
-  if (!session?.user) {
-    log.info("No session, redirecting to login");
-    return Response.redirect(`${url.origin}/login?redirect=/org/clio`);
-  }
-
-  // Verify user has an org membership
-  const membership = await getMembership(env.DB, session.user.id);
-  if (!membership) {
-    log.warn("No org membership found");
-    return Response.redirect(`${url.origin}/dashboard`);
-  }
-
-  // Generate OAuth PKCE parameters
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const state = await generateState(
-    session.user.id,
-    membership.org_id,
+    ctx.user.id,
+    ctx.orgId,
     codeVerifier,
     env.CLIO_CLIENT_SECRET
   );
   const redirectUri = url.origin + "/clio/callback";
 
-  // Build authorization URL and redirect
   const authUrl = buildAuthorizationUrl({
     clientId: env.CLIO_CLIENT_ID,
     redirectUri,
@@ -70,7 +55,7 @@ export async function handleClioConnectAuth(
     codeChallenge,
   });
 
-  log.info("Redirecting to Clio OAuth", { orgId: membership.org_id });
+  log.info("Redirecting to Clio OAuth", { orgId: ctx.orgId });
   return Response.redirect(authUrl, 302);
 }
 
@@ -79,28 +64,16 @@ export async function handleClioConnectAuth(
 // -----------------------------------------------------------------------------
 
 export async function handleClioStatus(
-  request: Request,
-  env: Env
+  _request: Request,
+  env: Env,
+  ctx: MemberContext
 ): Promise<Response> {
-  // Verify user is authenticated
-  const session = await getSession(request, env);
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Verify user has an org membership
-  const membership = await getMembership(env.DB, session.user.id);
-  if (!membership) {
-    return Response.json({ error: "No organization" }, { status: 400 });
-  }
-
-  // Get status from Durable Object
-  const doStub = env.TENANT.get(env.TENANT.idFromName(membership.org_id));
+  const doStub = env.TENANT.get(env.TENANT.idFromName(ctx.orgId));
   const doRequest = new Request("https://do/get-clio-status", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      userId: session.user.id,
+      userId: ctx.user.id,
       requestId: generateRequestId(),
     }),
   });
@@ -126,32 +99,19 @@ export async function handleClioStatus(
 // -----------------------------------------------------------------------------
 
 export async function handleClioRefreshSchema(
-  request: Request,
-  env: Env
+  _request: Request,
+  env: Env,
+  ctx: AdminContext
 ): Promise<Response> {
   const requestId = generateRequestId();
   const log = createLogger({ requestId, handler: "clio-refresh-schema" });
 
-  // Verify user is authenticated
-  const session = await getSession(request, env);
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Verify user is an admin
-  const membership = await getMembership(env.DB, session.user.id, true);
-  if (!membership) {
-    log.warn("Non-admin user attempted schema refresh");
-    return Response.json({ error: "Admin access required" }, { status: 403 });
-  }
-
-  // Request schema refresh from Durable Object
-  const doStub = env.TENANT.get(env.TENANT.idFromName(membership.org_id));
+  const doStub = env.TENANT.get(env.TENANT.idFromName(ctx.orgId));
   const doRequest = new Request("https://do/refresh-schema", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      userId: session.user.id,
+      userId: ctx.user.id,
       requestId,
     }),
   });
@@ -175,31 +135,19 @@ export async function handleClioRefreshSchema(
 // -----------------------------------------------------------------------------
 
 export async function handleClioDisconnect(
-  request: Request,
-  env: Env
+  _request: Request,
+  env: Env,
+  ctx: MemberContext
 ): Promise<Response> {
   const requestId = generateRequestId();
   const log = createLogger({ requestId, handler: "clio-disconnect" });
 
-  // Verify user is authenticated
-  const session = await getSession(request, env);
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Verify user has an org membership
-  const membership = await getMembership(env.DB, session.user.id);
-  if (!membership) {
-    return Response.json({ error: "No organization" }, { status: 400 });
-  }
-
-  // Delete token via Durable Object
-  const doStub = env.TENANT.get(env.TENANT.idFromName(membership.org_id));
+  const doStub = env.TENANT.get(env.TENANT.idFromName(ctx.orgId));
   const doRequest = new Request("https://do/delete-clio-token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      userId: session.user.id,
+      userId: ctx.user.id,
       requestId,
     }),
   });
@@ -214,7 +162,7 @@ export async function handleClioDisconnect(
     );
   }
 
-  log.info("Clio disconnected successfully", { orgId: membership.org_id });
+  log.info("Clio disconnected successfully", { orgId: ctx.orgId });
   return Response.json({ success: true });
 }
 

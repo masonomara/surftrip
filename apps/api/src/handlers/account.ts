@@ -1,4 +1,4 @@
-import { getSession } from "../lib/session";
+import type { AuthContext } from "../lib/session";
 import type { Env } from "../types/env";
 import { getDataDeletionPreview, deleteUserData } from "../services/gdpr";
 
@@ -7,18 +7,11 @@ import { getDataDeletionPreview, deleteUserData } from "../services/gdpr";
 // -----------------------------------------------------------------------------
 
 export async function handleGetAccountDeletionPreview(
-  request: Request,
-  env: Env
+  _request: Request,
+  env: Env,
+  ctx: AuthContext
 ): Promise<Response> {
-  // Verify user is authenticated
-  const session = await getSession(request, env);
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Get deletion preview data
-  const preview = await getDataDeletionPreview(env.DB, session.user.id);
-
+  const preview = await getDataDeletionPreview(env.DB, ctx.user.id);
   return Response.json(preview);
 }
 
@@ -28,15 +21,9 @@ export async function handleGetAccountDeletionPreview(
 
 export async function handleUpdateAccount(
   request: Request,
-  env: Env
+  env: Env,
+  ctx: AuthContext
 ): Promise<Response> {
-  // Verify user is authenticated
-  const session = await getSession(request, env);
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Parse request body
   let body: { name?: string };
   try {
     body = await request.json();
@@ -44,11 +31,9 @@ export async function handleUpdateAccount(
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  // Handle name update
   if (body.name !== undefined) {
     const trimmedName = body.name.trim();
 
-    // Validate name
     if (trimmedName.length === 0) {
       return Response.json({ error: "Name cannot be empty" }, { status: 400 });
     }
@@ -59,11 +44,10 @@ export async function handleUpdateAccount(
       );
     }
 
-    // Update the user's name in the database
     await env.DB.prepare(
       "UPDATE user SET name = ?, updated_at = ? WHERE id = ?"
     )
-      .bind(trimmedName, Date.now(), session.user.id)
+      .bind(trimmedName, Date.now(), ctx.user.id)
       .run();
 
     return Response.json({ success: true, name: trimmedName });
@@ -78,15 +62,9 @@ export async function handleUpdateAccount(
 
 export async function handleDeleteAccount(
   request: Request,
-  env: Env
+  env: Env,
+  ctx: AuthContext
 ): Promise<Response> {
-  // Verify user is authenticated
-  const session = await getSession(request, env);
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Parse request body
   let body: { confirmEmail?: string };
   try {
     body = await request.json();
@@ -94,21 +72,18 @@ export async function handleDeleteAccount(
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  // Verify email confirmation matches
-  if (!body.confirmEmail || body.confirmEmail !== session.user.email) {
+  if (!body.confirmEmail || body.confirmEmail !== ctx.user.email) {
     return Response.json({ error: "Email does not match" }, { status: 400 });
   }
 
-  // Attempt to delete user data
   const result = await deleteUserData(
     env.DB,
     env.R2,
     env.VECTORIZE,
-    session.user.id,
+    ctx.user.id,
     env.TENANT
   );
 
-  // Check if deletion was blocked (e.g., user is sole owner of an org)
   if ("type" in result && result.type === "sole_owner") {
     return Response.json(
       {

@@ -9,7 +9,7 @@
  * - Deleting an organization
  */
 
-import { getSession, requireAdmin, requireOwner, isAuthError } from "../lib/session";
+import type { AuthContext, AdminContext, OwnerContext } from "../lib/session";
 import type { Env } from "../types/env";
 import type { OrgMemberRow } from "../types";
 import { orgMemberRowToEntity } from "../types";
@@ -24,7 +24,6 @@ interface CreateOrgBody {
 
 /**
  * Checks if a user already belongs to an organization.
- * Users can only be in one organization at a time.
  */
 async function userHasOrganization(
   db: D1Database,
@@ -42,42 +41,26 @@ async function userHasOrganization(
  * POST /api/org
  *
  * Creates a new organization and makes the current user the owner.
- *
- * Users can only belong to one organization, so this fails if the user
- * is already a member of any organization.
- *
- * Request body: { name: string, firmSize?: string, jurisdictions?: string[], practiceTypes?: string[] }
- *
- * Response: { org: { id, name }, membership: { role: "admin", isOwner: true } }
  */
 export async function handleCreateOrg(
   request: Request,
-  env: Env
+  env: Env,
+  ctx: AuthContext
 ): Promise<Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Check if user already has an organization
-  if (await userHasOrganization(env.DB, session.user.id)) {
+  if (await userHasOrganization(env.DB, ctx.user.id)) {
     return Response.json(
       { error: "User already belongs to an organization" },
       { status: 400 }
     );
   }
 
-  // Parse request body
   let body: CreateOrgBody;
-
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  // Validate required fields
   if (!body.name?.trim()) {
     return Response.json(
       { error: "Organization name is required" },
@@ -85,13 +68,11 @@ export async function handleCreateOrg(
     );
   }
 
-  // Generate IDs and timestamp
   const orgId = crypto.randomUUID();
   const memberId = crypto.randomUUID();
   const now = Date.now();
 
   try {
-    // Create org and membership in a single transaction
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO org (id, name, jurisdictions, practice_types, firm_size, created_at, updated_at)
@@ -108,7 +89,7 @@ export async function handleCreateOrg(
       env.DB.prepare(
         `INSERT INTO org_members (id, user_id, org_id, role, is_owner, created_at)
          VALUES (?, ?, ?, 'admin', 1, ?)`
-      ).bind(memberId, session.user.id, orgId, now),
+      ).bind(memberId, ctx.user.id, orgId, now),
     ]);
 
     return Response.json({
@@ -129,20 +110,12 @@ export async function handleCreateOrg(
  *
  * Returns the current user's organization and membership details.
  * Returns null if the user doesn't belong to any organization.
- *
- * Response: { org: { id, name, ... }, role: string, isOwner: boolean } | null
  */
 export async function handleGetUserOrg(
-  request: Request,
-  env: Env
+  _request: Request,
+  env: Env,
+  ctx: AuthContext
 ): Promise<Response> {
-  const session = await getSession(request, env);
-
-  if (!session?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Get membership with org details in one query
   const row = await env.DB.prepare(
     `SELECT
        om.id, om.user_id, om.org_id, om.role, om.is_owner, om.created_at,
@@ -154,7 +127,7 @@ export async function handleGetUserOrg(
      JOIN org o ON o.id = om.org_id
      WHERE om.user_id = ?`
   )
-    .bind(session.user.id)
+    .bind(ctx.user.id)
     .first<
       OrgMemberRow & {
         org_name: string;
@@ -164,7 +137,6 @@ export async function handleGetUserOrg(
       }
     >();
 
-  // User doesn't belong to any organization
   if (!row) {
     return Response.json(null);
   }
@@ -192,21 +164,12 @@ export async function handleGetUserOrg(
  * PATCH /api/org
  *
  * Updates organization settings. Requires admin access.
- *
- * Request body: { name?: string, jurisdictions?: string[], practiceTypes?: string[], firmSize?: string }
- *
- * Response: { success: true }
  */
 export async function handleUpdateOrg(
   request: Request,
-  env: Env
+  env: Env,
+  ctx: AdminContext
 ): Promise<Response> {
-  const admin = await requireAdmin(request, env);
-  if (isAuthError(admin)) {
-    return admin;
-  }
-
-  // Parse request body
   let body: {
     name?: string;
     jurisdictions?: string[];
@@ -220,9 +183,7 @@ export async function handleUpdateOrg(
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  // SECURITY: Dynamic query construction with parameterized values.
   // Column names are hardcoded - never interpolate user input as column names.
-  // All values use ? placeholders and .bind() to prevent SQL injection.
   const updates: string[] = [];
   const values: (string | null)[] = [];
 
@@ -249,17 +210,13 @@ export async function handleUpdateOrg(
     values.push(body.firmSize || null);
   }
 
-  // At least one field must be updated
   if (updates.length === 0) {
     return Response.json({ error: "No fields to update" }, { status: 400 });
   }
 
-  // Always update the updated_at timestamp
   updates.push("updated_at = ?");
   values.push(String(Date.now()));
-
-  // Add org_id as the WHERE clause parameter
-  values.push(admin.orgId);
+  values.push(ctx.orgId);
 
   try {
     await env.DB.prepare(`UPDATE org SET ${updates.join(", ")} WHERE id = ?`)
@@ -281,23 +238,13 @@ export async function handleUpdateOrg(
  *
  * Returns a summary of what will be deleted when the organization is deleted.
  * Only the owner can view this.
- *
- * Response includes counts of:
- * - Members who will be removed
- * - Documents that will be deleted
- * - Messages that will be deleted
- * - Audit logs that will be deleted
  */
 export async function handleGetOrgDeletionPreview(
-  request: Request,
-  env: Env
+  _request: Request,
+  env: Env,
+  ctx: OwnerContext
 ): Promise<Response> {
-  const owner = await requireOwner(request, env);
-  if (isAuthError(owner)) {
-    return owner;
-  }
-
-  const preview = await getOrgDeletionPreview(env.DB, owner.orgId);
+  const preview = await getOrgDeletionPreview(env.DB, ctx.orgId);
   return Response.json(preview);
 }
 
@@ -306,39 +253,27 @@ export async function handleGetOrgDeletionPreview(
  *
  * Permanently deletes the organization and all associated data.
  * Requires the user to be the owner and confirm by typing the org name.
- *
- * Request body: { confirmName: string }
- *
- * Response: { deleted: { ... counts ... } }
  */
 export async function handleDeleteOrg(
   request: Request,
-  env: Env
+  env: Env,
+  ctx: OwnerContext
 ): Promise<Response> {
-  const owner = await requireOwner(request, env);
-  if (isAuthError(owner)) {
-    return owner;
-  }
-
-  // Parse request body
   let body: { confirmName?: string };
-
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  // Get the org name for confirmation
   const org = await env.DB.prepare(`SELECT name FROM org WHERE id = ?`)
-    .bind(owner.orgId)
+    .bind(ctx.orgId)
     .first<{ name: string }>();
 
   if (!org) {
     return Response.json({ error: "Organization not found" }, { status: 404 });
   }
 
-  // Verify the confirmation name matches
   if (body.confirmName !== org.name) {
     return Response.json(
       { error: "Organization name does not match" },
@@ -346,12 +281,11 @@ export async function handleDeleteOrg(
     );
   }
 
-  // Delete the organization and all data
   const result = await deleteOrg(
     env.DB,
     env.R2,
-    owner.orgId,
-    owner.userId,
+    ctx.orgId,
+    ctx.user.id,
     env.TENANT
   );
 

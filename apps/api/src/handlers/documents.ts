@@ -1,4 +1,4 @@
-import { requireAdmin, isAuthError } from "../lib/session";
+import type { AdminContext } from "../lib/session";
 import { createLogger, generateRequestId } from "../lib/logger";
 import type { Env } from "../types/env";
 import {
@@ -8,25 +8,16 @@ import {
   getOrgContextDocument,
 } from "../services/org-context";
 
-// ============================================================================
-// Route Handlers
-// ============================================================================
-
 /**
  * GET /api/documents
  * Lists all documents for the authenticated user's organization.
  */
 export async function handleGetDocuments(
-  request: Request,
-  env: Env
+  _request: Request,
+  env: Env,
+  ctx: AdminContext
 ): Promise<Response> {
-  const auth = await requireAdmin(request, env);
-
-  if (isAuthError(auth)) {
-    return auth;
-  }
-
-  const documents = await listOrgContext(env, auth.orgId);
+  const documents = await listOrgContext(env, ctx.orgId);
   return Response.json(documents);
 }
 
@@ -36,24 +27,16 @@ export async function handleGetDocuments(
  */
 export async function handleUploadDocument(
   request: Request,
-  env: Env
+  env: Env,
+  ctx: AdminContext
 ): Promise<Response> {
   const log = createLogger({
     requestId: generateRequestId(),
     handler: "uploadDocument",
   });
 
-  // Check authentication
-  const auth = await requireAdmin(request, env);
+  const orgLog = log.child({ orgId: ctx.orgId, userId: ctx.user.id });
 
-  if (isAuthError(auth)) {
-    log.warn("Upload rejected: unauthorized");
-    return auth;
-  }
-
-  const orgLog = log.child({ orgId: auth.orgId, userId: auth.userId });
-
-  // Parse the form data
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -62,7 +45,6 @@ export async function handleUploadDocument(
     return Response.json({ error: "Invalid form data" }, { status: 400 });
   }
 
-  // Validate the file
   const file = formData.get("file");
 
   if (!(file instanceof File)) {
@@ -76,15 +58,14 @@ export async function handleUploadDocument(
     size: file.size,
   });
 
-  // Process the upload
   const fileBuffer = await file.arrayBuffer();
   const result = await uploadOrgContext(
     env,
-    auth.orgId,
+    ctx.orgId,
     file.name,
     file.type,
     fileBuffer,
-    auth.userId,
+    ctx.user.id,
     orgLog
   );
 
@@ -101,8 +82,7 @@ export async function handleUploadDocument(
     chunksCreated: result.chunksCreated,
   });
 
-  // Return the newly created document
-  const document = await getOrgContextDocument(env, auth.orgId, result.fileId!);
+  const document = await getOrgContextDocument(env, ctx.orgId, result.fileId!);
   return Response.json(document, { status: 201 });
 }
 
@@ -111,20 +91,14 @@ export async function handleUploadDocument(
  * Deletes a document from the organization's context.
  */
 export async function handleDeleteDocument(
-  request: Request,
+  _request: Request,
   env: Env,
+  ctx: AdminContext,
   documentId: string
 ): Promise<Response> {
-  const auth = await requireAdmin(request, env);
-
-  if (isAuthError(auth)) {
-    return auth;
-  }
-
-  // Check if the document exists and belongs to this org
   const existingDocument = await getOrgContextDocument(
     env,
-    auth.orgId,
+    ctx.orgId,
     documentId
   );
 
@@ -132,8 +106,7 @@ export async function handleDeleteDocument(
     return Response.json({ error: "Document not found" }, { status: 404 });
   }
 
-  // Delete the document
-  const result = await deleteOrgContext(env, auth.orgId, documentId);
+  const result = await deleteOrgContext(env, ctx.orgId, documentId);
 
   if (!result.success) {
     return Response.json(
