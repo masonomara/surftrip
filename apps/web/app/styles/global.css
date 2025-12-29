@@ -173,6 +173,7 @@ strong {
   display: flex;
   align-items: center;
   justify-content: center;
+  text-decoration: none;
 }
 
 .btn:disabled {
@@ -319,6 +320,7 @@ strong {
   background-color: var(--surface-2);
   border: 1px solid var(--border-default);
   display: flex;
+  flex-direction: row;
   gap: 10px;
   align-items: flex-start;
 }
@@ -856,6 +858,17 @@ strong {
   font-size: 15px;
   line-height: 20px;
   min-width: 0;
+}
+
+.alert-error .link-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--error-primary);
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 /* ==========================================================================

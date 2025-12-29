@@ -25,15 +25,23 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     apiFetch(context, "/api/org/invitations", cookie),
   ]);
 
-  const members = membersResponse.ok
-    ? ((await membersResponse.json()) as OrgMember[])
-    : [];
+  let members: OrgMember[] = [];
+  let invitations: PendingInvitation[] = [];
+  let loadError: string | null = null;
 
-  const invitations = invitationsResponse.ok
-    ? ((await invitationsResponse.json()) as PendingInvitation[])
-    : [];
+  if (membersResponse.ok) {
+    members = (await membersResponse.json()) as OrgMember[];
+  } else {
+    loadError = "Failed to load members.";
+  }
 
-  return { user, org, members, invitations };
+  if (invitationsResponse.ok) {
+    invitations = (await invitationsResponse.json()) as PendingInvitation[];
+  } else if (!loadError) {
+    loadError = "Failed to load invitations.";
+  }
+
+  return { user, org, members, invitations, loadError };
 }
 
 // -----------------------------------------------------------------------------
@@ -41,7 +49,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 // -----------------------------------------------------------------------------
 
 export default function MembersPage({ loaderData }: Route.ComponentProps) {
-  const { user, org, members, invitations } = loaderData;
+  const { user, org, members, invitations, loadError } = loaderData;
   const revalidator = useRevalidator();
 
   // Modal state
@@ -165,6 +173,17 @@ export default function MembersPage({ loaderData }: Route.ComponentProps) {
           </button>
         }
       >
+        {loadError && (
+          <div className="alert alert-error">
+            {loadError}{" "}
+            <button
+              onClick={() => revalidator.revalidate()}
+              className="link-button"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         {error && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 

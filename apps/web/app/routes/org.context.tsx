@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useRevalidator } from "react-router";
 import type { Route } from "./+types/org.context";
 import { apiFetch } from "~/lib/api";
 import { API_URL } from "~/lib/auth-client";
@@ -29,11 +30,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const cookie = request.headers.get("cookie") || "";
   const docsResponse = await apiFetch(context, "/api/org/context", cookie);
 
-  const documents = docsResponse.ok
-    ? ((await docsResponse.json()) as OrgContextDocument[])
-    : [];
+  let documents: OrgContextDocument[] = [];
+  let loadError: string | null = null;
 
-  return { user, org, documents };
+  if (docsResponse.ok) {
+    documents = (await docsResponse.json()) as OrgContextDocument[];
+  } else {
+    loadError = "Failed to load documents.";
+  }
+
+  return { user, org, documents, loadError };
 }
 
 // -----------------------------------------------------------------------------
@@ -41,7 +47,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 // -----------------------------------------------------------------------------
 
 export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
-  const { user, org, documents: initialDocuments } = loaderData;
+  const { user, org, documents: initialDocuments, loadError } = loaderData;
+  const revalidator = useRevalidator();
 
   // Document state (local for optimistic updates)
   const [documents, setDocuments] =
@@ -205,7 +212,7 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
         {/* Info Banner */}
         <section className="section infoSection">
           <Info
-            strokeWidth={2}
+            strokeWidth={2.25}
             size={16}
             style={{ marginTop: "1.5px", minHeight: "16px", minWidth: "16px" }}
           />
@@ -216,6 +223,17 @@ export default function DocumentsPage({ loaderData }: Route.ComponentProps) {
           </div>
         </section>
 
+        {loadError && (
+          <div className="alert alert-error">
+            {loadError}{" "}
+            <button
+              onClick={() => revalidator.revalidate()}
+              className="link-button"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         {error && <div className="alert alert-error">{error}</div>}
 
         {/* Upload Section */}

@@ -40,11 +40,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   const clioResponse = await apiFetch(context, "/api/clio/status", cookie);
 
-  const clioStatus: ClioStatus = clioResponse.ok
-    ? ((await clioResponse.json()) as ClioStatus)
-    : { connected: false, schemaLoaded: false };
+  let clioStatus: ClioStatus = { connected: false, schemaLoaded: false };
+  let loadError: string | null = null;
 
-  return { user, org, clioStatus };
+  if (clioResponse.ok) {
+    clioStatus = (await clioResponse.json()) as ClioStatus;
+  } else {
+    loadError = "Failed to load Clio status.";
+  }
+
+  return { user, org, clioStatus, loadError };
 }
 
 // -----------------------------------------------------------------------------
@@ -52,7 +57,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 // -----------------------------------------------------------------------------
 
 export default function ClioPage({ loaderData }: Route.ComponentProps) {
-  const { user, org, clioStatus } = loaderData;
+  const { user, org, clioStatus, loadError } = loaderData;
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
 
@@ -195,6 +200,17 @@ export default function ClioPage({ loaderData }: Route.ComponentProps) {
           </>
         }
       >
+        {loadError && (
+          <div className="alert alert-error">
+            {loadError}{" "}
+            <button
+              onClick={() => revalidator.revalidate()}
+              className="link-button"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         {error && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 
