@@ -1,12 +1,25 @@
+/**
+ * Auth Page Integration Tests
+ *
+ * Tests the full authentication flow using MSW to mock API responses.
+ * Organized by user scenario: email step, login, signup, OAuth, invitations.
+ */
+
 import { describe, it, expect } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { http, HttpResponse } from "msw";
+
 import { server } from "../mocks/server";
 import AuthPage from "~/routes/auth";
 
+// Must match VITE_API_URL in .env (used during tests)
 const API_URL = "http://localhost:8787";
+
+// ============================================================================
+// Test Helpers
+// ============================================================================
 
 function renderAuth(route = "/auth") {
   return render(
@@ -16,12 +29,23 @@ function renderAuth(route = "/auth") {
   );
 }
 
-// Helper to get the submit button (not "Continue with Google")
+/**
+ * Gets the main submit button (not "Continue with Google").
+ * The regex anchors ensure we match exactly "Continue".
+ */
 function getSubmitButton() {
   return screen.getByRole("button", { name: /^continue$/i });
 }
 
+// ============================================================================
+// Tests
+// ============================================================================
+
 describe("AuthPage", () => {
+  // --------------------------------------------------------------------------
+  // Initial Email Step
+  // --------------------------------------------------------------------------
+
   describe("email step", () => {
     it("renders email input and submit button", () => {
       renderAuth();
@@ -39,14 +63,20 @@ describe("AuthPage", () => {
     });
   });
 
+  // --------------------------------------------------------------------------
+  // Existing User with Password
+  // --------------------------------------------------------------------------
+
   describe("existing user with password", () => {
     it("shows password field after email check", async () => {
       const user = userEvent.setup();
       renderAuth();
 
+      // Enter email and submit
       await user.type(screen.getByLabelText(/email/i), "test@example.com");
       await user.click(getSubmitButton());
 
+      // Should transition to password step
       await waitFor(() => {
         expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
       });
@@ -58,10 +88,15 @@ describe("AuthPage", () => {
     });
   });
 
+  // --------------------------------------------------------------------------
+  // New User Signup
+  // --------------------------------------------------------------------------
+
   describe("new user signup", () => {
     it("shows signup form for new user", async () => {
       const user = userEvent.setup();
 
+      // Override handler: user doesn't exist
       server.use(
         http.post(`${API_URL}/api/check-email`, () => {
           return HttpResponse.json({ exists: false, hasPassword: false });
@@ -73,6 +108,7 @@ describe("AuthPage", () => {
       await user.type(screen.getByLabelText(/email/i), "new@example.com");
       await user.click(getSubmitButton());
 
+      // Should show signup form with name field
       await waitFor(() => {
         expect(screen.getByLabelText(/name/i)).toBeInTheDocument();
       });
@@ -85,10 +121,15 @@ describe("AuthPage", () => {
     });
   });
 
+  // --------------------------------------------------------------------------
+  // OAuth-Only User
+  // --------------------------------------------------------------------------
+
   describe("oauth-only user", () => {
     it("shows Google sign-in prompt for oauth user", async () => {
       const user = userEvent.setup();
 
+      // Override handler: user exists but has no password (OAuth only)
       server.use(
         http.post(`${API_URL}/api/check-email`, () => {
           return HttpResponse.json({ exists: true, hasPassword: false });
@@ -100,6 +141,7 @@ describe("AuthPage", () => {
       await user.type(screen.getByLabelText(/email/i), "google@example.com");
       await user.click(getSubmitButton());
 
+      // Should prompt to use Google
       await waitFor(() => {
         expect(
           screen.getByText(/this account uses google sign-in/i)
@@ -112,10 +154,15 @@ describe("AuthPage", () => {
     });
   });
 
+  // --------------------------------------------------------------------------
+  // Invitation Flow
+  // --------------------------------------------------------------------------
+
   describe("invitation flow", () => {
     it("pre-fills email from invitation", async () => {
       renderAuth("/auth?invitation=inv-123");
 
+      // Wait for invitation to load
       await waitFor(() => {
         expect(
           screen.queryByText(/loading invitation/i)
@@ -137,10 +184,15 @@ describe("AuthPage", () => {
     });
   });
 
+  // --------------------------------------------------------------------------
+  // Error Handling
+  // --------------------------------------------------------------------------
+
   describe("error handling", () => {
     it("shows error message on API failure", async () => {
       const user = userEvent.setup();
 
+      // Simulate server error
       server.use(
         http.post(`${API_URL}/api/check-email`, () => {
           return new HttpResponse(null, { status: 500 });

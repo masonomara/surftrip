@@ -1,9 +1,19 @@
+/**
+ * MSW Request Handlers
+ *
+ * Default mock responses for API endpoints used in tests.
+ * Tests can override these using server.use() for specific scenarios.
+ */
+
 import { http, HttpResponse } from "msw";
 
-// Match the VITE_API_URL from .env (used in tests)
-const API_URL = "http://localhost:8787";
+// Must match VITE_API_URL in .env (used during tests)
+const API_BASE = "http://localhost:8787";
 
-// Mock data
+// ============================================================================
+// Mock Data
+// ============================================================================
+
 export const mockUser = {
   id: "user-1",
   email: "test@example.com",
@@ -17,7 +27,7 @@ export const mockSession = {
   session: {
     id: "sess-1",
     userId: "user-1",
-    expiresAt: new Date(Date.now() + 86400000).toISOString(),
+    expiresAt: new Date(Date.now() + 86400000).toISOString(), // 24 hours from now
   },
   user: mockUser,
 };
@@ -42,58 +52,64 @@ export const mockInvitation = {
   isAccepted: false,
 };
 
-// Default handlers (authenticated state)
+// ============================================================================
+// Default Handlers (authenticated user)
+// ============================================================================
+
 export const handlers = [
-  // Session
-  http.get(`${API_URL}/api/auth/get-session`, () => {
+  // Auth endpoints
+  http.get(`${API_BASE}/api/auth/get-session`, () => {
     return HttpResponse.json(mockSession);
   }),
 
-  // Check email - defaults to existing user with password
-  http.post(`${API_URL}/api/check-email`, () => {
-    return HttpResponse.json({ exists: true, hasPassword: true });
-  }),
-
-  // Sign in
-  http.post(`${API_URL}/api/auth/sign-in/email`, () => {
+  http.post(`${API_BASE}/api/auth/sign-in/email`, () => {
     return HttpResponse.json(
       { user: mockUser },
       { headers: { "Set-Cookie": "session=mock-session; Path=/" } }
     );
   }),
 
-  // Sign up
-  http.post(`${API_URL}/api/auth/sign-up/email`, () => {
+  http.post(`${API_BASE}/api/auth/sign-up/email`, () => {
     return HttpResponse.json({ user: mockUser });
   }),
 
-  // Sign out
-  http.post(`${API_URL}/api/auth/sign-out`, () => {
+  http.post(`${API_BASE}/api/auth/sign-out`, () => {
     return HttpResponse.json({ success: true });
   }),
 
-  // User org
-  http.get(`${API_URL}/api/user/org`, () => {
+  http.post(`${API_BASE}/api/auth/send-verification-email`, () => {
+    return HttpResponse.json({ success: true });
+  }),
+
+  // User endpoints
+  http.post(`${API_BASE}/api/check-email`, () => {
+    return HttpResponse.json({ exists: true, hasPassword: true });
+  }),
+
+  http.get(`${API_BASE}/api/user/org`, () => {
     return HttpResponse.json(mockOrg);
   }),
 
-  // Invitations
-  http.get(`${API_URL}/api/invitations/:id`, ({ params }) => {
-    return HttpResponse.json({ ...mockInvitation, id: params.id });
-  }),
-
-  // Send verification email
-  http.post(`${API_URL}/api/auth/send-verification-email`, () => {
-    return HttpResponse.json({ success: true });
+  // Invitation endpoints
+  http.get(`${API_BASE}/api/invitations/:id`, ({ params }) => {
+    return HttpResponse.json({
+      ...mockInvitation,
+      id: params.id,
+    });
   }),
 ];
 
-// Unauthenticated state handlers
+// ============================================================================
+// Unauthenticated Handlers
+// Use: server.use(...unauthenticatedHandlers)
+// ============================================================================
+
 export const unauthenticatedHandlers = [
-  http.get(`${API_URL}/api/auth/get-session`, () => {
+  http.get(`${API_BASE}/api/auth/get-session`, () => {
     return HttpResponse.json(null);
   }),
-  http.get(`${API_URL}/api/user/org`, () => {
+
+  http.get(`${API_BASE}/api/user/org`, () => {
     return new HttpResponse(null, { status: 401 });
   }),
 ];
