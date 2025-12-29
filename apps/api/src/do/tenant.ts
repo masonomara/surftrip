@@ -40,6 +40,7 @@ import {
 import { createLogger, type Logger } from "../lib/logger";
 import type { Env } from "../types/env";
 import { sanitizeAuditParams } from "../lib/sanitize";
+import { TENANT_CONFIG } from "../config/tenant";
 
 /**
  * TenantDO is a Durable Object that manages per-organization state.
@@ -1379,7 +1380,7 @@ Only include modifiedRequest if intent is "modify".`;
    */
   private async getRecentMessages(
     conversationId: string,
-    limit = 15
+    limit = TENANT_CONFIG.RECENT_MESSAGES_LIMIT
   ): Promise<Array<{ role: string; content: string }>> {
     const rows = this.sql
       .exec(
@@ -1459,7 +1460,7 @@ Only include modifiedRequest if intent is "modify".`;
   ): Promise<string> {
     const id = crypto.randomUUID();
     const now = Date.now();
-    const expiresAt = now + 5 * 60 * 1000; // 5 minutes
+    const expiresAt = now + TENANT_CONFIG.CONFIRMATION_TTL_MS;
 
     this.sql.exec(
       `INSERT INTO pending_confirmations (id, conversation_id, user_id, action, object_type, params, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1759,11 +1760,11 @@ Only include modifiedRequest if intent is "modify".`;
   async alarm(): Promise<void> {
     const now = Date.now();
 
-    // Schedule next alarm for 24 hours from now
-    await this.ctx.storage.setAlarm(now + 24 * 60 * 60 * 1000);
+    // Schedule next alarm
+    await this.ctx.storage.setAlarm(now + TENANT_CONFIG.ALARM_INTERVAL_MS);
 
-    // Find conversations that haven't been updated in 30 days
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+    // Find stale conversations
+    const thirtyDaysAgo = now - TENANT_CONFIG.STALE_CONVERSATION_MS;
 
     const staleConversations = this.sql
       .exec(
@@ -1843,7 +1844,7 @@ Only include modifiedRequest if intent is "modify".`;
     const existingAlarm = await this.ctx.storage.getAlarm();
 
     if (!existingAlarm) {
-      await this.ctx.storage.setAlarm(Date.now() + 24 * 60 * 60 * 1000);
+      await this.ctx.storage.setAlarm(Date.now() + TENANT_CONFIG.ALARM_INTERVAL_MS);
     }
   }
 }
