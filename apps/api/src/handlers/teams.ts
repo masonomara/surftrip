@@ -2,9 +2,21 @@ import { type ChannelMessage } from "../types";
 import type { Env } from "../types/env";
 import { createLogger, generateRequestId } from "../lib/logger";
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Types
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+
+interface TeamsActivity {
+  type: string;
+  text?: string;
+  id?: string;
+  from?: { id: string; aadObjectId?: string };
+  recipient?: { id: string };
+  conversation?: { id: string; conversationType?: string };
+  channelId?: string;
+  serviceUrl?: string;
+  channelData?: { tenant?: { id: string } };
+}
 
 interface ChannelUserInfo {
   userId: string;
@@ -15,40 +27,170 @@ interface ChannelUserInfo {
   firmSize: string | null;
 }
 
-interface TeamsActivity {
-  type: string;
-  text?: string;
-  id?: string;
-  from?: {
-    id: string;
-    aadObjectId?: string;
-  };
-  recipient?: {
-    id: string;
-  };
-  conversation?: {
-    id: string;
-    conversationType?: string;
-  };
-  channelId?: string;
-  serviceUrl?: string;
-  channelData?: {
-    tenant?: {
-      id: string;
-    };
+type ConversationScope = "personal" | "groupChat" | "teams";
+
+// -----------------------------------------------------------------------------
+// Helper Functions
+// -----------------------------------------------------------------------------
+
+/**
+ * Safely parse a JSON string, returning an empty array on failure.
+ */
+function safeParseJsonArray(jsonString: string | null): string[] {
+  if (!jsonString) {
+    return [];
+  }
+  try {
+    return JSON.parse(jsonString);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Determine the conversation scope from the Teams activity.
+ */
+function getConversationScope(activity: TeamsActivity): ConversationScope {
+  const conversationType = activity.conversation?.conversationType;
+
+  if (conversationType === "personal") {
+    return "personal";
+  }
+  if (conversationType === "groupChat") {
+    return "groupChat";
+  }
+  return "teams";
+}
+
+/**
+ * Look up a user by their channel-specific ID (e.g., Teams AAD Object ID).
+ */
+async function lookupChannelUser(
+  env: Env,
+  channelType: string,
+  channelUserId: string
+): Promise<ChannelUserInfo | null> {
+  // Find the user link and their org membership
+  const linkQuery = `
+    SELECT cul.user_id, om.org_id, om.role
+    FROM channel_user_links cul
+    JOIN org_members om ON om.user_id = cul.user_id
+    WHERE cul.channel_type = ? AND cul.channel_user_id = ?
+    LIMIT 1
+  `;
+
+  const link = await env.DB.prepare(linkQuery)
+    .bind(channelType, channelUserId)
+    .first<{ user_id: string; org_id: string; role: "admin" | "member" }>();
+
+  if (!link) {
+    return null;
+  }
+
+  // Get the organization's configuration
+  const orgQuery = `SELECT jurisdictions, practice_types, firm_size FROM org WHERE id = ?`;
+  const org = await env.DB.prepare(orgQuery)
+    .bind(link.org_id)
+    .first<{ jurisdictions: string; practice_types: string; firm_size: string | null }>();
+
+  if (!org) {
+    return null;
+  }
+
+  return {
+    userId: link.user_id,
+    orgId: link.org_id,
+    role: link.role,
+    jurisdictions: safeParseJsonArray(org.jurisdictions),
+    practiceTypes: safeParseJsonArray(org.practice_types),
+    firmSize: org.firm_size,
   };
 }
 
-type ConversationScope = "personal" | "groupChat" | "teams";
+/**
+ * Resolve the organization ID for a workspace-scoped conversation.
+ * Verifies that the Teams tenant is bound to the user's organization.
+ */
+async function resolveWorkspaceOrg(
+  env: Env,
+  user: ChannelUserInfo,
+  activity: TeamsActivity
+): Promise<string | null> {
+  const tenantId = activity.channelData?.tenant?.id;
+  if (!tenantId) {
+    return null;
+  }
 
-// ─────────────────────────────────────────────────────────────────────────────
+  // Check if the tenant is bound to an organization
+  const bindingQuery = `
+    SELECT org_id FROM workspace_bindings
+    WHERE channel_type = ? AND workspace_id = ?
+  `;
+
+  const binding = await env.DB.prepare(bindingQuery)
+    .bind("teams", tenantId)
+    .first<{ org_id: string }>();
+
+  // Only allow if the binding matches the user's organization
+  if (binding?.org_id === user.orgId) {
+    return binding.org_id;
+  }
+
+  return null;
+}
+
+/**
+ * Send a reply message back to the Teams conversation.
+ */
+async function sendTeamsReply(
+  activity: TeamsActivity,
+  reply: { text: string; replyToId?: string }
+): Promise<void> {
+  const { serviceUrl, conversation, recipient, from } = activity;
+
+  if (!serviceUrl || !conversation?.id) {
+    return;
+  }
+
+  const replyUrl = `${serviceUrl}/v3/conversations/${conversation.id}/activities`;
+
+  const replyPayload = {
+    type: "message",
+    text: reply.text,
+    from: recipient,
+    recipient: from,
+    conversation,
+    replyToId: reply.replyToId,
+  };
+
+  try {
+    await fetch(replyUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(replyPayload),
+    });
+  } catch (error) {
+    const log = createLogger({ handler: "teams-reply" });
+    log.error("Failed to send Teams reply", {
+      error,
+      conversationId: conversation.id,
+    });
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Main Handler
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
+/**
+ * POST /teams/messages
+ * Handles incoming messages from Microsoft Teams.
+ */
 export async function handleTeamsMessage(
   request: Request,
   env: Env
 ): Promise<Response> {
+  // Teams webhook only accepts POST
   if (request.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
@@ -58,7 +200,7 @@ export async function handleTeamsMessage(
   try {
     activity = (await request.json()) as TeamsActivity;
   } catch {
-    // Invalid JSON, but Teams expects 200
+    // Return 200 even on parse failure to acknowledge receipt
     return new Response(null, { status: 200 });
   }
 
@@ -76,20 +218,19 @@ export async function handleTeamsMessage(
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Activity Processing
-// ─────────────────────────────────────────────────────────────────────────────
-
+/**
+ * Process a Teams activity and generate a response.
+ */
 async function processTeamsActivity(
   activity: TeamsActivity,
   env: Env
 ): Promise<Response> {
-  // Only process message activities with text
+  // Only process message activities with text content
   if (activity.type !== "message" || !activity.text) {
     return new Response(null, { status: 200 });
   }
 
-  // Extract required IDs
+  // Extract required identifiers
   const aadObjectId = activity.from?.aadObjectId;
   const conversationId = activity.conversation?.id;
 
@@ -97,30 +238,62 @@ async function processTeamsActivity(
     return new Response(null, { status: 200 });
   }
 
-  // Look up the user in our system
+  // Look up the user by their Teams ID
   const user = await lookupChannelUser(env, "teams", aadObjectId);
 
   if (!user) {
-    // User not linked, send welcome message
+    // User not linked - send onboarding message
     await sendTeamsReply(activity, {
       text: "Welcome to Docket! Please link your account at docket.com to get started.",
     });
     return new Response(null, { status: 200 });
   }
 
-  // Determine conversation scope and validate org access
+  // Determine conversation scope and organization
   const scope = getConversationScope(activity);
-  const orgId = await resolveOrgId(env, user, activity, scope);
+
+  let orgId: string | null;
+  if (scope === "personal") {
+    // Personal chats use the user's organization directly
+    orgId = user.orgId;
+  } else {
+    // Workspace chats require tenant binding verification
+    orgId = await resolveWorkspaceOrg(env, user, activity);
+  }
 
   if (!orgId) {
     return new Response(null, { status: 200 });
   }
 
-  // Build the channel message
-  const channelMessage = buildChannelMessage(activity, user, orgId, scope);
+  // Build the channel message for the Durable Object
+  const channelMessage: ChannelMessage = {
+    channel: "teams",
+    orgId,
+    userId: user.userId,
+    userRole: user.role,
+    conversationId,
+    conversationScope: scope,
+    message: activity.text,
+    jurisdictions: user.jurisdictions,
+    practiceTypes: user.practiceTypes,
+    firmSize: user.firmSize as "solo" | "small" | "mid" | "large" | null,
+    metadata: {
+      threadId: conversationId,
+      teamsChannelId: activity.channelId,
+    },
+  };
 
-  // Route to the organization's Durable Object
-  const doResponse = await routeMessageToDO(env, channelMessage);
+  // Send to the organization's Durable Object for processing
+  const doId = env.TENANT.idFromName(orgId);
+  const doStub = env.TENANT.get(doId);
+
+  const doRequest = new Request("https://do/process-message", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(channelMessage),
+  });
+
+  const doResponse = await doStub.fetch(doRequest);
   const result = (await doResponse.json()) as { response: string };
 
   // Send the response back to Teams
@@ -130,214 +303,4 @@ async function processTeamsActivity(
   });
 
   return new Response(null, { status: 200 });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper Functions
-// ─────────────────────────────────────────────────────────────────────────────
-
-function getConversationScope(activity: TeamsActivity): ConversationScope {
-  const conversationType = activity.conversation?.conversationType;
-
-  if (conversationType === "personal") {
-    return "personal";
-  }
-
-  if (conversationType === "groupChat") {
-    return "groupChat";
-  }
-
-  return "teams";
-}
-
-async function resolveOrgId(
-  env: Env,
-  user: ChannelUserInfo,
-  activity: TeamsActivity,
-  scope: ConversationScope
-): Promise<string | null> {
-  // For personal chats, use the user's org directly
-  if (scope === "personal") {
-    return user.orgId;
-  }
-
-  // For team/group chats, verify the workspace is linked to the user's org
-  const tenantId = activity.channelData?.tenant?.id;
-  if (!tenantId) {
-    return null;
-  }
-
-  const workspaceOrgId = await lookupWorkspaceOrg(env, "teams", tenantId);
-
-  // Verify user belongs to this workspace's org
-  if (!workspaceOrgId || workspaceOrgId !== user.orgId) {
-    return null;
-  }
-
-  return workspaceOrgId;
-}
-
-function buildChannelMessage(
-  activity: TeamsActivity,
-  user: ChannelUserInfo,
-  orgId: string,
-  scope: ConversationScope
-): ChannelMessage {
-  return {
-    channel: "teams",
-    orgId,
-    userId: user.userId,
-    userRole: user.role,
-    conversationId: activity.conversation!.id,
-    conversationScope: scope,
-    message: activity.text!,
-    jurisdictions: user.jurisdictions,
-    practiceTypes: user.practiceTypes,
-    firmSize: user.firmSize as "solo" | "small" | "mid" | "large" | null,
-    metadata: {
-      threadId: activity.conversation?.id,
-      teamsChannelId: activity.channelId,
-    },
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Teams API
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function sendTeamsReply(
-  activity: TeamsActivity,
-  reply: { text: string; replyToId?: string }
-): Promise<void> {
-  const serviceUrl = activity.serviceUrl;
-  const conversationId = activity.conversation?.id;
-
-  if (!serviceUrl || !conversationId) {
-    return;
-  }
-
-  const replyUrl = `${serviceUrl}/v3/conversations/${conversationId}/activities`;
-
-  const replyPayload = {
-    type: "message",
-    text: reply.text,
-    from: activity.recipient,
-    recipient: activity.from,
-    conversation: activity.conversation,
-    replyToId: reply.replyToId,
-  };
-
-  try {
-    await fetch(replyUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(replyPayload),
-    });
-  } catch (error) {
-    const log = createLogger({ handler: "teams-reply" });
-    log.error("Failed to send Teams reply", { error, conversationId });
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Database Lookups
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function lookupChannelUser(
-  env: Env,
-  channelType: string,
-  channelUserId: string
-): Promise<ChannelUserInfo | null> {
-  // Look up the channel link and org membership
-  const link = await env.DB.prepare(
-    `SELECT cul.user_id, om.org_id, om.role
-     FROM channel_user_links cul
-     JOIN org_members om ON om.user_id = cul.user_id
-     WHERE cul.channel_type = ? AND cul.channel_user_id = ?
-     LIMIT 1`
-  )
-    .bind(channelType, channelUserId)
-    .first<{ user_id: string; org_id: string; role: "admin" | "member" }>();
-
-  if (!link) {
-    return null;
-  }
-
-  // Get org settings
-  const org = await env.DB.prepare(
-    `SELECT jurisdictions, practice_types, firm_size
-     FROM org
-     WHERE id = ?`
-  )
-    .bind(link.org_id)
-    .first<{
-      jurisdictions: string;
-      practice_types: string;
-      firm_size: string | null;
-    }>();
-
-  if (!org) {
-    return null;
-  }
-
-  // Parse JSON arrays
-  const jurisdictions = parseJsonArray(org.jurisdictions);
-  const practiceTypes = parseJsonArray(org.practice_types);
-
-  return {
-    userId: link.user_id,
-    orgId: link.org_id,
-    role: link.role,
-    jurisdictions,
-    practiceTypes,
-    firmSize: org.firm_size,
-  };
-}
-
-function parseJsonArray(json: string | null): string[] {
-  if (!json) {
-    return [];
-  }
-
-  try {
-    return JSON.parse(json);
-  } catch {
-    return [];
-  }
-}
-
-async function lookupWorkspaceOrg(
-  env: Env,
-  channelType: string,
-  workspaceId: string
-): Promise<string | null> {
-  const result = await env.DB.prepare(
-    `SELECT org_id
-     FROM workspace_bindings
-     WHERE channel_type = ? AND workspace_id = ?`
-  )
-    .bind(channelType, workspaceId)
-    .first<{ org_id: string }>();
-
-  return result?.org_id ?? null;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Durable Object Routing
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function routeMessageToDO(
-  env: Env,
-  message: ChannelMessage
-): Promise<Response> {
-  const doId = env.TENANT.idFromName(message.orgId);
-  const doStub = env.TENANT.get(doId);
-
-  return doStub.fetch(
-    new Request("https://do/process-message", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(message),
-    })
-  );
 }
