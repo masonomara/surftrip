@@ -253,18 +253,18 @@ function SyncConfigSection({
 }: SyncConfigSectionProps) {
   const lastSyncText = lastSyncedAt
     ? `Last synced ${new Date(lastSyncedAt).toLocaleDateString()}`
-    : "Not synced yet";
+    : "";
 
   return (
     <section className="section">
-      <h2 className="text-title-3">Sync Clio Configuration</h2>
+      <h2 className="text-title-3">Clio Configuration</h2>
 
       <div className="info-card">
         <div>
-          <h3 className="text-headline">{lastSyncText}</h3>
+          <h3 className="text-headline">Sync Clio</h3>
           <p className="section-description">
-            If you&apos;ve added custom fields or changed your Clio setup, sync
-            to update Docket. Auto-syncs hourly.
+            For custom fields or changed your Clio configuration. Re-syncs
+            hourly. {lastSyncText}
           </p>
         </div>
 
