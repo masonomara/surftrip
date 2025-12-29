@@ -5,6 +5,7 @@ import { z } from "zod";
 // =============================================================================
 
 export type OrgRole = "admin" | "member";
+// Note: "chatgpt" is reserved for Version 2
 export type ChannelType = "teams" | "slack" | "mcp" | "chatgpt" | "web";
 export type FirmSize = "solo" | "small" | "mid" | "large";
 export type ConversationScope =
