@@ -1,5 +1,6 @@
 import { Env } from "../types/env";
 import { KB_CONFIG } from "../config/kb";
+import { createLogger } from "../lib/logger";
 
 // ============================================================================
 // Types
@@ -57,7 +58,8 @@ export async function retrieveRAGContext(
     const context = { kbChunks, orgChunks };
     return applyTokenBudget(context);
   } catch (error) {
-    console.error("[RAG] Retrieval error:", error);
+    const log = createLogger({ component: "rag-retrieval", orgId });
+    log.error("RAG retrieval failed", { error });
     return { kbChunks: [], orgChunks: [] };
   }
 }

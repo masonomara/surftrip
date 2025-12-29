@@ -14,6 +14,7 @@ import type { Env } from "../types/env";
 import type { OrgMemberRow } from "../types";
 import { orgMemberRowToEntity } from "../types";
 import { getOrgDeletionPreview, deleteOrg } from "../services/org-deletion";
+import { createLogger, generateRequestId } from "../lib/logger";
 
 interface CreateOrgBody {
   name?: string;
@@ -72,6 +73,12 @@ export async function handleCreateOrg(
   const memberId = crypto.randomUUID();
   const now = Date.now();
 
+  const log = createLogger({
+    requestId: generateRequestId(),
+    handler: "create-org",
+    userId: ctx.user.id,
+  });
+
   try {
     await env.DB.batch([
       env.DB.prepare(
@@ -97,7 +104,7 @@ export async function handleCreateOrg(
       membership: { role: "admin", isOwner: true },
     });
   } catch (error) {
-    console.error("Failed to create org:", error);
+    log.error("Failed to create org", { error });
     return Response.json(
       { error: "Failed to create organization" },
       { status: 500 }
@@ -218,6 +225,12 @@ export async function handleUpdateOrg(
   values.push(String(Date.now()));
   values.push(ctx.orgId);
 
+  const log = createLogger({
+    requestId: generateRequestId(),
+    handler: "update-org",
+    orgId: ctx.orgId,
+  });
+
   try {
     await env.DB.prepare(`UPDATE org SET ${updates.join(", ")} WHERE id = ?`)
       .bind(...values)
@@ -225,7 +238,7 @@ export async function handleUpdateOrg(
 
     return Response.json({ success: true });
   } catch (error) {
-    console.error("Failed to update org:", error);
+    log.error("Failed to update org", { error });
     return Response.json(
       { error: "Failed to update organization" },
       { status: 500 }

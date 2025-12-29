@@ -1,5 +1,6 @@
 import { type ChannelMessage } from "../types";
 import type { Env } from "../types/env";
+import { createLogger, generateRequestId } from "../lib/logger";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -61,10 +62,15 @@ export async function handleTeamsMessage(
     return new Response(null, { status: 200 });
   }
 
+  const log = createLogger({
+    requestId: generateRequestId(),
+    handler: "teams-message",
+  });
+
   try {
     return await processTeamsActivity(activity, env);
   } catch (error) {
-    console.error("handleTeamsMessage error:", error);
+    log.error("Teams message processing failed", { error });
     // Always return 200 to Teams to prevent retries
     return new Response(null, { status: 200 });
   }
@@ -228,7 +234,8 @@ async function sendTeamsReply(
       body: JSON.stringify(replyPayload),
     });
   } catch (error) {
-    console.error("Teams reply error:", error);
+    const log = createLogger({ handler: "teams-reply" });
+    log.error("Failed to send Teams reply", { error, conversationId });
   }
 }
 

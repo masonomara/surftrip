@@ -178,7 +178,8 @@ export function getAuth(env: AuthEnv) {
         });
 
         if (!result.success) {
-          console.error("Failed to send password reset email:", result.error);
+          const log = createLogger({ handler: "auth-password-reset" });
+          log.error("Failed to send password reset email", { error: result.error, email: user.email });
         }
       },
     },
@@ -194,7 +195,8 @@ export function getAuth(env: AuthEnv) {
         });
 
         if (!result.success) {
-          console.error("Failed to send verification email:", result.error);
+          const log = createLogger({ handler: "auth-verification" });
+          log.error("Failed to send verification email", { error: result.error, email: user.email });
         }
       },
     },

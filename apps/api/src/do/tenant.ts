@@ -129,7 +129,7 @@ export class TenantDO extends DurableObject<Env> {
           return Response.json({ error: "Not found" }, { status: 404 });
       }
     } catch (error) {
-      console.error(`[TenantDO:${this.orgId}] Error:`, error);
+      this.log.error("Request failed", { error, path: url.pathname });
       return Response.json({ error: "Internal error" }, { status: 500 });
     }
   }
