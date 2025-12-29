@@ -39,22 +39,19 @@ import {
 } from "./handlers/documents";
 import type { Env } from "./types/env";
 
-// Re-export for Cloudflare Workers
 export { TenantDO };
 export type { Env };
 
-// Origins allowed to make CORS requests
+// -----------------------------------------------------------------------------
+// CORS Configuration
+// -----------------------------------------------------------------------------
+
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "https://docketadmin.com",
   "https://www.docketadmin.com",
 ];
 
-/**
- * Builds CORS headers for the response based on the request origin.
- * If the origin is in our allowed list, we reflect it back.
- * Otherwise, we use localhost as a fallback (blocks requests from unknown origins).
- */
 function getCorsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get("Origin") || "";
   const allowedOrigin = ALLOWED_ORIGINS.includes(origin)
@@ -69,16 +66,11 @@ function getCorsHeaders(request: Request): HeadersInit {
   };
 }
 
-/**
- * Wraps a response with CORS headers.
- */
 function withCors(response: Response, request: Request): Response {
   const headers = new Headers(response.headers);
-
   for (const [key, value] of Object.entries(getCorsHeaders(request))) {
     headers.set(key, value);
   }
-
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -86,17 +78,134 @@ function withCors(response: Response, request: Request): Response {
   });
 }
 
-/**
- * Main Cloudflare Worker entry point.
- * Routes requests to the appropriate handler.
- */
+// -----------------------------------------------------------------------------
+// Route Handler Type
+// -----------------------------------------------------------------------------
+
+type RouteHandler = (request: Request, env: Env) => Promise<Response>;
+
+// Static routes: exact path + method -> handler
+const staticRoutes: Record<string, Record<string, RouteHandler>> = {
+  "/api/check-email": {
+    POST: handleCheckEmail,
+  },
+  "/api/org": {
+    POST: handleCreateOrg,
+    PATCH: handleUpdateOrg,
+    DELETE: handleDeleteOrg,
+  },
+  "/api/org/deletion-preview": {
+    GET: handleGetOrgDeletionPreview,
+  },
+  "/api/user/org": {
+    GET: handleGetUserOrg,
+  },
+  "/api/clio/connect": {
+    GET: handleClioConnectAuth,
+  },
+  "/api/clio/status": {
+    GET: handleClioStatus,
+  },
+  "/api/clio/disconnect": {
+    POST: handleClioDisconnect,
+  },
+  "/api/org/clio/refresh-schema": {
+    POST: handleClioRefreshSchema,
+  },
+  "/api/org/members": {
+    GET: handleGetMembers,
+  },
+  "/api/org/invitations": {
+    GET: handleGetInvitations,
+    POST: handleSendInvitation,
+  },
+  "/api/org/transfer-ownership": {
+    POST: handleTransferOwnership,
+  },
+  "/api/account/deletion-preview": {
+    GET: handleGetAccountDeletionPreview,
+  },
+  "/api/account": {
+    PATCH: handleUpdateAccount,
+    DELETE: handleDeleteAccount,
+  },
+  "/api/org/context": {
+    GET: handleGetDocuments,
+    POST: handleUploadDocument,
+  },
+};
+
+// -----------------------------------------------------------------------------
+// Dynamic Route Matching
+// -----------------------------------------------------------------------------
+
+function matchDynamicRoute(
+  path: string,
+  method: string,
+  request: Request,
+  env: Env
+): Promise<Response> | null {
+  // /api/org/members/:memberId
+  const memberMatch = path.match(/^\/api\/org\/members\/([^/]+)$/);
+  if (memberMatch) {
+    const memberId = memberMatch[1];
+    if (method === "DELETE") {
+      return handleRemoveMember(request, env, memberId);
+    }
+    if (method === "PATCH") {
+      return handleUpdateMemberRole(request, env, memberId);
+    }
+    return Promise.resolve(
+      Response.json({ error: "Method not allowed" }, { status: 405 })
+    );
+  }
+
+  // /api/org/invitations/:invitationId
+  const revokeInvitationMatch = path.match(
+    /^\/api\/org\/invitations\/([^/]+)$/
+  );
+  if (revokeInvitationMatch && method === "DELETE") {
+    const invitationId = revokeInvitationMatch[1];
+    return handleRevokeInvitation(request, env, invitationId);
+  }
+
+  // /api/invitations/:invitationId (public, no auth)
+  const getInvitationMatch = path.match(/^\/api\/invitations\/([^/]+)$/);
+  if (getInvitationMatch && method === "GET") {
+    const invitationId = getInvitationMatch[1];
+    return handleGetInvitation(request, env, invitationId);
+  }
+
+  // /api/invitations/:invitationId/accept
+  const acceptInvitationMatch = path.match(
+    /^\/api\/invitations\/([^/]+)\/accept$/
+  );
+  if (acceptInvitationMatch && method === "POST") {
+    const invitationId = acceptInvitationMatch[1];
+    return handleAcceptInvitation(request, env, invitationId);
+  }
+
+  // /api/org/context/:documentId
+  const documentMatch = path.match(/^\/api\/org\/context\/([^/]+)$/);
+  if (documentMatch && method === "DELETE") {
+    const documentId = documentMatch[1];
+    return handleDeleteDocument(request, env, documentId);
+  }
+
+  return null;
+}
+
+// -----------------------------------------------------------------------------
+// Main Worker Entry Point
+// -----------------------------------------------------------------------------
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
 
-    // Handle CORS preflight requests
+    // Handle CORS preflight
     if (method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -104,12 +213,11 @@ export default {
       });
     }
 
-    // Health check endpoint (for load balancers, etc.)
+    // Health check endpoints (no CORS needed)
     if (path === "/health") {
       return Response.json({ status: "ok" });
     }
 
-    // Readiness check (verifies D1 is accessible)
     if (path === "/ready") {
       try {
         await env.DB.prepare("SELECT 1").first();
@@ -122,7 +230,7 @@ export default {
       }
     }
 
-    // Better Auth handles all /api/auth/* routes
+    // Better Auth handles its own routing
     if (path.startsWith("/api/auth")) {
       try {
         const authResponse = await getAuth(env).handler(request);
@@ -136,185 +244,37 @@ export default {
       }
     }
 
-    // Teams bot webhook (doesn't need CORS)
+    // Teams webhook (no CORS needed - Teams calls this directly)
     if (path === "/api/messages") {
       return handleTeamsMessage(request, env);
     }
 
-    // Clio OAuth callback (doesn't need CORS - it's a redirect from Clio)
+    // Clio OAuth callback (no CORS - browser redirect)
     if (path === "/clio/callback") {
       return handleClioCallback(request, env);
     }
 
-    // Route to appropriate handler
-    const response = await routeRequest(request, env, path, method);
+    // Try static routes first
+    const methodHandlers = staticRoutes[path];
+    if (methodHandlers) {
+      const handler = methodHandlers[method];
+      if (handler) {
+        const response = await handler(request, env);
+        return withCors(response, request);
+      }
+    }
 
-    if (response) {
+    // Try dynamic routes
+    const dynamicResponse = matchDynamicRoute(path, method, request, env);
+    if (dynamicResponse) {
+      const response = await dynamicResponse;
       return withCors(response, request);
     }
 
-    // No matching route found
+    // Not found
     return withCors(
       Response.json({ error: "Not found" }, { status: 404 }),
       request
     );
   },
 };
-
-/**
- * Routes authenticated API requests to the appropriate handler.
- * Returns null if no matching route is found.
- */
-async function routeRequest(
-  request: Request,
-  env: Env,
-  path: string,
-  method: string
-): Promise<Response | null> {
-  // ============================================================
-  // Authentication
-  // ============================================================
-
-  if (path === "/api/check-email" && method === "POST") {
-    return handleCheckEmail(request, env);
-  }
-
-  // ============================================================
-  // Organization Management
-  // ============================================================
-
-  if (path === "/api/org" && method === "POST") {
-    return handleCreateOrg(request, env);
-  }
-
-  if (path === "/api/org" && method === "PATCH") {
-    return handleUpdateOrg(request, env);
-  }
-
-  if (path === "/api/org" && method === "DELETE") {
-    return handleDeleteOrg(request, env);
-  }
-
-  if (path === "/api/org/deletion-preview" && method === "GET") {
-    return handleGetOrgDeletionPreview(request, env);
-  }
-
-  if (path === "/api/user/org" && method === "GET") {
-    return handleGetUserOrg(request, env);
-  }
-
-  // ============================================================
-  // Clio Integration
-  // ============================================================
-
-  if (path === "/api/clio/connect" && method === "GET") {
-    return handleClioConnectAuth(request, env);
-  }
-
-  if (path === "/api/clio/status" && method === "GET") {
-    return handleClioStatus(request, env);
-  }
-
-  if (path === "/api/clio/disconnect" && method === "POST") {
-    return handleClioDisconnect(request, env);
-  }
-
-  if (path === "/api/org/clio/refresh-schema" && method === "POST") {
-    return handleClioRefreshSchema(request, env);
-  }
-
-  // ============================================================
-  // Member Management
-  // ============================================================
-
-  if (path === "/api/org/members" && method === "GET") {
-    return handleGetMembers(request, env);
-  }
-
-  if (path === "/api/org/invitations" && method === "POST") {
-    return handleSendInvitation(request, env);
-  }
-
-  if (path === "/api/org/invitations" && method === "GET") {
-    return handleGetInvitations(request, env);
-  }
-
-  if (path === "/api/org/transfer-ownership" && method === "POST") {
-    return handleTransferOwnership(request, env);
-  }
-
-  // Member routes with dynamic ID: /api/org/members/:userId
-  const memberMatch = path.match(/^\/api\/org\/members\/([^/]+)$/);
-  if (memberMatch) {
-    const userId = memberMatch[1];
-
-    if (method === "DELETE") {
-      return handleRemoveMember(request, env, userId);
-    }
-
-    if (method === "PATCH") {
-      return handleUpdateMemberRole(request, env, userId);
-    }
-
-    return Response.json({ error: "Method not allowed" }, { status: 405 });
-  }
-
-  // Invitation revocation: /api/org/invitations/:invitationId
-  const invitationMatch = path.match(/^\/api\/org\/invitations\/([^/]+)$/);
-  if (invitationMatch && method === "DELETE") {
-    return handleRevokeInvitation(request, env, invitationMatch[1]);
-  }
-
-  // ============================================================
-  // Public Invitation Routes (unauthenticated)
-  // ============================================================
-
-  // Get invitation details: /api/invitations/:invitationId
-  const publicInviteMatch = path.match(/^\/api\/invitations\/([^/]+)$/);
-  if (publicInviteMatch && method === "GET") {
-    return handleGetInvitation(request, env, publicInviteMatch[1]);
-  }
-
-  // Accept invitation: /api/invitations/:invitationId/accept
-  const acceptMatch = path.match(/^\/api\/invitations\/([^/]+)\/accept$/);
-  if (acceptMatch && method === "POST") {
-    return handleAcceptInvitation(request, env, acceptMatch[1]);
-  }
-
-  // ============================================================
-  // Account Management
-  // ============================================================
-
-  if (path === "/api/account/deletion-preview" && method === "GET") {
-    return handleGetAccountDeletionPreview(request, env);
-  }
-
-  if (path === "/api/account" && method === "PATCH") {
-    return handleUpdateAccount(request, env);
-  }
-
-  if (path === "/api/account" && method === "DELETE") {
-    return handleDeleteAccount(request, env);
-  }
-
-  // ============================================================
-  // Document Management (Org Context)
-  // ============================================================
-
-  if (path === "/api/org/context" && method === "GET") {
-    return handleGetDocuments(request, env);
-  }
-
-  if (path === "/api/org/context" && method === "POST") {
-    return handleUploadDocument(request, env);
-  }
-
-  // Delete document: /api/org/context/:documentId
-  const documentMatch = path.match(/^\/api\/org\/context\/([^/]+)$/);
-  if (documentMatch && method === "DELETE") {
-    return handleDeleteDocument(request, env, documentMatch[1]);
-  }
-
-  // No matching route
-  return null;
-}
