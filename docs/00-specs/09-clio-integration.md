@@ -23,48 +23,22 @@ Base URL: `https://app.clio.com/api/v4/`
 - Activity Descriptions
 - Users (firm staff)
 
-## Clio Schema Caching
+## Clio Custom Fields
 
-A per-org Clio Schema is cached in DO SQLite. Fetch handles custom fields added by firm admins, and Clio API changes. Fetch is triggered by:
+Clio has no schema introspection API - base object fields are documented in the API Reference and known to the LLM. Only custom fields (firm-specific) need to be fetched dynamically.
 
-- First Clio API call (no cached schema)
-- User triggers refresh via docket.com/settings
-- Developer schema updates
-
-## Clio API Schema
-
-Each object type has a schema endpoint:
+**Fetch custom fields per-org:**
 
 ```
-GET /api/v4/matters.json?fields=schema
-GET /api/v4/contacts.json?fields=schema
-GET /api/v4/tasks.json?fields=schema
-...
+GET /api/v4/custom_fields.json?parent_type=Matter&deleted=false
+GET /api/v4/custom_fields.json?parent_type=Contact&deleted=false
 ```
 
-Response includes field definitions:
+Cached in DO SQLite with `fetched_at` timestamp. Lazy refresh (automatic, no user action):
 
-```json
-{
-  "schema": {
-    "type": "Matter",
-    "fields": [
-      { "name": "id", "type": "integer", "read_only": true },
-      { "name": "display_number", "type": "string", "required": true },
-      { "name": "description", "type": "string" },
-      {
-        "name": "status",
-        "type": "string",
-        "enum": ["Open", "Pending", "Closed"]
-      },
-      { "name": "client", "type": "Contact", "relationship": true },
-      { "name": "practice_area", "type": "PracticeArea", "relationship": true },
-      { "name": "open_date", "type": "date" },
-      { "name": "close_date", "type": "date" }
-    ]
-  }
-}
-```
+- First Clio API call (no cached custom fields)
+- Cache older than 1 hour (checked on each Clio API call)
+- Developer bumps `CLIO_SCHEMA_VERSION`
 
 ## Clio OAuth
 
@@ -73,6 +47,52 @@ Per-user tokens stored encrypted in DO Storage (AES-GCM). Access tokens expire a
 ## Clio Multi-Tenant Architecture
 
 Clio's OAuth model supports multi-tenant applications. Each user authorizes Docket independently via OAuth, so each authorization creates a distinct `access_token` for that user. Tokens are per-user, not per-firm. Docket stores tokens in DO Storage keyed by `user_id`. Rate limits apply per access token, so heavy usage by one firm doesn't affect others. Each org's DO stores its users' Clio tokens in DO Storage (encrypted AES-GCM). Cross-org token access is architecturally impossible—DOs are isolated by `org_id`
+
+## Clio Request Body Format
+
+**POST/PATCH body structure:**
+
+```json
+{
+  "data": {
+    "field1": "value1",
+    "field2": "value2"
+  }
+}
+```
+
+Do NOT nest under object type. This is wrong:
+
+```json
+{
+  "data": {
+    "contact": { "first_name": "Test" }
+  }
+}
+```
+
+This is correct:
+
+```json
+{
+  "data": {
+    "first_name": "Test",
+    "last_name": "Smith",
+    "type": "Person"
+  }
+}
+```
+
+**Contact required fields:**
+
+- `type`: Must be `"Person"` or `"Company"`
+- For Person: `first_name` and `last_name`
+- For Company: `name`
+
+**Matter required fields:**
+
+- `description`: Matter title
+- `client`: Contact ID reference (the client must exist first)
 
 ## Clio Error Handling
 

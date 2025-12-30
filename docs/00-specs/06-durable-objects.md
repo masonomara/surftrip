@@ -14,9 +14,9 @@ One DO per organization. Each org's DO coordinates tenant state, conversation lo
 
 Endpoint: `POST /process-message`
 
-1. Channel Adapter sends `ChannelMessage` (user_id, org_id, role, conversationId, conversationScope, message) to DO
+1. Channel Adapter sends `ChannelMessage` (user_id, org_id, role, conversationId, conversationScope, message, jurisdictions[], practiceTypes[], firmSize) to DO
 2. DO verifies user's role from SQLite
-3. DO generates embedding via Workers AI, queries Vectorize for Knowledge Base + Org Context chunks
+3. DO generates embedding via Workers AI, queries Vectorize for Knowledge Base + Org Context chunks (filtered by jurisdictions[], practiceTypes[], firmSize)
 4. DO loads Clio Schema from memory cache (populated from SQLite in constructor)
 5. DO builds system prompt: RAG context + Clio Schema + Org Context
 6. DO appends last 15 messages from this `conversationId`'s history, calls Workers AI
@@ -61,7 +61,7 @@ Two storage mechanisms in each DO:
 
 Audit logs are for troubleshooting, compliance, and support. They track Clio CUD operations (user_id, timestamp, params, result), Org Context changes (uploads, deletions), role/permission changes, and Clio OAuth connect/disconnect events.
 
-**Storage:** Append-only to R2 (`/orgs/{org_id}/audit/{year}/{month}.jsonl`). Each entry includes `prev_hash` (SHA-256 of previous entry) for tamper detection. Multi-year retention for legal compliance.
+**Storage:** One R2 object per entry (`/orgs/{org_id}/audit/{year}/{month}/{day}/{timestamp}-{uuid}.json`). Simple PUT, no read-modify-write. Query via R2 list with date prefix. Multi-year retention for legal compliance.
 
 ## Constructor Pattern
 

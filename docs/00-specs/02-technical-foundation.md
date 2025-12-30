@@ -44,7 +44,7 @@ Each organization has its own Cloudflare Durable Object (DO). The Knowledge Base
 - DOs: Per-org isolated state: conversations (keyed by `conversationId`), messages, settings, cached schema (`docketTenant`)
 - D1 Database: Auth, org registry, subscriptions, role permissions, invitations, workspace bindings, API keys, KB chunks, Org Context chunks (`DB`)
 - Vectorize: KB embeddings (shared) + Org Context embeddings (filtered by org_id) (`VECTORIZE`)
-- R2 Bucket: Org Context docs, legal docs, archived conversations, audit logs (path-isolated) (`R2`). Enable object versioning on storage buckets.
+- R2 Bucket: Org Context docs, legal docs, archived conversations, audit logs (path-isolated) (`R2`). Configure lifecycle rules for retention and storage.
 - DO Storage: Per-user Clio OAuth tokens (encrypted)
 - Workers AI: LLM interface (`AI`)
 - All bindings attached to worker
@@ -63,6 +63,14 @@ Each organization has its own Cloudflare Durable Object (DO). The Knowledge Base
 - Master key stored in Cloudflare Secrets (`wrangler secret put ENCRYPTION_KEY`)
 - Per-user keys derived via HKDF-SHA256 with `user_id` as context/salt
 - Key version prefixed to ciphertext for rotation support, decrypt with old key, re-encrypt with new
+
+**Key Rotation Procedure:**
+
+1. Generate new key: `openssl rand -base64 32`
+2. Set old key: `wrangler secret put ENCRYPTION_KEY_OLD` (paste current value)
+3. Set new key: `wrangler secret put ENCRYPTION_KEY` (paste new value)
+4. Deploy. Data re-encrypts on access via `decryptAndRotate()`.
+5. After access period, delete: `wrangler secret delete ENCRYPTION_KEY_OLD`
 
 ## Data Deletion
 

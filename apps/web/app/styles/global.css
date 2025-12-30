@@ -1,0 +1,869 @@
+/* ==========================================================================
+   Design Tokens (CSS Custom Properties)
+   ========================================================================== */
+
+:root {
+  /* Backgrounds */
+  --container: #ffffff;
+  --surface-1: #f9f8f6;
+  --surface-2: #f4f3f0;
+  --surface-3: #e8e5dd;
+
+  /* Text */
+  --text-primary: #131416;
+  --text-secondary: #3c3d43;
+  --text-tertiary: #6f717a;
+
+  /* Borders */
+  --border-solid: rgba(29, 29, 35, 1);
+  --border-dark: rgba(29, 29, 35, 0.3);
+  --border-default: rgba(29, 29, 35, 0.15);
+
+  /* Brand */
+  --brand-primary: #2053b9;
+  --brand-secondary: #255ccc;
+  --brand-highlight: rgba(32, 83, 185, 0.15);
+
+  /* Status: Error */
+  --error-primary: #a82639;
+  --error-secondary: #b92b40;
+  --error-highlight: rgba(168, 38, 57, 0.15);
+
+  /* Status: Success */
+  --success-primary: #016644;
+  --success-secondary: #00714a;
+  --success-highlight: rgba(1, 102, 68, 0.15);
+
+  /* Overlay */
+  --overlay: rgba(29, 29, 35, 0.6);
+
+  /* Buttons */
+  --button-primary: #131416;
+  --button-primary-text: #ffffff;
+  --button-primary-border: rgba(29, 29, 35, 0.15);
+  --button-secondary: rgba(0, 0, 0, 0);
+  --button-secondary-text: #131416;
+  --button-secondary-border: rgba(29, 29, 35, 0.15);
+}
+
+/* ==========================================================================
+   Reset & Base Styles
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+html * {
+  font-family: "Geist", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100svh;
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+
+ul {
+  list-style-position: outside;
+}
+
+ul > li::marker {
+  font-size: 0.75em;
+}
+
+strong {
+  font-weight: 500;
+}
+
+:focus-visible {
+  outline: #2053b9 auto 0.5px;
+}
+
+/* ==========================================================================
+   Typography
+   ========================================================================== */
+
+.text-large-title {
+  font-size: 33px;
+  line-height: 40px;
+  font-weight: 500;
+}
+
+.text-title-1 {
+  font-size: 27px;
+  line-height: 33px;
+  font-weight: 500;
+}
+
+.text-title-2 {
+  font-size: 21px;
+  line-height: 26px;
+  font-weight: 500;
+}
+
+.text-title-3 {
+  font-size: 19px;
+  line-height: 24px;
+  font-weight: 500;
+}
+
+.text-headline {
+  font-size: 16px;
+  line-height: 21px;
+  font-weight: 500;
+}
+
+.text-body {
+  font-size: 16px;
+  line-height: 21px;
+}
+
+.text-callout {
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.text-subhead {
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.text-footnote {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.text-caption-1,
+.text-caption-2 {
+  font-size: 11px;
+  line-height: 13px;
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-tertiary {
+  color: var(--text-tertiary);
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+/* Base button styles */
+.btn {
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 500;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Button variants */
+.btn-primary {
+  background: var(--text-primary) !important;
+  color: var(--container);
+  border: none;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--text-secondary) !important;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.btn-danger {
+  background: var(--error-primary) !important;
+  color: var(--container);
+  border: 1px solid var(--error-highlight);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--error-secondary) !important;
+}
+
+.btn-danger-outline {
+  background: transparent;
+  color: var(--error-primary);
+  border: 1px solid var(--error-primary);
+}
+
+.btn-danger-outline:hover:not(:disabled) {
+  background: var(--error-highlight);
+}
+
+/* Button sizes */
+.btn-sm {
+  padding: 0 10px;
+  gap: 6px;
+  font-size: 15px !important;
+  line-height: 20px !important;
+  font-weight: 400;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background: transparent;
+}
+
+.btn-sm:hover {
+  background: var(--surface-2);
+}
+
+.btn-lg,
+.btn-lg-fit {
+  padding: 0 20px;
+  font-size: 16px;
+  line-height: 21px;
+  height: 44px;
+  border-radius: 8px;
+  font-weight: 500;
+  gap: 10px;
+}
+
+.btn-lg {
+  width: 100%;
+}
+
+.btn-lg-fit {
+  width: fit-content !important;
+}
+
+/* Button groups */
+.btn-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+/* Link styled as button */
+.link-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: inherit;
+  padding: 0;
+  text-decoration: none;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   Forms
+   ========================================================================== */
+
+.form-group {
+  width: 100%;
+  min-width: 0;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 19px;
+  color: var(--text-secondary);
+}
+
+.form-input,
+.form-select {
+  width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--container);
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 21px;
+  height: 42px;
+}
+
+.form-input:hover {
+  border-color: var(--border-dark);
+}
+
+.form-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input-disabled {
+  background-color: var(--container);
+  cursor: not-allowed;
+  color: var(--text-tertiary);
+}
+
+.input-disabled:hover {
+  border: 1px solid var(--border-default);
+}
+
+/* ==========================================================================
+   Alerts
+   ========================================================================== */
+
+.alert {
+  padding: 0px 16px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 19px;
+  margin-bottom: 16px;
+}
+
+.alert-error {
+  background: var(--error-highlight);
+  color: var(--error-primary);
+}
+
+.alert-error .link-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--error-primary);
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.alert-success {
+  background: var(--success-highlight);
+  color: var(--success-primary);
+}
+
+/* ==========================================================================
+   Sections
+   ========================================================================== */
+
+.section {
+  margin-bottom: 16px;
+  padding: 22px;
+  border-radius: 12px;
+  gap: 22px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.section-description {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.infoSection {
+  background-color: var(--surface-2);
+  border: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.infoSection * {
+  font-size: 14px !important;
+  line-height: 19px !important;
+}
+
+.infoSection ul {
+  padding-left: 1em;
+}
+
+/* ==========================================================================
+   Cards
+   ========================================================================== */
+
+.card {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 1.5rem;
+  min-width: 0;
+}
+
+.card-sm {
+  padding: 1rem;
+}
+
+.card-lg {
+  padding: 2rem;
+}
+
+.info-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 22px;
+  width: 100%;
+  min-width: 0;
+}
+
+.info-card * {
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.form-card {
+  display: grid;
+  justify-content: space-between;
+  align-items: center;
+  gap: 22px;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 1fr 1fr;
+}
+
+.danger-card {
+  background: var(--error-highlight);
+  border: 1px solid var(--error-tertiary);
+  border-radius: 8px;
+  padding: 1.5rem;
+  min-width: 0;
+}
+
+/* ==========================================================================
+   Modals
+   ========================================================================== */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-content {
+  background: var(--surface-1);
+  padding: 22px;
+  border-radius: 16px;
+  width: calc(100% - 40px);
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  border: 1px solid var(--border-default);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.modal-title {
+  font-size: 19px;
+  line-height: 24px;
+  font-weight: 500;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-tertiary);
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-body-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* Modal progress indicator */
+.modal-progress {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+}
+
+.modal-progress-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+}
+
+.modal-progress-step {
+  width: 100%;
+  height: 4px;
+  background: var(--border-default);
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+
+.modal-progress-item span {
+  color: var(--text-tertiary);
+}
+
+.modal-progress-step.active,
+.modal-progress-step.completed {
+  background: var(--text-primary);
+}
+
+.modal-progress-item:has(.modal-progress-step.active) span,
+.modal-progress-item:has(.modal-progress-step.completed) span {
+  color: var(--text-primary);
+}
+
+/* Modal option cards (for selection UI) */
+.modal-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.modal-option-card,
+.modal-size-card {
+  padding: 0 16px;
+  background: var(--surface-1);
+  font-size: 16px;
+  line-height: 21px;
+  height: 64px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+
+.modal-option-card:hover,
+.modal-size-card:hover {
+  border-color: var(--border-dark);
+  color: var(--text-primary);
+}
+
+.modal-option-card.selected,
+.modal-size-card.selected {
+  border-color: var(--border-solid);
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+/* Modal checkbox grids */
+.modal-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.modal-checkbox-grid-2col {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.modal-checkbox-item,
+.chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  height: 36px;
+  font-size: 14px;
+  line-height: 19px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+
+.modal-checkbox-item:hover,
+.chip:hover {
+  border-color: var(--border-dark);
+  color: var(--text-primary);
+  background: var(--surface-1);
+}
+
+.modal-checkbox-item.selected,
+.chip-selected {
+  border-color: var(--border-solid);
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.modal-checkbox-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   Tables
+   ========================================================================== */
+
+.tableWrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  min-width: 500px;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding-right: 11px;
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-right: 0;
+}
+
+.table th {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table tbody tr {
+  border-top: 1px solid var(--border-default);
+}
+
+.table tbody tr:first-child {
+  border-top: none;
+}
+
+.table td {
+  font-size: 14px;
+  line-height: 19px;
+  border-top: 1px solid var(--border-default);
+  min-height: 32px;
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+
+/* ==========================================================================
+   Badges & Chips
+   ========================================================================== */
+
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 16px;
+  padding: 0.25rem 0.5rem;
+  background: var(--surface-3);
+  color: var(--text-primary);
+  border-radius: 4px;
+}
+
+.badge-owner {
+  background: var(--text-primary);
+  color: var(--container);
+}
+
+.badge-admin {
+  background: var(--surface-3);
+}
+
+.chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* ==========================================================================
+   Status Indicators
+   ========================================================================== */
+
+.status-success {
+  color: var(--success-primary);
+}
+
+.status-error {
+  color: var(--error-primary);
+}
+
+.status-muted {
+  color: var(--text-secondary);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  margin-right: 10px;
+  background: var(--surface-2) !important;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot-success {
+  background: var(--success-primary);
+}
+
+.status-dot-error {
+  background: var(--error-primary);
+}
+
+/* ==========================================================================
+   Info Rows (key-value display)
+   ========================================================================== */
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  min-width: 0;
+  gap: 16px;
+}
+
+.info-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-default);
+}
+
+.info-label {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 19px;
+  flex-shrink: 0;
+}
+
+.info-value {
+  font-size: 14px;
+  line-height: 19px;
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* ==========================================================================
+   Layout Utilities
+   ========================================================================== */
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-width: 0;
+  gap: 16px;
+}
+
+/* ==========================================================================
+   Misc Components
+   ========================================================================== */
+
+.back-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.back-link:hover {
+  color: var(--text-primary);
+}
+
+.empty-state {
+  padding: 0;
+  text-align: left;
+  color: var(--text-secondary);
+  border-radius: 8px;
+  font-size: 15px;
+  line-height: 20px;
+  min-width: 0;
+}
+
+/* ==========================================================================
+   Responsive Adjustments
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .form-card {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 599px) {
+  .info-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

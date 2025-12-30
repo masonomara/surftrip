@@ -9,7 +9,7 @@ A case management bot for law firms and legal clinics using Clio. Docket helps l
 
 ## How It Works
 
-Users chat via Microsoft Teams (primary), MCP Clients, Slack, ChatGPT, or other channels. The bot accesses:
+Users chat via web interface, Microsoft Teams, MCP clients, Slack, or other channels. The bot accesses:
 
 - **Knowledge Base (KB)** — Case management documentation shared across all organizations (D1 + Vectorize). Built with a legal expert.
 - **Org Context** — Organization-specific documentation: operating procedures, structure. Uploaded by Admins. Per-org isolated (D1 + Vectorize filtered by org_id, raw docs in R2).

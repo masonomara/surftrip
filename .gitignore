@@ -57,6 +57,7 @@ dist
 !.dev.vars.example
 .env*
 !.env.example
+!.env.test.example
 .wrangler/
 
 
@@ -64,6 +65,21 @@ dist
 .editorconfig
 .vscode/
 /docs/archive
+/docs/admin
 /docs/99*
 CLAUDE.md
 /devTools
+**/migrations/meta/
+**/kb
+**/worker-configuration.d.ts
+/.config
+/.claude
+/.vscode
+
+.react-router/
+build/
+
+# Playwright
+test-results/
+playwright-report/
+**/test/e2e/.auth/user.json

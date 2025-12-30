@@ -1,0 +1,268 @@
+/* ==========================================================================
+   App Layout
+
+   Desktop: Fixed sidebar on left, scrollable content on right
+   Mobile: Sidebar slides in from right as overlay
+   ========================================================================== */
+
+/* Main container */
+.layout {
+  display: flex;
+  min-height: 100svh;
+}
+
+/* Mobile overlay (hidden on desktop) */
+.overlay {
+  display: none;
+}
+
+/* ==========================================================================
+   Sidebar
+   ========================================================================== */
+
+.sidebar {
+  width: 255px;
+  flex-shrink: 0;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border-default);
+  padding: 27px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+}
+
+/* Sidebar header with logo */
+.sidebarHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.logo {
+  padding: 3.75px 8px;
+}
+
+.logo img {
+  height: 20px;
+  width: auto;
+}
+
+/* Close button (mobile only) */
+.closeButton {
+  display: none;
+}
+
+/* ==========================================================================
+   Navigation Sections
+   ========================================================================== */
+
+.section {
+  margin-bottom: 8px;
+  gap: 4px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.sectionLabel {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 16px 8px 0;
+  border-top: 1px solid var(--border-default);
+}
+
+/* First section doesn't need top border */
+.section:first-of-type .sectionLabel {
+  border-top: none;
+}
+
+/* ==========================================================================
+   Navigation Items
+   ========================================================================== */
+
+.navList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 19px;
+  transition: background 0.15s ease;
+}
+
+.navItem:hover,
+.navItemActive {
+  color: var(--text-primary);
+}
+
+.navItemActive {
+  background: var(--surface-3);
+}
+
+/* Nav icons */
+.navIcon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.navItem:hover .navIcon,
+.navItemActive .navIcon {
+  color: var(--text-primary);
+}
+
+/* ==========================================================================
+   Organization Info (bottom of sidebar)
+   ========================================================================== */
+
+.orgInfoDivider {
+  margin-top: auto;
+  height: 1px;
+  width: 100%;
+  background-color: var(--border-default);
+}
+
+.orgInfo {
+  padding: 8px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.orgAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.orgDetails {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.orgName {
+  font-size: 14px;
+  line-height: 19px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.orgRole {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-tertiary);
+}
+
+/* Hover states */
+.orgInfo:hover .orgName {
+  color: var(--text-primary);
+}
+
+.orgInfo:hover .orgRole {
+  color: var(--text-secondary);
+}
+
+.orgInfoActive {
+  background-color: var(--surface-3);
+}
+
+/* ==========================================================================
+   Main Content Area
+   ========================================================================== */
+
+.content {
+  flex: 1;
+  background: var(--surface-1);
+  min-height: 100svh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
+  margin-left: 255px; /* Offset for fixed sidebar */
+}
+
+.contentInner {
+  padding: 27px 22px 44px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+}
+
+/* ==========================================================================
+   Mobile Layout (≤768px)
+
+   Sidebar becomes a slide-in panel from the right
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  /* Show overlay when sidebar is open */
+  .overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 90;
+  }
+
+  /* Content takes full width on mobile */
+  .content {
+    margin-left: 0;
+  }
+
+  /* Sidebar slides in from right */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    min-width: 255px;
+    width: calc(100vw - 40px);
+    max-width: 355px;
+    z-index: 100;
+    border-right: none;
+    border-left: 1px solid var(--border-default);
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+  }
+
+  /* Show close button on mobile */
+  .closeButton {
+    display: flex;
+  }
+}

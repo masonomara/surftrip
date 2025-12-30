@@ -1,0 +1,55 @@
+# =============================================================================
+# API Development Environment Variables
+# Copy this file to .dev.vars and fill in your values
+# =============================================================================
+
+ENVIRONMENT=development
+
+# -----------------------------------------------------------------------------
+# Cloudflare (for CLI and tests)
+# -----------------------------------------------------------------------------
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_API_TOKEN=
+
+# -----------------------------------------------------------------------------
+# Better Auth (required)
+# -----------------------------------------------------------------------------
+BETTER_AUTH_URL=https://api.docketadmin.com
+BETTER_AUTH_SECRET=  # Generate with: openssl rand -base64 32
+
+# -----------------------------------------------------------------------------
+# Encryption (required - for Clio OAuth tokens)
+# -----------------------------------------------------------------------------
+ENCRYPTION_KEY=  # Generate with: openssl rand -base64 32
+
+# -----------------------------------------------------------------------------
+# Clio OAuth (required)
+# Get from: https://app.clio.com/settings/developer_applications
+# -----------------------------------------------------------------------------
+CLIO_APP_ID=
+CLIO_CLIENT_ID=
+CLIO_CLIENT_SECRET=
+
+# -----------------------------------------------------------------------------
+# Google SSO (optional)
+# Get from: https://console.cloud.google.com/apis/credentials
+# -----------------------------------------------------------------------------
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# -----------------------------------------------------------------------------
+# Apple SSO (optional)
+# Get from: https://developer.apple.com/account/resources/identifiers
+# APPLE_KEY_ID and APPLE_TEAM_ID are used to generate APPLE_CLIENT_SECRET JWT
+# -----------------------------------------------------------------------------
+APPLE_KEY_ID=
+APPLE_TEAM_ID=
+APPLE_CLIENT_ID=
+APPLE_CLIENT_SECRET=
+APPLE_APP_BUNDLE_IDENTIFIER=
+
+# -----------------------------------------------------------------------------
+# Resend (required for email)
+# Get from: https://resend.com/api-keys
+# -----------------------------------------------------------------------------
+RESEND_API_KEY=
