@@ -1948,12 +1948,12 @@ Each component file listed in Steps 8–15 gets a corresponding `.module.css` wi
 
 ### Phase 3 — Core Infrastructure
 
-- [ ] **Claude** Write `lib/types.ts` — `Conversation`, `Message`, `LocalConversation`, `LocalMessage`, `ProcessDataPart` types
-- [ ] **Claude** Write `lib/supabase/client.ts` — browser client using `createBrowserClient`
-- [ ] **Claude** Write `lib/supabase/server.ts` — server client using `createServerClient` + async `cookies()`
-- [ ] **Claude** Write `proxy.ts` — session refresh via `getClaims()`; redirects authenticated users away from `/login`/`/signup`; guests are never redirected (Next.js renamed `middleware.ts` → `proxy.ts`; see Step 7)
-- [ ] **Claude** Write `lib/local-storage.ts` — `loadConversations`, `loadConversation`, `createConversation`, `appendMessages`, `updateTitle`, `deleteConversation` (Step 7.5)
-- [ ] **Claude** Write `lib/process-log-context.tsx` — React context for sharing process steps between `ChatView` and `ProcessLog`
+- [x] **Claude** Write `lib/types.ts` — `LocalConversation`, `LocalMessage`, `ProcessDataPart` types; DB types via Supabase-generated `Tables<>` helpers
+- [x] **Claude** Write `lib/supabase/client.ts` — browser client using `createBrowserClient`
+- [x] **Claude** Write `lib/supabase/server.ts` — server client using `createServerClient` + async `cookies()`
+- [x] **Claude** Write `proxy.ts` — session refresh via `getClaims()`; redirects authenticated users away from `/login`/`/signup`; guests are never redirected (Next.js renamed `middleware.ts` → `proxy.ts`; see Step 7)
+- [x] **Claude** Write `lib/local-storage.ts` — `loadConversations`, `loadConversation`, `createConversation`, `appendMessages`, `updateTitle`, `deleteConversation` (Step 7.5)
+- [x] **Claude** Write `lib/process-log-context.tsx` — React context for sharing process steps between `ChatView` and `ProcessLog`
 
 ---
 

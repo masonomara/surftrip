@@ -4,6 +4,15 @@
 
 Always code as if the guy who ends up maintaining your code will be a violent psychopath who knows where you live. Code for readability.
 
+## Development Rules
+
+- Schema in `lib/types.ts` is single source of truth
+- No type is defined anywhere else in the codebase
+- No `as SomeType[]` = if you need a cast, fix the schema and regenerate
+- Regenerate types everytime the schema changes, not at the end
+- If TypeScript can;t infer from `database.ts`, the schema is wrong. Fix the schema, regenerate
+- No brwoser check = no next step
+
 ## Project Objective
 
 This task is designed to simulate a real-world scenario, giving you the chance to showcase your skills. We’re not looking for perfection — we want to see how you solve problems and communicate effectively.
