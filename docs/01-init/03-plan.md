@@ -1936,13 +1936,13 @@ Each component file listed in Steps 8–15 gets a corresponding `.module.css` wi
 
 ### Phase 2 — Database
 
-- [ ] **Claude** Write `supabase/schema.sql` — tables, indexes, trigger function, triggers, RLS policies
-- [ ] **You** Open Supabase → SQL Editor → New query, paste `supabase/schema.sql`, and run it
-- [ ] **Claude** Write `supabase/seed.sql` — sample conversations and messages in a `DO $$` block
-- [ ] **You** In Supabase → Authentication → Users: create a test user account
-- [ ] **You** Copy the test user's UUID from the Users table, paste it into `supabase/seed.sql` replacing `'YOUR-USER-UUID-HERE'`
-- [ ] **You** Open Supabase → SQL Editor, paste `supabase/seed.sql`, and run it
-- [ ] **You** Verify in Supabase → Table Editor: confirm `conversations` and `messages` tables have data
+- [x] **Claude** Write `supabase/schema.sql` — tables, indexes, trigger function, triggers, RLS policies
+- [x] **You** Open Supabase → SQL Editor → New query, paste `supabase/schema.sql`, and run it
+- [x] **Claude** Write `supabase/seed.sql` — sample conversations and messages in a `DO $$` block
+- [x] **You** In Supabase → Authentication → Users: create a test user account
+- [x] **You** Copy the test user's UUID from the Users table, paste it into `supabase/seed.sql` replacing `'YOUR-USER-UUID-HERE'`
+- [x] **You** Open Supabase → SQL Editor, paste `supabase/seed.sql`, and run it
+- [x] **You** Verify in Supabase → Table Editor: confirm `conversations` and `messages` tables have data
 
 ---
 
