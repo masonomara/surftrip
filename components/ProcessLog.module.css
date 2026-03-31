@@ -1,0 +1,47 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  border-left: 1px solid var(--border, #2a2a2a);
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.heading {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #888);
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+
+.empty {
+  font-size: 0.85rem;
+  color: var(--text-muted, #888);
+}
+
+.steps {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.step {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.index {
+  color: var(--text-muted, #888);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 1.2rem;
+}
+
+.text {
+  color: var(--text, #e8e8e8);
+}

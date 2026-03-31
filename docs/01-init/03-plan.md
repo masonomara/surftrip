@@ -1972,14 +1972,14 @@ Each component file listed in Steps 8–15 gets a corresponding `.module.css` wi
 
 ### Phase 5 — App Shell
 
-- [ ] **Claude** Write `app/(app)/layout.tsx` — three-column grid, no auth gate; checks auth to conditionally server-fetch conversations; passes `isAuthenticated` + `serverConversations` to sidebar
-- [ ] **Claude** Write `app/(app)/layout.module.css` — CSS grid: `260px 1fr 280px`, full-height
-- [ ] **Claude** Write `components/ConversationSidebar.tsx` — two data sources (localStorage for guests, prop for auth); new chat button forks on `isAuthenticated`; sidebar footer shows "Sign in to sync" for guests, "Sign out" for auth users
-- [ ] **Claude** Write `components/ConversationSidebar.module.css`
-- [ ] **Claude** Write `components/ProcessLog.tsx` — reads steps from context, numbered list, empty state
-- [ ] **Claude** Write `components/ProcessLog.module.css`
-- [ ] **Claude** Write `app/(app)/page.tsx` — auth users redirected to latest/new Supabase conversation; guests rendered via `GuestHome`
-- [ ] **Claude** Write `app/(app)/GuestHome.tsx` — Client Component; on mount loads latest localStorage conversation or creates a new one, then `router.replace`s into it
+- [x] **Claude** Write `app/(app)/layout.tsx` — three-column grid, no auth gate; checks auth to conditionally server-fetch conversations; passes `isAuthenticated` + `serverConversations` to sidebar
+- [x] **Claude** Write `app/(app)/layout.module.css` — CSS grid: `260px 1fr 280px`, full-height
+- [x] **Claude** Write `components/ConversationSidebar.tsx` — two data sources (localStorage for guests, prop for auth); new chat button forks on `isAuthenticated`; sidebar footer shows "Sign in to sync" for guests, "Sign out" for auth users
+- [x] **Claude** Write `components/ConversationSidebar.module.css`
+- [x] **Claude** Write `components/ProcessLog.tsx` — reads steps from context, numbered list, empty state
+- [x] **Claude** Write `components/ProcessLog.module.css`
+- [x] **Claude** Write `app/(app)/page.tsx` — auth users redirected to latest/new Supabase conversation; guests rendered via `GuestHome`
+- [x] **Claude** Write `app/(app)/GuestHome.tsx` — Client Component; on mount loads latest localStorage conversation or creates a new one, then `router.replace`s into it
 
 ---
 
