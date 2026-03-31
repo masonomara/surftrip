@@ -30,3 +30,14 @@ Create a lightweight app where a user can input a prompt, submit it to an AI API
 - Submission Instructions
 - Create a public GitHub repository
 - Include a simple README.md with setup instructions
+
+## Key Reminders
+
+- `OPENAI_API_KEY` — never prefix with `NEXT_PUBLIC_`. It must only appear in `app/api/chat/route.ts`.
+- `params` in Next.js 15 pages/layouts is a `Promise` — always `await params` or use `useEffect` to resolve it client-side.
+- `cookies()` from `next/headers` is async in Next.js 15 — always `await cookies()`.
+- Middleware must return `supabaseResponse` as-is — never create a new `NextResponse` without copying its cookies.
+- `getClaims()` in middleware (local JWT read, no network). `getUser()` in route handlers (validates with Supabase Auth server).
+- RLS is enforced at the DB layer — route handlers don't need manual `WHERE user_id = ?` guards, but an explicit conversation ownership check in the route handler gives a cleaner 403 response.
+- `onFinish` in `streamText` is async — use `await` and handle errors with try/catch (errors there are non-fatal to the stream but must be logged).
+- `router.refresh()` after mutations (new conversation, message sent) to revalidate Server Component data (the sidebar list).
