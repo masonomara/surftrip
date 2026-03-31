@@ -1,54 +1,32 @@
-# CLAUDE.md
+# Surftrip.com
 
-This file provides guidance to Claude Code when working with this repository.
+## Development Ethos
 
-**Before starting work, read the numbered docs in `/docs/00-specs`.**
+Always code as if the guy who ends up maintaining your code will be a violent psychopath who knows where you live. Code for readability.
 
-## What is Docket?
+## Project Objective
 
-Docket is an AI assistant for law firms that use Clio (legal practice management software). Users chat with the bot through the web interface, Teams, Slack, or MCP clients. The bot can look up case information, answer questions about firm procedures, and perform operations in Clio.
+This task is designed to simulate a real-world scenario, giving you the chance to showcase your skills. We’re not looking for perfection — we want to see how you solve problems and communicate effectively.
 
-**Current status:** Phases 2-9 complete. Phase 9b (web chat interface) in progress.
+### Assessment Overview
 
-## Project Structure
+- Role: Frontend Engineer
+- Challenge: Build an AI-integrated web app with clean UI and solid architecture
+- Stack: React, Angular, Vue or NextJS (your choice)
 
-```
-apps/api/      Cloudflare Worker + Durable Object
-apps/web/      React Router 7 frontend on Cloudflare Workers
-packages/shared/   Shared types and Zod schemas
-```
+### Objective
 
-## How Data is Stored
+Create a lightweight app where a user can input a prompt, submit it to an AI API (e.g., OpenAI), and receive/display a response. Focus on:
 
-- **D1** — Shared database for auth, organizations, and Knowledge Base content
-- **Vectorize** — Embeddings for semantic search (filtered by org)
-- **DO SQLite** — Per-organization conversations, messages, and settings
-- **DO KV** — Encrypted Clio OAuth tokens (per-organization)
-- **R2** — Document storage and audit logs
+- Prompt input + submit button
+- Fetching from OpenAI or HuggingFace
+- Displaying results dynamically
+- Error handling and loading states
 
-## Naming Conventions
+### Bonus (+10 pts)
 
-Use Title Case for product components: Knowledge Base, Org Context, Clio Schema, Durable Object, Workers AI.
-
-Common abbreviations: DO (Durable Object), KB (Knowledge Base).
-
-## Logging
-
-Use the structured logger from `lib/logger.ts`. All logs are JSON and include a `requestId` for tracing requests through the system.
-
-## Known Issues
-
-1. **DO SQLite in vitest** — The vitest-pool-workers plugin can't test Durable Object SQLite (SQLITE_AUTH error). Use the `/demo/clio` endpoint for manual testing instead.
-
-2. **RAG integration tests** — Require remote Vectorize bindings and metadata indexes. Setup:
-   - `CLOUDFLARE_ACCOUNT_ID` in test command (already set in package.json)
-   - `remoteBindings: true` in vitest.config.mts (already configured)
-   - Metadata indexes created on `docket-kb` Vectorize index for: `type`, `category`, `jurisdiction`, `practice_type`, `firm_size`, `org_id`
-   - Tests may be flaky due to Vectorize eventual consistency (45s wait)
-
-## Code Philosophy
-
-Omit needless code. A file should have no unnecessary functions. Lower numbered docs are sources of truth over higher numbered ones.
-
-Vigorous writing is concise. A line should contain no unnecessary characters, a file no unnecessary functions, for the same reason that a drawing should have no unnecessary lines and a machine no unnecessary parts. Happy talk must die. Instructions must die. Omit needless code.
-Check consistency often between documents. Remove unnecessary interdependencies and relationships. Lower numbered documents serve as sources of truths over higher numbers documents.
+- Save and show past prompts/responses (chat history)
+- Include a “Clear” button for the user
+- Submission Instructions
+- Create a public GitHub repository
+- Include a simple README.md with setup instructions

@@ -7,7 +7,6 @@ This task is designed to simulate a real-world scenario, giving you the chance t
 - Role: Frontend Engineer
 - Challenge: Build an AI-integrated web app with clean UI and solid architecture
 - Stack: React, Angular, Vue or NextJS (your choice)
-- Deadline: 7 days from today
 
 ## Objective
 
