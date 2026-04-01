@@ -1,0 +1,135 @@
+/* ── Wrapper / layout ───────────────── */
+
+.wrapper {
+  padding: 0 22px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.inputArea {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.inputWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* ── Textarea ───────────────────────── */
+
+.textarea {
+  border: none;
+  padding: 16px 15px 52px;
+  background: var(--container);
+  color: var(--text-primary);
+  border-radius: 12px;
+  outline: 1px solid var(--border-default);
+  width: 100%;
+  font-size: 16px;
+  line-height: 21px;
+  overflow: hidden;
+  box-shadow: var(--shadow-input);
+}
+
+.textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.textarea:focus {
+  outline: 1px solid var(--border-input-hover);
+}
+
+.textarea:disabled {
+  background: var(--container);
+  cursor: not-allowed;
+}
+
+/* ── Bottom action row ──────────────── */
+
+.bottomRow {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 12px;
+  position: absolute;
+  bottom: 1px;
+  left: 1px;
+  right: 1px;
+  border-radius: 0 0 12px 12px;
+}
+
+/* ── Buttons ────────────────────────── */
+
+.clearButton {
+  margin-right: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-tertiary);
+  padding: 0;
+}
+
+.clearButton:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.clearButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sendButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: var(--text-primary);
+  color: var(--container);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sendButton:hover {
+  background: var(--btn-primary-hover);
+}
+
+.stopButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--container);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.stopButton:hover {
+  background: var(--surface-2);
+}
+
+/* ── Disclaimer note ────────────────── */
+
+.note {
+  text-align: center;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-tertiary);
+}

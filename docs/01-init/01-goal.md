@@ -1,4 +1,4 @@
-# Surftrip.com
+# surftrip.fun
 
 ## Context
 

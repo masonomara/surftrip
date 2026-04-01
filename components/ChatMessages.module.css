@@ -1,0 +1,262 @@
+/* ── Messages list ─────────────────── */
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-bottom: -6px;
+}
+
+.messages::-webkit-scrollbar {
+  width: 5px;
+}
+
+.messages::-webkit-scrollbar-track {
+  background: var(--surface-1);
+}
+
+.messages::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 100px;
+}
+
+.messages::-webkit-scrollbar-thumb:hover {
+  background: var(--border-input-hover);
+}
+
+/* ── Empty state ────────────────────── */
+
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 2rem;
+}
+
+.empty p {
+  font-size: 16px;
+  line-height: 21px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.hint {
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+/* ── Message bubbles ────────────────── */
+
+.message {
+  display: flex;
+}
+
+.user {
+  justify-content: flex-end;
+}
+
+.assistant {
+  justify-content: flex-start;
+}
+
+.bubble {
+  max-width: 80%;
+  padding: 11px 16px;
+  border-radius: 12px;
+  font-size: 16px;
+  line-height: 21px;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.user .bubble {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+
+.assistant .bubble {
+  max-width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+  color: var(--text-primary);
+}
+
+/* ── Streaming cursor ───────────────── */
+
+.cursor {
+  display: inline;
+  animation: blink 1s step-end infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ── Error ──────────────────────────── */
+
+.error {
+  padding: 12px 16px;
+  background: var(--error-highlight);
+  color: var(--error-primary);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 19px;
+}
+
+/* ── Markdown content ───────────────── */
+
+.mdP {
+  margin-bottom: 12px;
+  font-size: 16px;
+  line-height: 21px;
+}
+
+.mdP:last-child {
+  margin-bottom: 0;
+}
+
+.mdUl,
+.mdOl {
+  margin: 0 0 12px 20px;
+}
+
+.mdUl:last-child,
+.mdOl:last-child {
+  margin-bottom: 0;
+}
+
+.mdLi {
+  margin-bottom: 4px;
+  font-size: 16px;
+  line-height: 21px;
+}
+
+.mdH1,
+.mdH2,
+.mdH3 {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  margin-top: 16px;
+}
+
+.mdH1:first-child,
+.mdH2:first-child,
+.mdH3:first-child {
+  margin-top: 0;
+}
+
+.mdH1 {
+  font-size: 20px;
+  line-height: 26px;
+}
+
+.mdH2 {
+  font-size: 18px;
+  line-height: 24px;
+}
+
+.mdH3 {
+  font-size: 16px;
+  line-height: 21px;
+}
+
+.mdStrong {
+  font-weight: 600;
+}
+
+.mdEm {
+  font-style: italic;
+}
+
+.mdHr {
+  border: none;
+  border-top: 1px solid var(--border-default);
+  margin: 16px 0;
+}
+
+.mdBlockquote {
+  border-left: 3px solid var(--border-input-hover);
+  padding-left: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+
+.mdA {
+  color: var(--brand-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.mdA:hover {
+  color: var(--brand-focus);
+}
+
+.mdTableWrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.mdTable {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.mdTh,
+.mdTd {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.mdTh {
+  font-weight: 600;
+  border-bottom-width: 2px;
+  border-bottom-color: var(--border-input-hover);
+}
+
+.mdPre {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  margin-bottom: 12px;
+  font-size: 13px;
+  line-height: 18px;
+  font-family: var(--font-roboto-mono), var(--font-mono);
+}
+
+.mdCode {
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 13px;
+  line-height: 18px;
+  font-family: var(--font-roboto-mono), var(--font-mono);
+}
+
+/* ── Reduced motion ─────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor {
+    animation: none;
+  }
+}

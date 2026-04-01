@@ -1972,52 +1972,52 @@ Each component file listed in Steps 8–15 gets a corresponding `.module.css` wi
 
 ### Phase 5 — App Shell
 
-- [ ] **Claude** Write `app/(app)/layout.tsx` — three-column grid, no auth gate; checks auth to conditionally server-fetch conversations; passes `isAuthenticated` + `serverConversations` to sidebar
-- [ ] **Claude** Write `app/(app)/layout.module.css` — CSS grid: `260px 1fr 280px`, full-height
-- [ ] **Claude** Write `components/ConversationSidebar.tsx` — two data sources (localStorage for guests, prop for auth); new chat button forks on `isAuthenticated`; sidebar footer shows "Sign in to sync" for guests, "Sign out" for auth users
-- [ ] **Claude** Write `components/ConversationSidebar.module.css`
-- [ ] **Claude** Write `components/ProcessLog.tsx` — reads steps from context, numbered list, empty state
-- [ ] **Claude** Write `components/ProcessLog.module.css`
-- [ ] **Claude** Write `app/(app)/page.tsx` — auth users redirected to latest/new Supabase conversation; guests rendered via `GuestHome`
-- [ ] **Claude** Write `app/(app)/GuestHome.tsx` — Client Component; on mount loads latest localStorage conversation or creates a new one, then `router.replace`s into it
+- [x] **Claude** Write `app/(app)/layout.tsx` — three-column grid, no auth gate; checks auth to conditionally server-fetch conversations; passes `isAuthenticated` + `serverConversations` to sidebar
+- [x] **Claude** Write `app/(app)/layout.module.css` — CSS grid: `260px 1fr 280px`, full-height
+- [x] **Claude** Write `components/ConversationSidebar.tsx` — two data sources (localStorage for guests, prop for auth); new chat button forks on `isAuthenticated`; sidebar footer shows "Sign in to sync" for guests, "Sign out" for auth users
+- [x] **Claude** Write `components/ConversationSidebar.module.css`
+- [x] **Claude** Write `components/ProcessLog.tsx` — reads steps from context, numbered list, empty state
+- [x] **Claude** Write `components/ProcessLog.module.css`
+- [x] **Claude** Write `app/(app)/page.tsx` — auth users redirected to latest/new Supabase conversation; guests rendered via `GuestHome`
+- [x] **Claude** Write `app/(app)/GuestHome.tsx` — Client Component; on mount loads latest localStorage conversation or creates a new one, then `router.replace`s into it
 
 ---
 
 ### Phase 6 — API Route
 
-- [ ] **Claude** Write `app/api/chat/route.ts`:
-  - [ ] **Claude** Auth check via `getUser()` — **does not reject guests**; result determines whether Supabase writes happen
-  - [ ] **Claude** Input validation (empty check, 10,000 character max) — applied to both guests and auth users
-  - [ ] **Claude** Conversation ownership check — runs **only for authenticated users** (clean 403 if `chatId` doesn't belong to them)
-  - [ ] **Claude** `createDataStreamResponse` wrapper with process log event emissions
-  - [ ] **Claude** `streamText` call with surf trip system prompt and full conversation history
-  - [ ] **Claude** `onFinish`: if guest → early return (client handles localStorage); if auth → save messages to Supabase, auto-title on first turn, bump `updated_at`
+- [x] **Claude** Write `app/api/chat/route.ts`:
+  - [x] **Claude** Auth check via `getUser()` — **does not reject guests**; result determines whether Supabase writes happen
+  - [x] **Claude** Input validation (empty check, 10,000 character max) — applied to both guests and auth users
+  - [x] **Claude** Conversation ownership check — runs **only for authenticated users** (clean 403 if `chatId` doesn't belong to them)
+  - [x] **Claude** `createUIMessageStreamResponse` + `createUIMessageStream` wrapper with process log event emissions
+  - [x] **Claude** `streamText` call with surf trip system prompt and full conversation history
+  - [x] **Claude** `onFinish`: if guest → early return (client handles localStorage); if auth → save messages to Supabase, auto-title on first turn, bump `updated_at`
 
 ---
 
 ### Phase 7 — Chat UI
 
-- [ ] **Claude** Write `app/(app)/chat/[id]/page.tsx` — Server Component shell: checks auth, fetches initial Supabase messages for auth users (passes `[]` for guests), renders `ChatView` with `chatId`, `initialMessages`, `isAuthenticated`
-- [ ] **Claude** Write `app/(app)/chat/[id]/ChatView.tsx` — Client Component:
-  - [ ] **Claude** `useChat` with `DefaultChatTransport` and `prepareSendMessagesRequest` (sends `chatId` in body)
-  - [ ] **Claude** `onData` callback wiring to `addStep` from process log context
-  - [ ] **Claude** `onFinish`: if guest → `appendMessages` + `updateTitle` to localStorage + `router.refresh()`; if auth → `router.refresh()` only (Supabase write in API route)
-  - [ ] **Claude** Guest `useEffect`: on mount, call `loadConversation(chatId)` and `setMessages()` to hydrate from localStorage
-  - [ ] **Claude** `handleClear`: if guest → `deleteConversation(chatId)`; if auth → Supabase `DELETE`; then `router.push('/')`
-- [ ] **Claude** Write `app/(app)/chat/[id]/chat.module.css`
-- [ ] **Claude** Write `components/ChatMessages.tsx` — parts-based message rendering, streaming cursor (`▊`) on last assistant message, scroll-to-bottom, empty state, error state
-- [ ] **Claude** Write `components/ChatMessages.module.css`
-- [ ] **Claude** Write `components/ChatInput.tsx` — auto-resize textarea, Enter to send / Shift+Enter for newline, Send button, Stop button (while streaming), Clear button, disabled while `isActive`
-- [ ] **Claude** Write `components/ChatInput.module.css`
+- [x] **Claude** Write `app/(app)/chat/[id]/page.tsx` — Server Component shell: checks auth, fetches initial Supabase messages for auth users (passes `[]` for guests), renders `ChatView` with `chatId`, `initialMessages`, `isAuthenticated`
+- [x] **Claude** Write `app/(app)/chat/[id]/ChatView.tsx` — Client Component:
+  - [x] **Claude** `useChat` with `DefaultChatTransport` and `prepareSendMessagesRequest` (sends `chatId` in body)
+  - [x] **Claude** `onData` callback wiring to `addStep` from process log context
+  - [x] **Claude** `onFinish`: if guest → `appendMessages` + `updateTitle` to localStorage + `router.refresh()`; if auth → `router.refresh()` only (Supabase write in API route)
+  - [x] **Claude** Guest `useEffect`: on mount, call `loadConversation(chatId)` and `setMessages()` to hydrate from localStorage
+  - [x] **Claude** `handleClear`: if guest → `deleteConversation(chatId)`; if auth → Supabase `DELETE`; then `router.push('/')`
+- [x] **Claude** Write `app/(app)/chat/[id]/chat.module.css`
+- [x] **Claude** Write `components/ChatMessages.tsx` — parts-based message rendering, streaming cursor (`▊`) on last assistant message, scroll-to-bottom, empty state, error state
+- [x] **Claude** Write `components/ChatMessages.module.css`
+- [x] **Claude** Write `components/ChatInput.tsx` — auto-resize textarea, Enter to send / Shift+Enter for newline, Send button, Stop button (while streaming), Clear button, disabled while `isActive`
+- [x] **Claude** Write `components/ChatInput.module.css`
 
 ---
 
 ### Phase 8 — Styling Pass
 
-- [ ] **Claude** Write `app/globals.css` — design tokens (`--bg`, `--surface`, `--border`, `--text`, `--accent`, etc.), CSS reset
-- [ ] **Claude** Audit all `.module.css` files for visual consistency
-- [ ] **Claude** Verify streaming cursor animation works
-- [ ] **Claude** Verify three-column layout holds at 1280px+ and degrades gracefully below
+- [x] **Claude** Write `app/globals.css` — design tokens (`--bg`, `--surface`, `--border`, `--text`, `--accent`, etc.), CSS reset
+- [x] **Claude** Audit all `.module.css` files for visual consistency
+- [x] **Claude** Verify streaming cursor animation works
+- [x] **Claude** Verify three-column layout holds at 1280px+ and degrades gracefully below
 
 ---
 

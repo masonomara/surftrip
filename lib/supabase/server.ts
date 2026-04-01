@@ -2,6 +2,10 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/lib/types";
 
+// ── createClient ───────────────────────────────────────────────────────────
+//
+// Returns a Supabase client for use in Server Components, route handlers, and
+// middleware. For Client Components and browser contexts, use client.ts instead.
 export async function createClient() {
   const cookieStore = await cookies();
 
@@ -17,8 +21,10 @@ export async function createClient() {
               cookieStore.set(name, value, options),
             );
           } catch {
-            // Called from a Server Component — safe to ignore.
-            // The proxy handles session refresh.
+            // cookieStore.set() throws when called from a Server Component
+            // (as opposed to a route handler or middleware), because Server
+            // Components cannot set response headers. This is expected —
+            // the middleware handles session cookie refresh for those cases.
           }
         },
       },

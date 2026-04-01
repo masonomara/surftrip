@@ -1,4 +1,4 @@
-# Surftrip.com — Technology Research
+# surftrip.fun — Technology Research
 
 This document covers findings from deep-reading the project spec and researching the stack via current documentation. It is the reference for all implementation decisions before a line of code is written.
 

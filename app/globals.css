@@ -1,40 +1,195 @@
+/* ==========================================================================
+   Design Tokens
+
+   Color Production Rules
+   ──────────────────────
+   1. Raw palette vars are defined once here. Never reference them
+      directly in component CSS — always go through a semantic token.
+
+   2. Semantic tokens map to values and are the only thing components
+      should ever use. Add new tokens here before introducing new color needs.
+
+   3. Surface hierarchy (light: light→slightly darker; dark: dark→slightly lighter)
+        container  — elevated card/input bg (paper / base-950)
+        surface-1  — page / panel bg (base-50 / black)
+        surface-2  — sidebar bg (base-100 / base-850)
+        surface-3  — hover state bg (base-150 / base-800)
+
+   4. Text hierarchy (most→least emphasis)
+        text-primary   — body copy, labels
+        text-secondary — supporting text, placeholders, captions
+        text-tertiary  — hints, disabled, timestamps
+
+   5. Border hierarchy (weakest→strongest)
+        border-default     — structural dividers, panel edges
+        border-input       — form input resting border
+        border-input-hover — form input focus/hover border
+
+   6. Interactive elements
+        transparent bg → hover: surface-3 → active/selected: surface-3
+        Icon buttons: color text-tertiary → hover text-primary + surface-3 bg
+
+   7. Primary action buttons
+        bg: text-primary  color: container  hover-bg: btn-primary-hover
+        (Ink-on-paper: ink-dark bg with paper text in light; inverse in dark)
+
+   8. Shadows
+        Use --shadow-input for input depth. In dark mode it is suppressed
+        because borders carry the visual weight instead.
+
+   9. Backdrop / overlay scrim
+        Use --backdrop. Opacity is stronger in dark mode so it reads against
+        the near-black background.
+
+  10. Semantic status colors
+        error-primary / error-highlight — destructive actions, error messages
+        success-primary                 — completed process log events
+        warning-primary                 — in-progress / active process log events
+        brand-primary                   — focus rings (via :focus-visible global)
+   ========================================================================== */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* --- Palette --- */
+
+  /* Base scale */
+  --paper: #fffcf0;
+  --base-50: #f2f0e5;
+  --base-100: #e6e4d9;
+  --base-150: #dad8ce;
+  --base-200: #cecdc3;
+  --base-300: #b7b5ac;
+  --base-500: #878580;
+  --base-600: #6f6e69;
+  --base-700: #575653;
+  --base-800: #403e3c;
+  --base-850: #343331;
+  --base-900: #282726;
+  --base-950: #1c1b1a;
+  --black: #100f0f;
+
+  /* Accents — light mode (600) */
+  --red: #af3029;
+  --orange: #bc5215;
+  --yellow: #ad8301;
+  --green: #66800b;
+  --cyan: #24837b;
+  --blue: #205ea6;
+  --purple: #5e409d;
+  --magenta: #a02f6f;
+
+  /* Accents — dark mode (400) */
+  --red-dk: #d14d41;
+  --orange-dk: #da702c;
+  --yellow-dk: #d0a215;
+  --green-dk: #879a39;
+  --cyan-dk: #3aa99f;
+  --blue-dk: #4385be;
+  --purple-dk: #8b7ec8;
+  --magenta-dk: #ce5d97;
+
+  /* --- Light mode semantic tokens (default) --- */
+
+  --container: var(--paper);
+  --surface-1: var(--base-50);
+  --surface-2: var(--base-100);
+  --surface-3: var(--base-150);
+
+  --text-primary: var(--base-950);
+  --text-secondary: var(--base-500);
+  --text-tertiary: var(--base-300);
+
+  --border-default: var(--base-150);
+  --border-input: var(--base-200);
+  --border-input-hover: var(--base-300);
+
+  --brand-primary: var(--blue);
+  --brand-focus: #1a4a89;
+  --brand-highlight: #eef3fb;
+
+  --error-primary: var(--red);
+  --error-focus: #8d271f;
+  --error-highlight: #ffeeed;
+
+  --success-primary: var(--green);
+  --warning-primary: var(--yellow);
+
+  /* Distinct from --text-primary so hover is visible */
+  --btn-primary-hover: var(--black);
+
+  /* Input box-shadow: warm-tinted in light, suppressed in dark */
+  --shadow-input:
+    rgba(16, 15, 15, 0.06) 0px 2.5px 5px -2.5px,
+    rgba(16, 15, 15, 0.04) 0px 1.5px 3px -1.5px;
+
+  /* Modal/overlay scrim */
+  --backdrop: rgba(16, 15, 15, 0.35);
+
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+
+  --transition-fast: 0.15s ease;
 }
 
+/* --- Dark mode — follows system preference --- */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --container: var(--base-950);
+    --surface-1: var(--black);
+    --surface-2: var(--base-850);
+    --surface-3: var(--base-800);
+
+    --text-primary: var(--base-150);
+    --text-secondary: var(--base-500);
+    --text-tertiary: var(--base-600);
+
+    --border-default: var(--base-800);
+    --border-input: var(--base-700);
+    --border-input-hover: var(--base-600);
+
+    --brand-primary: var(--blue-dk);
+    --brand-focus: #5a9ed1;
+    --brand-highlight: rgba(67, 133, 190, 0.15);
+
+    --error-primary: var(--red-dk);
+    --error-focus: #e56960;
+    --error-highlight: rgba(209, 77, 65, 0.15);
+
+    --success-primary: var(--green-dk);
+    --warning-primary: var(--yellow-dk);
+
+    /* Distinct from --text-primary (base-150) so hover is visible */
+    --btn-primary-hover: var(--paper);
+
+    /* Borders carry separation in dark mode; suppress the shadow */
+    --shadow-input: none;
+
+    /* Stronger scrim so it reads against near-black background */
+    --backdrop: rgba(0, 0, 0, 0.65);
   }
+}
+
+/* ==========================================================================
+   Reset & Base
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html {
   height: 100%;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+body {
+  min-height: 100svh;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-family: var(--font-inter), system-ui, sans-serif;
 }
 
 a {
@@ -42,8 +197,12 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+textarea {
+  resize: none;
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
 }

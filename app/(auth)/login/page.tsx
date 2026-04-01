@@ -1,72 +1,88 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import Link from "next/link";
 import styles from "./login.module.css";
+
+// ── Component ──────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
+    setErrorMessage(null);
+    setIsSubmitting(true);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
+    if (authError) {
+      setErrorMessage(authError.message);
+      setIsSubmitting(false);
       return;
     }
 
+    // push() navigates to the home page; refresh() forces the Server Components
+    // (layout, sidebar) to re-render with the now-authenticated session.
     router.push("/");
     router.refresh();
   }
 
+  // ── Render ───────────────────────────────────────────────────────────────
+
   return (
-    <div className={styles.container}>
-      <h1 className={styles.title}>Surftrip</h1>
-      <p className={styles.subtitle}>Sign in to plan your next wave</p>
+    <div className={styles.page}>
+      <div className={styles.container}>
+        <h1 className={styles.title}>Surftrip</h1>
+        <p className={styles.subtitle}>Sign in to plan your next wave</p>
 
-      <form onSubmit={handleSubmit} className={styles.form}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className={styles.input}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className={styles.input}
-        />
+        <form onSubmit={handleSubmit} className={styles.form}>
+          <div className={styles.fieldGroup}>
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className={styles.input}
+            />
+          </div>
+          <div className={styles.fieldGroup}>
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className={styles.input}
+            />
+          </div>
 
-        {error && <p className={styles.error}>{error}</p>}
+          {errorMessage && <p className={styles.error}>{errorMessage}</p>}
 
-        <button type="submit" disabled={loading} className={styles.button}>
-          {loading ? "Signing in..." : "Sign in"}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className={styles.button}
+          >
+            {isSubmitting ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
 
-      <p className={styles.footer}>
-        No account? <Link href="/signup">Sign up</Link>
-      </p>
+        <p className={styles.footer}>
+          No account? <Link href="/signup">Sign up</Link>
+        </p>
+      </div>
     </div>
   );
 }
