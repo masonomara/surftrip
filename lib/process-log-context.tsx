@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useState } from "react";
 
+// ── Overview ───────────────────────────────────────────────────────────────
+//
 // The ProcessLog panel displays the AI's reasoning steps as they stream in.
 // This context lets ChatView (deep in the tree) push steps to ProcessLog
 // (a sibling, not a descendant) without prop-drilling through AppShell.

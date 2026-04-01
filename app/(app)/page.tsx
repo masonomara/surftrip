@@ -2,11 +2,13 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import GuestHome from "@/components/GuestHome";
 
-// This is the root page ("/"). Its only job is to redirect the user to a chat.
+// ── Component ──────────────────────────────────────────────────────────────
 //
+// This is the root page ("/"). Its only job is to redirect the user to a chat.
 // Authenticated users are redirected server-side (no client JS needed).
 // Guest users are handed off to <GuestHome>, which redirects client-side
 // after reading localStorage (which the server can't access).
+
 export default async function HomePage() {
   const supabase = await createClient();
   const {

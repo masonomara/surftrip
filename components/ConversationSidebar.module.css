@@ -1,3 +1,5 @@
+/* ── Sidebar layout ─────────────────── */
+
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -9,12 +11,22 @@
   height: 100%;
 }
 
+/* ── Header ─────────────────────────── */
+
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 4px 8px 8px;
   gap: 8px;
+}
+
+.logo {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
 }
 
 .hideBtn {
@@ -76,13 +88,7 @@
   padding: 0 8px 4px;
 }
 
-.logo {
-  font-size: 15px;
-  line-height: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: -0.01em;
-}
+/* ── Nav / conversation list ────────── */
 
 .nav {
   flex: 1;
@@ -151,6 +157,8 @@
     opacity: 1;
   }
 }
+
+/* ── Footer ─────────────────────────── */
 
 .footer {
   padding: 8px;

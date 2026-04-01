@@ -142,7 +142,9 @@ export default function ConversationSidebar({
       router.refresh();
     } else {
       deleteConversation(id);
-      setLocalConversations((prev) => prev.filter((conversation) => conversation.id !== id));
+      setLocalConversations((prev) =>
+        prev.filter((conversation) => conversation.id !== id),
+      );
       window.dispatchEvent(new StorageEvent("storage"));
     }
 

@@ -18,9 +18,13 @@ export const metadata: Metadata = {
   description: "AI-powered surf trip planning assistant",
 };
 
+// ── Types ──────────────────────────────────────────────────────────────────
+
 type Props = {
   children: React.ReactNode;
 };
+
+// ── Component ──────────────────────────────────────────────────────────────
 
 export default function RootLayout({ children }: Props) {
   return (

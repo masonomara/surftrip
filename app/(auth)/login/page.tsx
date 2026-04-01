@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./login.module.css";
 
+// ── Component ──────────────────────────────────────────────────────────────
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -35,6 +37,8 @@ export default function LoginPage() {
     router.push("/");
     router.refresh();
   }
+
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className={styles.page}>

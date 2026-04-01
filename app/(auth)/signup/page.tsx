@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./signup.module.css";
 
+// ── Component ──────────────────────────────────────────────────────────────
+
 export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -35,6 +37,8 @@ export default function SignupPage() {
     router.push("/");
     router.refresh();
   }
+
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className={styles.page}>

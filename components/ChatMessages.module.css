@@ -1,3 +1,5 @@
+/* ── Messages list ─────────────────── */
+
 .messages {
   flex: 1;
   overflow-y: auto;
@@ -25,6 +27,8 @@
   background: var(--border-input-hover);
 }
 
+/* ── Empty state ────────────────────── */
+
 .empty {
   flex: 1;
   display: flex;
@@ -49,6 +53,8 @@
   font-weight: 400;
   color: var(--text-tertiary);
 }
+
+/* ── Message bubbles ────────────────── */
 
 .message {
   display: flex;
@@ -84,6 +90,8 @@
   color: var(--text-primary);
 }
 
+/* ── Streaming cursor ───────────────── */
+
 .cursor {
   display: inline;
   animation: blink 1s step-end infinite;
@@ -100,6 +108,8 @@
   }
 }
 
+/* ── Error ──────────────────────────── */
+
 .error {
   padding: 12px 16px;
   background: var(--error-highlight);
@@ -108,6 +118,142 @@
   font-size: 14px;
   line-height: 19px;
 }
+
+/* ── Markdown content ───────────────── */
+
+.mdP {
+  margin-bottom: 12px;
+  font-size: 16px;
+  line-height: 21px;
+}
+
+.mdP:last-child {
+  margin-bottom: 0;
+}
+
+.mdUl,
+.mdOl {
+  margin: 0 0 12px 20px;
+}
+
+.mdUl:last-child,
+.mdOl:last-child {
+  margin-bottom: 0;
+}
+
+.mdLi {
+  margin-bottom: 4px;
+  font-size: 16px;
+  line-height: 21px;
+}
+
+.mdH1,
+.mdH2,
+.mdH3 {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  margin-top: 16px;
+}
+
+.mdH1:first-child,
+.mdH2:first-child,
+.mdH3:first-child {
+  margin-top: 0;
+}
+
+.mdH1 {
+  font-size: 20px;
+  line-height: 26px;
+}
+
+.mdH2 {
+  font-size: 18px;
+  line-height: 24px;
+}
+
+.mdH3 {
+  font-size: 16px;
+  line-height: 21px;
+}
+
+.mdStrong {
+  font-weight: 600;
+}
+
+.mdEm {
+  font-style: italic;
+}
+
+.mdHr {
+  border: none;
+  border-top: 1px solid var(--border-default);
+  margin: 16px 0;
+}
+
+.mdBlockquote {
+  border-left: 3px solid var(--border-input-hover);
+  padding-left: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+
+.mdA {
+  color: var(--brand-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.mdA:hover {
+  color: var(--brand-focus);
+}
+
+.mdTableWrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.mdTable {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.mdTh,
+.mdTd {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.mdTh {
+  font-weight: 600;
+  border-bottom-width: 2px;
+  border-bottom-color: var(--border-input-hover);
+}
+
+.mdPre {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  margin-bottom: 12px;
+  font-size: 13px;
+  line-height: 18px;
+  font-family: var(--font-roboto-mono), var(--font-mono);
+}
+
+.mdCode {
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 13px;
+  line-height: 18px;
+  font-family: var(--font-roboto-mono), var(--font-mono);
+}
+
+/* ── Reduced motion ─────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
   .cursor {

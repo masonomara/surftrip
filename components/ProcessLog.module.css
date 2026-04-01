@@ -1,3 +1,5 @@
+/* ── Panel layout ───────────────────── */
+
 .panel {
   border-left: 1px solid var(--border-default);
   overflow-y: auto;
@@ -23,6 +25,8 @@
   color: var(--text-tertiary);
 }
 
+/* ── Events ─────────────────────────── */
+
 .events {
   flex: 1;
   padding: 16px 20px;
@@ -47,6 +51,8 @@
   gap: 8px;
   height: 36px;
 }
+
+/* ── Status dot ─────────────────────── */
 
 .dot {
   width: 7px;
@@ -78,11 +84,7 @@
   line-height: 19px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dotActive {
-    animation: none;
-  }
-}
+/* ── Close button ───────────────────── */
 
 .closeBtn {
   background: none;
@@ -98,4 +100,12 @@
 
 .closeBtn:hover {
   color: var(--text-primary);
+}
+
+/* ── Reduced motion ─────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .dotActive {
+    animation: none;
+  }
 }

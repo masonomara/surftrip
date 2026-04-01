@@ -2,8 +2,10 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/lib/types";
 
-// Returns a Supabase client for use in Server Components, route handlers, and middleware.
-// For Client Components and browser contexts, use lib/supabase/client.ts instead.
+// ── createClient ───────────────────────────────────────────────────────────
+//
+// Returns a Supabase client for use in Server Components, route handlers, and
+// middleware. For Client Components and browser contexts, use client.ts instead.
 export async function createClient() {
   const cookieStore = await cookies();
 

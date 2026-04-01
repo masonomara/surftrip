@@ -1,7 +1,9 @@
 import type { LocalConversation, LocalMessage } from "@/lib/types";
 
-// All conversations for guest users are stored under this single localStorage key
-// as a JSON-serialized LocalConversation[], sorted by updatedAt descending.
+// ── Constants ──────────────────────────────────────────────────────────────
+
+// All guest conversations live under this key as a JSON-serialized
+// LocalConversation[], sorted by updatedAt descending.
 const STORAGE_KEY = "surftrip_conversations";
 
 // ── Read ───────────────────────────────────────────────────────────────────

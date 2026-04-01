@@ -1,8 +1,10 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/lib/types";
 
+// ── createClient ───────────────────────────────────────────────────────────
+//
 // Returns a Supabase client for use in Client Components and browser contexts.
-// For Server Components, route handlers, and middleware, use lib/supabase/server.ts instead.
+// For Server Components, route handlers, and middleware, use server.ts instead.
 export function createClient() {
   return createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
