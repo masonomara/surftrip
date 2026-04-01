@@ -235,9 +235,46 @@ export type LocalConversation = {
   messages: LocalMessage[];
 };
 
+// ── Process log types ──────────────────────────────────────────────────────
+
+export type ProcessSource = {
+  title: string;
+  url: string;
+};
+
+export type ProcessStep =
+  | {
+      id: string;
+      kind: "status";
+      label: string;
+      status: "active" | "done";
+    }
+  | {
+      id: string;
+      kind: "tool";
+      toolName: string;
+      label: string;
+      status: "active" | "done" | "error";
+      detail?: string;
+      sources?: ProcessSource[];
+    };
+
+export type ProcessDataEvent =
+  | { id: string; kind: "status"; label: string }
+  | { id: string; kind: "tool-start"; toolName: string; label: string }
+  | {
+      id: string;
+      kind: "tool-done";
+      toolName: string;
+      label: string;
+      detail?: string;
+      sources?: ProcessSource[];
+    }
+  | { id: string; kind: "tool-error"; toolName: string; label: string; error: string };
+
 // ── AI SDK types ───────────────────────────────────────────────────────────
 
 import type { UIMessage } from "ai";
 
-export type AppDataTypes = { process: { step: string } };
+export type AppDataTypes = { process: ProcessDataEvent };
 export type AppMessage = UIMessage<unknown, AppDataTypes>;
