@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState } from "react";
+import type { ProcessStep, ProcessDataEvent } from "@/lib/types";
 
 // ── Overview ───────────────────────────────────────────────────────────────
 //
@@ -11,8 +12,8 @@ import { createContext, useContext, useState } from "react";
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type ProcessLogContextType = {
-  steps: string[];
-  addStep: (step: string) => void;
+  steps: ProcessStep[];
+  addEvent: (event: ProcessDataEvent) => void;
   clearSteps: () => void;
 };
 
@@ -25,10 +26,50 @@ type Props = {
 };
 
 export function ProcessLogProvider({ children }: Props) {
-  const [steps, setSteps] = useState<string[]>([]);
+  const [steps, setSteps] = useState<ProcessStep[]>([]);
 
-  function addStep(step: string) {
-    setSteps((prev) => [...prev, step]);
+  function addEvent(event: ProcessDataEvent) {
+    setSteps((prev) => {
+      if (event.kind === "tool-done") {
+        return prev.map((s) => {
+          if (s.id !== event.id || s.kind !== "tool") return s;
+          return {
+            ...s,
+            label: event.label,
+            status: "done" as const,
+            detail: event.detail,
+            sources: event.sources,
+          };
+        });
+      }
+
+      if (event.kind === "tool-error") {
+        return prev.map((s) => {
+          if (s.id !== event.id || s.kind !== "tool") return s;
+          return { ...s, label: event.label, status: "error" as const };
+        });
+      }
+
+      if (event.kind === "tool-start") {
+        const newStep: ProcessStep = {
+          id: event.id,
+          kind: "tool",
+          toolName: event.toolName,
+          label: event.label,
+          status: "active",
+        };
+        return [...prev, newStep];
+      }
+
+      // kind === "status"
+      const newStep: ProcessStep = {
+        id: event.id,
+        kind: "status",
+        label: event.label,
+        status: event.label === "Done" ? "done" : "active",
+      };
+      return [...prev, newStep];
+    });
   }
 
   function clearSteps() {
@@ -36,7 +77,7 @@ export function ProcessLogProvider({ children }: Props) {
   }
 
   return (
-    <ProcessLogContext.Provider value={{ steps, addStep, clearSteps }}>
+    <ProcessLogContext.Provider value={{ steps, addEvent, clearSteps }}>
       {children}
     </ProcessLogContext.Provider>
   );
