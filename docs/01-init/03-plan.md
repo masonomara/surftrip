@@ -1959,14 +1959,14 @@ Each component file listed in Steps 8–15 gets a corresponding `.module.css` wi
 
 ### Phase 4 — Auth
 
-- [ ] **Claude** Write `app/(auth)/login/page.tsx` — email/password sign-in form, error state, redirect on success
-- [ ] **Claude** Write `app/(auth)/signup/page.tsx` — email/password sign-up form, "check your email" confirmation state
-- [ ] **Claude** Write `app/auth/callback/route.ts` — exchanges auth code for session, redirects to `/`
-- [ ] **Claude** Write `app/(auth)/login/login.module.css`
-- [ ] **Claude** Write `app/(auth)/signup/signup.module.css`
-- [ ] **You** Test signup → confirm email → verify redirect to `/` works
-- [ ] **You** Test login with confirmed account → verify redirect to `/`
-- [ ] **You** Verify that visiting `/login` while already signed in redirects to `/` (proxy handles this)
+- [x] **Claude** Write `app/(auth)/login/page.tsx` — email/password sign-in form, error state, redirect on success
+- [x] **Claude** Write `app/(auth)/signup/page.tsx` — email/password sign-up form, "check your email" confirmation state
+- [x] **Claude** Write `app/auth/callback/route.ts` — exchanges auth code for session, redirects to `/`
+- [x] **Claude** Write `app/(auth)/login/login.module.css`
+- [x] **Claude** Write `app/(auth)/signup/signup.module.css`
+- [x] **You** Test signup → confirm email → verify redirect to `/` works
+- [x] **You** Test login with confirmed account → verify redirect to `/`
+- [x] **You** Verify that visiting `/login` while already signed in redirects to `/` (proxy handles this)
 
 ---
 
