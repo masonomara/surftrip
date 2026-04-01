@@ -28,7 +28,9 @@ export default function ProcessLog({ onClose }: Props) {
       </div>
       <div className={styles.events}>
         {steps.length === 0 ? (
-          <p className={styles.empty}>Steps will appear here as the AI works.</p>
+          <p className={styles.empty}>
+            Steps will appear here as the AI works.
+          </p>
         ) : (
           steps.map((step, i) => (
             <div key={i} className={styles.event}>

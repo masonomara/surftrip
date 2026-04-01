@@ -30,7 +30,9 @@
   cursor: pointer;
   padding: 4px 8px 4px 4px;
   border-radius: 7px;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .hideBtn:hover {
@@ -52,7 +54,10 @@
   border-radius: 7px;
   padding: 4px 10px 4px 8px;
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .newChatBtn:hover {

@@ -54,8 +54,7 @@ export function appendMessages(
 
   // Re-sort so the most recently updated conversation surfaces first.
   all.sort(
-    (a, b) =>
-      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
 
   persist(all);

@@ -13,30 +13,50 @@ type Props = {
   error: Error | null;
 };
 
-const markdownComponents: React.ComponentProps<typeof Markdown>["components"] = {
-  p: ({ node: _node, ...props }) => <p className={styles.mdP} {...props} />,
-  ul: ({ node: _node, ...props }) => <ul className={styles.mdUl} {...props} />,
-  ol: ({ node: _node, ...props }) => <ol className={styles.mdOl} {...props} />,
-  li: ({ node: _node, ...props }) => <li className={styles.mdLi} {...props} />,
-  h1: ({ node: _node, ...props }) => <h1 className={styles.mdH1} {...props} />,
-  h2: ({ node: _node, ...props }) => <h2 className={styles.mdH2} {...props} />,
-  h3: ({ node: _node, ...props }) => <h3 className={styles.mdH3} {...props} />,
-  strong: ({ node: _node, ...props }) => <strong className={styles.mdStrong} {...props} />,
-  em: ({ node: _node, ...props }) => <em className={styles.mdEm} {...props} />,
-  a: ({ node: _node, ...props }) => <a className={styles.mdA} target="_blank" rel="noopener noreferrer" {...props} />,
-  table: ({ node: _node, ...props }) => <div className={styles.mdTableWrap}><table className={styles.mdTable} {...props} /></div>,
-  thead: ({ node: _node, ...props }) => <thead {...props} />,
-  th: ({ node: _node, ...props }) => <th className={styles.mdTh} {...props} />,
-  td: ({ node: _node, ...props }) => <td className={styles.mdTd} {...props} />,
-  hr: ({ node: _node, ...props }) => <hr className={styles.mdHr} {...props} />,
-  blockquote: ({ node: _node, ...props }) => <blockquote className={styles.mdBlockquote} {...props} />,
-  code: ({ node: _node, className, children, ...props }) => {
-    const isBlock = !className && String(children).includes("\n");
-    return isBlock
-      ? <pre className={styles.mdPre}><code {...props}>{children}</code></pre>
-      : <code className={styles.mdCode} {...props}>{children}</code>;
-  },
-};
+const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
+  {
+    p: ({ ...props }) => <p className={styles.mdP} {...props} />,
+    ul: ({ ...props }) => <ul className={styles.mdUl} {...props} />,
+    ol: ({ ...props }) => <ol className={styles.mdOl} {...props} />,
+    li: ({ ...props }) => <li className={styles.mdLi} {...props} />,
+    h1: ({ ...props }) => <h1 className={styles.mdH1} {...props} />,
+    h2: ({ ...props }) => <h2 className={styles.mdH2} {...props} />,
+    h3: ({ ...props }) => <h3 className={styles.mdH3} {...props} />,
+    strong: ({ ...props }) => <strong className={styles.mdStrong} {...props} />,
+    em: ({ ...props }) => <em className={styles.mdEm} {...props} />,
+    a: ({ ...props }) => (
+      <a
+        className={styles.mdA}
+        target="_blank"
+        rel="noopener noreferrer"
+        {...props}
+      />
+    ),
+    table: ({ ...props }) => (
+      <div className={styles.mdTableWrap}>
+        <table className={styles.mdTable} {...props} />
+      </div>
+    ),
+    thead: ({ ...props }) => <thead {...props} />,
+    th: ({ ...props }) => <th className={styles.mdTh} {...props} />,
+    td: ({ ...props }) => <td className={styles.mdTd} {...props} />,
+    hr: ({ ...props }) => <hr className={styles.mdHr} {...props} />,
+    blockquote: ({ ...props }) => (
+      <blockquote className={styles.mdBlockquote} {...props} />
+    ),
+    code: ({ className, children, ...props }) => {
+      const isBlock = !className && String(children).includes("\n");
+      return isBlock ? (
+        <pre className={styles.mdPre}>
+          <code {...props}>{children}</code>
+        </pre>
+      ) : (
+        <code className={styles.mdCode} {...props}>
+          {children}
+        </code>
+      );
+    },
+  };
 
 export default function ChatMessages({ messages, isStreaming, error }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -70,7 +90,10 @@ export default function ChatMessages({ messages, isStreaming, error }: Props) {
             <div className={styles.bubble}>
               {message.role === "assistant" ? (
                 <>
-                  <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                  <Markdown
+                    remarkPlugins={[remarkGfm]}
+                    components={markdownComponents}
+                  >
                     {text}
                   </Markdown>
                   {isStreaming && message === messages.at(-1) && (

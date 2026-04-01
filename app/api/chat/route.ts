@@ -34,7 +34,10 @@ export async function POST(req: Request) {
 
   const lastMessage = messages.at(-1);
   const userContent =
-    lastMessage?.parts.filter(isTextUIPart).map((p) => p.text).join("") ?? "";
+    lastMessage?.parts
+      .filter(isTextUIPart)
+      .map((p) => p.text)
+      .join("") ?? "";
 
   if (!userContent || userContent.trim().length === 0) {
     return new Response("Empty message", { status: 400 });
@@ -70,8 +73,9 @@ export async function POST(req: Request) {
             const assistantContent = assistantMessage
               ? Array.isArray(assistantMessage.content)
                 ? assistantMessage.content
-                    .filter((p): p is { type: "text"; text: string } =>
-                      p.type === "text",
+                    .filter(
+                      (p): p is { type: "text"; text: string } =>
+                        p.type === "text",
                     )
                     .map((p) => p.text)
                     .join("")
@@ -94,9 +98,7 @@ export async function POST(req: Request) {
                   .from("conversations")
                   .update({
                     title:
-                      title.length < userContent.length
-                        ? `${title}...`
-                        : title,
+                      title.length < userContent.length ? `${title}...` : title,
                   })
                   .eq("id", chatId)
                   .eq("title", "New conversation");
@@ -112,7 +114,10 @@ export async function POST(req: Request) {
           },
         });
 
-        writer.write({ type: "data-process", data: { step: "Generating response..." } });
+        writer.write({
+          type: "data-process",
+          data: { step: "Generating response..." },
+        });
         writer.merge(result.toUIMessageStream());
       },
     }),

@@ -26,10 +26,16 @@ export default function ConversationSidebar({
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
-  const [localConversations, setLocalConversations] = useState<ConversationSummary[]>([]);
-  const conversations = isAuthenticated ? serverConversations : localConversations;
+  const [localConversations, setLocalConversations] = useState<
+    ConversationSummary[]
+  >([]);
+  const conversations = isAuthenticated
+    ? serverConversations
+    : localConversations;
 
-  const currentChatId = pathname.startsWith("/chat/") ? pathname.slice(6) : null;
+  const currentChatId = pathname.startsWith("/chat/")
+    ? pathname.slice(6)
+    : null;
 
   useEffect(() => {
     if (isAuthenticated) return;
@@ -75,7 +81,9 @@ export default function ConversationSidebar({
     onClose?.();
     if (isAuthenticated) {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
       const { data } = await supabase
         .from("conversations")
@@ -99,13 +107,21 @@ export default function ConversationSidebar({
     <aside className={styles.sidebar}>
       <div className={styles.header}>
         {onClose ? (
-          <button
-            onClick={onClose}
-            className={styles.hideBtn}
-            type="button"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M10.5 3.5 6 8l4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <button onClick={onClose} className={styles.hideBtn} type="button">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M10.5 3.5 6 8l4.5 4.5"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
             Hide
           </button>
@@ -118,8 +134,17 @@ export default function ConversationSidebar({
           type="button"
           aria-label="New chat"
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 2.5a.75.75 0 0 1 .75.75v4h4a.75.75 0 0 1 0 1.5h-4v4a.75.75 0 0 1-1.5 0v-4h-4a.75.75 0 0 1 0-1.5h4v-4A.75.75 0 0 1 8 2.5Z" fill="currentColor"/>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M8 2.5a.75.75 0 0 1 .75.75v4h4a.75.75 0 0 1 0 1.5h-4v4a.75.75 0 0 1-1.5 0v-4h-4a.75.75 0 0 1 0-1.5h4v-4A.75.75 0 0 1 8 2.5Z"
+              fill="currentColor"
+            />
           </svg>
           New chat
         </button>

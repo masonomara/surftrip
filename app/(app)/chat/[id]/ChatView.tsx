@@ -54,7 +54,10 @@ export default function ChatView({
           );
 
           function extractText(msg: AppMessage): string {
-            return msg.parts.filter(isTextUIPart).map((p) => p.text).join("");
+            return msg.parts
+              .filter(isTextUIPart)
+              .map((p) => p.text)
+              .join("");
           }
 
           const toSave = [];
@@ -75,7 +78,10 @@ export default function ChatView({
 
           appendMessages(chatId, toSave);
 
-          if (finishedMessages.filter((m) => m.role === "user").length === 1 && lastUser) {
+          if (
+            finishedMessages.filter((m) => m.role === "user").length === 1 &&
+            lastUser
+          ) {
             const raw = extractText(lastUser);
             const title = raw.slice(0, 60) + (raw.length > 60 ? "..." : "");
             updateTitle(chatId, title);
