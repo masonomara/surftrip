@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { isTextUIPart } from "ai";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { AppMessage } from "@/lib/types";
 import styles from "./ChatMessages.module.css";
 
@@ -9,6 +11,31 @@ type Props = {
   messages: AppMessage[];
   isStreaming: boolean;
   error: Error | null;
+};
+
+const markdownComponents: React.ComponentProps<typeof Markdown>["components"] = {
+  p: ({ node: _node, ...props }) => <p className={styles.mdP} {...props} />,
+  ul: ({ node: _node, ...props }) => <ul className={styles.mdUl} {...props} />,
+  ol: ({ node: _node, ...props }) => <ol className={styles.mdOl} {...props} />,
+  li: ({ node: _node, ...props }) => <li className={styles.mdLi} {...props} />,
+  h1: ({ node: _node, ...props }) => <h1 className={styles.mdH1} {...props} />,
+  h2: ({ node: _node, ...props }) => <h2 className={styles.mdH2} {...props} />,
+  h3: ({ node: _node, ...props }) => <h3 className={styles.mdH3} {...props} />,
+  strong: ({ node: _node, ...props }) => <strong className={styles.mdStrong} {...props} />,
+  em: ({ node: _node, ...props }) => <em className={styles.mdEm} {...props} />,
+  a: ({ node: _node, ...props }) => <a className={styles.mdA} target="_blank" rel="noopener noreferrer" {...props} />,
+  table: ({ node: _node, ...props }) => <div className={styles.mdTableWrap}><table className={styles.mdTable} {...props} /></div>,
+  thead: ({ node: _node, ...props }) => <thead {...props} />,
+  th: ({ node: _node, ...props }) => <th className={styles.mdTh} {...props} />,
+  td: ({ node: _node, ...props }) => <td className={styles.mdTd} {...props} />,
+  hr: ({ node: _node, ...props }) => <hr className={styles.mdHr} {...props} />,
+  blockquote: ({ node: _node, ...props }) => <blockquote className={styles.mdBlockquote} {...props} />,
+  code: ({ node: _node, className, children, ...props }) => {
+    const isBlock = !className && String(children).includes("\n");
+    return isBlock
+      ? <pre className={styles.mdPre}><code {...props}>{children}</code></pre>
+      : <code className={styles.mdCode} {...props}>{children}</code>;
+  },
 };
 
 export default function ChatMessages({ messages, isStreaming, error }: Props) {
@@ -34,22 +61,30 @@ export default function ChatMessages({ messages, isStreaming, error }: Props) {
       {messages.map((message) => {
         const textParts = message.parts.filter(isTextUIPart);
         if (textParts.length === 0) return null;
+        const text = textParts.map((p) => p.text).join("");
         return (
           <div
             key={message.id}
             className={`${styles.message} ${styles[message.role]}`}
           >
             <div className={styles.bubble}>
-              {textParts.map((part, i) => (
-                <span key={i} className={styles.text}>
-                  {part.text}
-                </span>
-              ))}
-              {isStreaming &&
-                message.role === "assistant" &&
-                message === messages.at(-1) && (
-                  <span className={styles.cursor}>▊</span>
-                )}
+              {message.role === "assistant" ? (
+                <>
+                  <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                    {text}
+                  </Markdown>
+                  {isStreaming && message === messages.at(-1) && (
+                    <span className={styles.cursor}>▊</span>
+                  )}
+                </>
+              ) : (
+                <>
+                  {text}
+                  {isStreaming && message === messages.at(-1) && (
+                    <span className={styles.cursor}>▊</span>
+                  )}
+                </>
+              )}
             </div>
           </div>
         );

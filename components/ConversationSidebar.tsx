@@ -16,11 +16,13 @@ type ConversationSummary = Pick<
 type Props = {
   serverConversations: ConversationSummary[];
   isAuthenticated: boolean;
+  onClose?: () => void;
 };
 
 export default function ConversationSidebar({
   serverConversations,
   isAuthenticated,
+  onClose,
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -69,17 +71,68 @@ export default function ConversationSidebar({
     router.refresh();
   }
 
+  async function handleNewChat() {
+    onClose?.();
+    if (isAuthenticated) {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("conversations")
+        .insert({ title: "New conversation", user_id: user.id })
+        .select("id")
+        .single();
+      if (data) {
+        router.push(`/chat/${data.id}`);
+        router.refresh();
+      }
+    } else {
+      const id = crypto.randomUUID();
+      const { createConversation } = await import("@/lib/local-storage");
+      createConversation(id, "New conversation");
+      window.dispatchEvent(new StorageEvent("storage"));
+      router.push(`/chat/${id}`);
+    }
+  }
+
   return (
     <aside className={styles.sidebar}>
       <div className={styles.header}>
-        <span className={styles.logo}>Surftrip</span>
+        {onClose ? (
+          <button
+            onClick={onClose}
+            className={styles.hideBtn}
+            type="button"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10.5 3.5 6 8l4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Hide
+          </button>
+        ) : (
+          <span className={styles.logo}>Surftrip</span>
+        )}
+        <button
+          onClick={handleNewChat}
+          className={styles.newChatBtn}
+          type="button"
+          aria-label="New chat"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 2.5a.75.75 0 0 1 .75.75v4h4a.75.75 0 0 1 0 1.5h-4v4a.75.75 0 0 1-1.5 0v-4h-4a.75.75 0 0 1 0-1.5h4v-4A.75.75 0 0 1 8 2.5Z" fill="currentColor"/>
+          </svg>
+          New chat
+        </button>
       </div>
+
+      <div className={styles.sectionLabel}>Your chats</div>
 
       <nav className={styles.nav}>
         {conversations.map((c) => (
           <div key={c.id} className={styles.itemRow}>
             <Link
               href={`/chat/${c.id}`}
+              onClick={onClose}
               className={`${styles.item} ${
                 pathname === `/chat/${c.id}` ? styles.active : ""
               }`}

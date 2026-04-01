@@ -1,89 +1,127 @@
-.container {
-  padding: 0.75rem 1rem 1rem;
-  border-top: 1px solid var(--border, #2a2a2a);
+.wrapper {
+  padding: 0 22px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   flex-shrink: 0;
 }
 
-.inputRow {
+.inputArea {
   display: flex;
-  gap: 0.5rem;
-  align-items: flex-end;
+  flex-direction: column;
+  width: 100%;
+}
+
+.inputWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 }
 
 .textarea {
-  flex: 1;
-  resize: none;
+  border: none;
+  padding: 16px 15px 52px;
+  background: var(--container);
+  color: var(--text-primary);
+  border-radius: 12px;
+  outline: 1px solid var(--border-default);
+  width: 100%;
+  font-size: 16px;
+  line-height: 21px;
   overflow: hidden;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid var(--border, #2a2a2a);
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  line-height: 1.5;
-  background: var(--surface, #1a1a1a);
-  color: inherit;
-  outline: none;
-  min-height: 42px;
+  box-shadow:
+    rgba(0, 0, 0, 0.05) 0px 2.5px 5px -2.5px,
+    rgba(0, 0, 0, 0.03) 0px 1.5px 3px -1.5px;
+}
+
+.textarea::placeholder {
+  color: var(--text-tertiary);
 }
 
 .textarea:focus {
-  border-color: var(--accent, #3b82f6);
+  outline: 1px solid var(--border-input-hover);
 }
 
 .textarea:disabled {
-  opacity: 0.5;
-}
-
-.sendButton,
-.stopButton {
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  border: none;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  height: 42px;
-}
-
-.sendButton {
-  background: var(--accent, #3b82f6);
-  color: #fff;
-}
-
-.sendButton:disabled {
-  opacity: 0.5;
+  background: var(--container);
   cursor: not-allowed;
 }
 
-.stopButton {
-  background: var(--surface, #1a1a1a);
-  color: var(--text, #e8e8e8);
-  border: 1px solid var(--border, #2a2a2a);
-}
-
-.actions {
+.bottomRow {
   display: flex;
+  flex-direction: row;
   justify-content: flex-end;
-  margin-top: 0.4rem;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 12px;
+  position: absolute;
+  bottom: 1px;
+  left: 1px;
+  right: 1px;
+  border-radius: 0 0 12px 12px;
 }
 
 .clearButton {
-  background: transparent;
+  margin-right: auto;
+  background: none;
   border: none;
-  font-size: 0.78rem;
-  color: var(--text-muted, #888);
   cursor: pointer;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-tertiary);
   padding: 0;
 }
 
-.clearButton:hover {
-  color: var(--text, #e8e8e8);
+.clearButton:hover:not(:disabled) {
+  color: var(--text-secondary);
 }
 
 .clearButton:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.sendButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: var(--text-primary);
+  color: var(--container);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sendButton:hover {
+  background: var(--btn-primary-hover);
+}
+
+.stopButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--container);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.stopButton:hover {
+  background: var(--surface-2);
+}
+
+.note {
+  text-align: center;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-tertiary);
 }

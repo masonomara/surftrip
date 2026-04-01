@@ -1,47 +1,96 @@
 .panel {
+  border-left: 1px solid var(--border-default);
+  overflow-y: auto;
+  background: var(--surface-1);
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  border-left: 1px solid var(--border, #2a2a2a);
-  padding: 1rem;
-  overflow-y: auto;
+  font-family: var(--font-roboto-mono), var(--font-mono);
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 0;
 }
 
 .heading {
-  font-size: 0.75rem;
+  font-size: 12px;
+  line-height: 16px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted, #888);
-  margin-bottom: 1rem;
-  flex-shrink: 0;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+}
+
+.events {
+  flex: 1;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
 }
 
 .empty {
-  font-size: 0.85rem;
-  color: var(--text-muted, #888);
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 18px;
 }
 
-.steps {
-  list-style: none;
+.event {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
 }
 
-.step {
+.eventHeader {
   display: flex;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
 }
 
-.index {
-  color: var(--text-muted, #888);
-  font-variant-numeric: tabular-nums;
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success-primary);
   flex-shrink: 0;
-  min-width: 1.2rem;
 }
 
-.text {
-  color: var(--text, #e8e8e8);
+.dotActive {
+  background: var(--warning-primary);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.label {
+  flex: 1;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 19px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dotActive {
+    animation: none;
+  }
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.closeBtn:hover {
+  color: var(--text-primary);
 }

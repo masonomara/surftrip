@@ -35,38 +35,44 @@ export default function LoginPage() {
   }
 
   return (
-    <div className={styles.container}>
-      <h1 className={styles.title}>Surftrip</h1>
-      <p className={styles.subtitle}>Sign in to plan your next wave</p>
+    <div className={styles.page}>
+      <div className={styles.container}>
+        <h1 className={styles.title}>Surftrip</h1>
+        <p className={styles.subtitle}>Sign in to plan your next wave</p>
 
-      <form onSubmit={handleSubmit} className={styles.form}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className={styles.input}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className={styles.input}
-        />
+        <form onSubmit={handleSubmit} className={styles.form}>
+          <div className={styles.fieldGroup}>
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className={styles.input}
+            />
+          </div>
+          <div className={styles.fieldGroup}>
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className={styles.input}
+            />
+          </div>
 
-        {error && <p className={styles.error}>{error}</p>}
+          {error && <p className={styles.error}>{error}</p>}
 
-        <button type="submit" disabled={loading} className={styles.button}>
-          {loading ? "Signing in..." : "Sign in"}
-        </button>
-      </form>
+          <button type="submit" disabled={loading} className={styles.button}>
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
 
-      <p className={styles.footer}>
-        No account? <Link href="/signup">Sign up</Link>
-      </p>
+        <p className={styles.footer}>
+          No account? <Link href="/signup">Sign up</Link>
+        </p>
+      </div>
     </div>
   );
 }

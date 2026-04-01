@@ -1,9 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProcessLogProvider } from "@/lib/process-log-context";
-import ConversationSidebar from "@/components/ConversationSidebar";
-import ProcessLog from "@/components/ProcessLog";
+import AppShell from "@/components/AppShell";
 import type { Tables } from "@/lib/types";
-import styles from "./layout.module.css";
 
 type ConversationSummary = Pick<
   Tables<"conversations">,
@@ -31,15 +29,13 @@ export default async function AppLayout({
   }
 
   return (
-    <div className={styles.shell}>
-      <ConversationSidebar
+    <ProcessLogProvider>
+      <AppShell
         serverConversations={serverConversations}
         isAuthenticated={!!user}
-      />
-      <ProcessLogProvider>
-        <main className={styles.main}>{children}</main>
-        <ProcessLog />
-      </ProcessLogProvider>
-    </div>
+      >
+        {children}
+      </AppShell>
+    </ProcessLogProvider>
   );
 }

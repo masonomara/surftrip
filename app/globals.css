@@ -1,40 +1,62 @@
+/* ==========================================================================
+   Design Tokens
+   ========================================================================== */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --container: #ffffff;
+  --surface-1: #fafafb;
+  --surface-2: #f4f4f5;
+  --surface-3: #eff0f1;
+
+  --text-primary: #2e3034;
+  --text-secondary: #5f6168;
+  --text-tertiary: #878a92;
+
+  --border-default: #e2e3e5;
+  --border-input: #c4c4c4;
+  --border-input-hover: #abadb3;
+
+  --brand-primary: #005bd3;
+  --brand-focus: #00419c;
+  --brand-highlight: #f1f3ff;
+
+  --error-primary: #b82a3f;
+  --error-focus: #871c2c;
+  --error-highlight: #fcf0f0;
+
+  --success-primary: #137045;
+  --warning-primary: #765f22;
+
+  --btn-primary-hover: #191a1d;
+
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+
+  --transition-fast: 0.15s ease;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ==========================================================================
+   Reset & Base
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html {
   height: 100%;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+body {
+  min-height: 100svh;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-family: var(--font-inter), system-ui, sans-serif;
 }
 
 a {
@@ -42,8 +64,12 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+textarea {
+  resize: none;
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
 }

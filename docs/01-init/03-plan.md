@@ -2014,10 +2014,10 @@ Each component file listed in Steps 8–15 gets a corresponding `.module.css` wi
 
 ### Phase 8 — Styling Pass
 
-- [ ] **Claude** Write `app/globals.css` — design tokens (`--bg`, `--surface`, `--border`, `--text`, `--accent`, etc.), CSS reset
-- [ ] **Claude** Audit all `.module.css` files for visual consistency
-- [ ] **Claude** Verify streaming cursor animation works
-- [ ] **Claude** Verify three-column layout holds at 1280px+ and degrades gracefully below
+- [x] **Claude** Write `app/globals.css` — design tokens (`--bg`, `--surface`, `--border`, `--text`, `--accent`, etc.), CSS reset
+- [x] **Claude** Audit all `.module.css` files for visual consistency
+- [x] **Claude** Verify streaming cursor animation works
+- [x] **Claude** Verify three-column layout holds at 1280px+ and degrades gracefully below
 
 ---
 

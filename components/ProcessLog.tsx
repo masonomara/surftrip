@@ -3,25 +3,45 @@
 import { useProcessLog } from "@/lib/process-log-context";
 import styles from "./ProcessLog.module.css";
 
-export default function ProcessLog() {
+type Props = {
+  onClose?: () => void;
+};
+
+export default function ProcessLog({ onClose }: Props) {
   const { steps } = useProcessLog();
+  const lastIndex = steps.length - 1;
 
   return (
     <aside className={styles.panel}>
-      <h2 className={styles.heading}>Process log</h2>
-
-      {steps.length === 0 ? (
-        <p className={styles.empty}>Steps will appear here as the AI works.</p>
-      ) : (
-        <ol className={styles.steps}>
-          {steps.map((step, i) => (
-            <li key={i} className={styles.step}>
-              <span className={styles.index}>{i + 1}</span>
-              <span className={styles.text}>{step}</span>
-            </li>
-          ))}
-        </ol>
-      )}
+      <div className={styles.headerRow}>
+        <h2 className={styles.heading}>Process log</h2>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className={styles.closeBtn}
+            type="button"
+            aria-label="Close process log"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      <div className={styles.events}>
+        {steps.length === 0 ? (
+          <p className={styles.empty}>Steps will appear here as the AI works.</p>
+        ) : (
+          steps.map((step, i) => (
+            <div key={i} className={styles.event}>
+              <div className={styles.eventHeader}>
+                <span
+                  className={`${styles.dot} ${i === lastIndex && step !== "Done" ? styles.dotActive : ""}`}
+                />
+                <span className={styles.label}>{step}</span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </aside>
   );
 }
