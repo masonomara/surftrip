@@ -15,7 +15,7 @@ import {
 import ChatMessages from "@/components/ChatMessages";
 import ChatInput from "@/components/ChatInput";
 import type { AppMessage } from "@/lib/types";
-import styles from "./chat.module.css";
+import styles from "@/components/ChatView.module.css";
 
 type Props = {
   chatId: string;
@@ -34,7 +34,7 @@ export default function ChatView({
   const { messages, sendMessage, setMessages, status, stop, error } =
     useChat<AppMessage>({
       transport: new DefaultChatTransport({
-        api: "/api/chat",
+        api: "/api",
         prepareSendMessagesRequest: ({ messages }) => ({
           body: { messages, chatId },
         }),
