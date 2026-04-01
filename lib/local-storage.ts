@@ -1,41 +1,49 @@
 import type { LocalConversation, LocalMessage } from "@/lib/types";
 
-const KEY = "surftrip_conversations";
+// All conversations for guest users are stored under this single localStorage key
+// as a JSON-serialized LocalConversation[], sorted by updatedAt descending.
+const STORAGE_KEY = "surftrip_conversations";
 
 // ── Read ───────────────────────────────────────────────────────────────────
 
 export function loadConversations(): LocalConversation[] {
+  // localStorage is not available during SSR.
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? "[]");
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
   } catch {
+    // localStorage contains invalid JSON (corrupted or manually edited).
+    // Return empty rather than crashing the app.
     return [];
   }
 }
 
 export function loadConversation(id: string): LocalConversation | null {
-  return loadConversations().find((c) => c.id === id) ?? null;
+  return (
+    loadConversations().find((conversation) => conversation.id === id) ?? null
+  );
 }
 
 // ── Write ──────────────────────────────────────────────────────────────────
 
 function persist(conversations: LocalConversation[]): void {
-  localStorage.setItem(KEY, JSON.stringify(conversations));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
 }
 
 export function createConversation(
   id: string,
   title: string,
 ): LocalConversation {
-  const conv: LocalConversation = {
+  const newConversation: LocalConversation = {
     id,
     title,
     updatedAt: new Date().toISOString(),
     messages: [],
   };
-  // Prepend so the newest conversation is first.
-  persist([conv, ...loadConversations()]);
-  return conv;
+
+  // Prepend so the newest conversation is first without needing a sort.
+  persist([newConversation, ...loadConversations()]);
+  return newConversation;
 }
 
 export function appendMessages(
@@ -43,12 +51,14 @@ export function appendMessages(
   messages: LocalMessage[],
 ): void {
   const all = loadConversations();
-  const idx = all.findIndex((c) => c.id === conversationId);
-  if (idx === -1) return;
+  const index = all.findIndex(
+    (conversation) => conversation.id === conversationId,
+  );
+  if (index === -1) return;
 
-  all[idx] = {
-    ...all[idx],
-    messages: [...all[idx].messages, ...messages],
+  all[index] = {
+    ...all[index],
+    messages: [...all[index].messages, ...messages],
     updatedAt: new Date().toISOString(),
   };
 
@@ -62,20 +72,26 @@ export function appendMessages(
 
 export function updateTitle(conversationId: string, title: string): void {
   const all = loadConversations();
-  const idx = all.findIndex((c) => c.id === conversationId);
-  if (idx === -1) return;
-  all[idx] = { ...all[idx], title };
+  const index = all.findIndex(
+    (conversation) => conversation.id === conversationId,
+  );
+  if (index === -1) return;
+  all[index] = { ...all[index], title };
   persist(all);
 }
 
 export function clearConversationMessages(id: string): void {
   const all = loadConversations();
-  const idx = all.findIndex((c) => c.id === id);
-  if (idx === -1) return;
-  all[idx] = { ...all[idx], messages: [], updatedAt: new Date().toISOString() };
+  const index = all.findIndex((conversation) => conversation.id === id);
+  if (index === -1) return;
+  all[index] = {
+    ...all[index],
+    messages: [],
+    updatedAt: new Date().toISOString(),
+  };
   persist(all);
 }
 
 export function deleteConversation(id: string): void {
-  persist(loadConversations().filter((c) => c.id !== id));
+  persist(loadConversations().filter((conversation) => conversation.id !== id));
 }

@@ -7,11 +7,10 @@ import remarkGfm from "remark-gfm";
 import type { AppMessage } from "@/lib/types";
 import styles from "./ChatMessages.module.css";
 
-type Props = {
-  messages: AppMessage[];
-  isStreaming: boolean;
-  error: Error | null;
-};
+// ── Markdown renderer overrides ────────────────────────────────────────────
+//
+// Each element gets a CSS module class so we can style markdown output without
+// leaking global styles or fighting specificity wars.
 
 const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
   {
@@ -24,6 +23,15 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
     h3: ({ ...props }) => <h3 className={styles.mdH3} {...props} />,
     strong: ({ ...props }) => <strong className={styles.mdStrong} {...props} />,
     em: ({ ...props }) => <em className={styles.mdEm} {...props} />,
+    hr: ({ ...props }) => <hr className={styles.mdHr} {...props} />,
+    blockquote: ({ ...props }) => (
+      <blockquote className={styles.mdBlockquote} {...props} />
+    ),
+    th: ({ ...props }) => <th className={styles.mdTh} {...props} />,
+    td: ({ ...props }) => <td className={styles.mdTd} {...props} />,
+
+    // Links always open in a new tab. `noopener noreferrer` prevents the new
+    // page from accessing `window.opener` (a phishing vector).
     a: ({ ...props }) => (
       <a
         className={styles.mdA}
@@ -32,21 +40,21 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
         {...props}
       />
     ),
+
+    // Tables need a scroll wrapper so they don't blow out the layout on mobile.
     table: ({ ...props }) => (
       <div className={styles.mdTableWrap}>
         <table className={styles.mdTable} {...props} />
       </div>
     ),
-    thead: ({ ...props }) => <thead {...props} />,
-    th: ({ ...props }) => <th className={styles.mdTh} {...props} />,
-    td: ({ ...props }) => <td className={styles.mdTd} {...props} />,
-    hr: ({ ...props }) => <hr className={styles.mdHr} {...props} />,
-    blockquote: ({ ...props }) => (
-      <blockquote className={styles.mdBlockquote} {...props} />
-    ),
+
+    // react-markdown passes a `className` of `language-xxx` on fenced code
+    // blocks. Inline code has no className. We use this to decide whether to
+    // render a <pre><code> block or just a plain <code> span.
     code: ({ className, children, ...props }) => {
-      const isBlock = !className && String(children).includes("\n");
-      return isBlock ? (
+      const isFencedBlock =
+        Boolean(className) || String(children).includes("\n");
+      return isFencedBlock ? (
         <pre className={styles.mdPre}>
           <code {...props}>{children}</code>
         </pre>
@@ -58,9 +66,20 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
     },
   };
 
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type Props = {
+  messages: AppMessage[];
+  isStreaming: boolean;
+  error: Error | null;
+};
+
+// ── Component ──────────────────────────────────────────────────────────────
+
 export default function ChatMessages({ messages, isStreaming, error }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Scroll to the bottom whenever a new message arrives or content streams in.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isStreaming]);
@@ -76,12 +95,24 @@ export default function ChatMessages({ messages, isStreaming, error }: Props) {
     );
   }
 
+  const lastMessage = messages.at(-1);
+
   return (
     <div className={styles.messages}>
       {messages.map((message) => {
-        const textParts = message.parts.filter(isTextUIPart);
-        if (textParts.length === 0) return null;
-        const text = textParts.map((p) => p.text).join("");
+        // A message can contain multiple parts (text, tool calls, etc.).
+        // We only render text parts here; everything else is shown in the
+        // ProcessLog panel.
+        const text = message.parts
+          .filter(isTextUIPart)
+          .map((part) => part.text)
+          .join("");
+
+        if (!text) return null;
+
+        // Show the blinking cursor on the last message while it's streaming.
+        const showStreamingCursor = isStreaming && message === lastMessage;
+
         return (
           <div
             key={message.id}
@@ -96,14 +127,14 @@ export default function ChatMessages({ messages, isStreaming, error }: Props) {
                   >
                     {text}
                   </Markdown>
-                  {isStreaming && message === messages.at(-1) && (
+                  {showStreamingCursor && (
                     <span className={styles.cursor}>▊</span>
                   )}
                 </>
               ) : (
                 <>
                   {text}
-                  {isStreaming && message === messages.at(-1) && (
+                  {showStreamingCursor && (
                     <span className={styles.cursor}>▊</span>
                   )}
                 </>
@@ -119,6 +150,7 @@ export default function ChatMessages({ messages, isStreaming, error }: Props) {
         </div>
       )}
 
+      {/* Scroll anchor — scrollIntoView targets this invisible div */}
       <div ref={bottomRef} />
     </div>
   );

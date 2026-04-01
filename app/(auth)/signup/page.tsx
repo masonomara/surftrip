@@ -10,23 +10,28 @@ export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
+    setErrorMessage(null);
+    setIsSubmitting(true);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+    });
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
+    if (authError) {
+      setErrorMessage(authError.message);
+      setIsSubmitting(false);
       return;
     }
 
+    // push() navigates to the home page; refresh() forces the Server Components
+    // (layout, sidebar) to re-render with the now-authenticated session.
     router.push("/");
     router.refresh();
   }
@@ -60,10 +65,14 @@ export default function SignupPage() {
             />
           </div>
 
-          {error && <p className={styles.error}>{error}</p>}
+          {errorMessage && <p className={styles.error}>{errorMessage}</p>}
 
-          <button type="submit" disabled={loading} className={styles.button}>
-            {loading ? "Creating account..." : "Sign up"}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className={styles.button}
+          >
+            {isSubmitting ? "Creating account..." : "Sign up"}
           </button>
         </form>
 

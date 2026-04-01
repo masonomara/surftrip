@@ -3,13 +3,18 @@
 import { useProcessLog } from "@/lib/process-log-context";
 import styles from "./ProcessLog.module.css";
 
+// ── Types ──────────────────────────────────────────────────────────────────
+
 type Props = {
   onClose?: () => void;
 };
 
+// ── Component ──────────────────────────────────────────────────────────────
+
 export default function ProcessLog({ onClose }: Props) {
   const { steps } = useProcessLog();
-  const lastIndex = steps.length - 1;
+
+  const lastStepIndex = steps.length - 1;
 
   return (
     <aside className={styles.panel}>
@@ -26,22 +31,29 @@ export default function ProcessLog({ onClose }: Props) {
           </button>
         )}
       </div>
+
       <div className={styles.events}>
         {steps.length === 0 ? (
           <p className={styles.empty}>
             Steps will appear here as the AI works.
           </p>
         ) : (
-          steps.map((step, i) => (
-            <div key={i} className={styles.event}>
-              <div className={styles.eventHeader}>
-                <span
-                  className={`${styles.dot} ${i === lastIndex && step !== "Done" ? styles.dotActive : ""}`}
-                />
-                <span className={styles.label}>{step}</span>
+          steps.map((step, index) => {
+            // The dot pulses on the last step while the AI is still working.
+            // Once the final step is "Done", the pulse stops.
+            const isInProgress = index === lastStepIndex && step !== "Done";
+
+            return (
+              <div key={index} className={styles.event}>
+                <div className={styles.eventHeader}>
+                  <span
+                    className={`${styles.dot} ${isInProgress ? styles.dotActive : ""}`}
+                  />
+                  <span className={styles.label}>{step}</span>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </aside>

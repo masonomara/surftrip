@@ -2,6 +2,12 @@
 
 import { createContext, useContext, useState } from "react";
 
+// The ProcessLog panel displays the AI's reasoning steps as they stream in.
+// This context lets ChatView (deep in the tree) push steps to ProcessLog
+// (a sibling, not a descendant) without prop-drilling through AppShell.
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
 type ProcessLogContextType = {
   steps: string[];
   addStep: (step: string) => void;
@@ -9,6 +15,8 @@ type ProcessLogContextType = {
 };
 
 const ProcessLogContext = createContext<ProcessLogContextType | null>(null);
+
+// ── Provider ───────────────────────────────────────────────────────────────
 
 type Props = {
   children: React.ReactNode;
@@ -32,9 +40,12 @@ export function ProcessLogProvider({ children }: Props) {
   );
 }
 
-export function useProcessLog() {
-  const ctx = useContext(ProcessLogContext);
-  if (!ctx)
-    throw new Error("useProcessLog must be used within ProcessLogProvider");
-  return ctx;
+// ── Hook ───────────────────────────────────────────────────────────────────
+
+export function useProcessLog(): ProcessLogContextType {
+  const context = useContext(ProcessLogContext);
+  if (!context) {
+    throw new Error("useProcessLog must be used within a <ProcessLogProvider>");
+  }
+  return context;
 }

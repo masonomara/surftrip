@@ -12,11 +12,50 @@ import {
 import type { ConversationSummary } from "@/lib/types";
 import styles from "./ConversationSidebar.module.css";
 
+// ── Icons ──────────────────────────────────────────────────────────────────
+
+const ChevronLeftIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    aria-hidden="true"
+  >
+    <path
+      d="M10.5 3.5 6 8l4.5 4.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const PlusIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    aria-hidden="true"
+  >
+    <path
+      d="M8 2.5a.75.75 0 0 1 .75.75v4h4a.75.75 0 0 1 0 1.5h-4v4a.75.75 0 0 1-1.5 0v-4h-4a.75.75 0 0 1 0-1.5h4v-4A.75.75 0 0 1 8 2.5Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
 type Props = {
   serverConversations: ConversationSummary[];
   isAuthenticated: boolean;
   onClose?: () => void;
 };
+
+// ── Component ──────────────────────────────────────────────────────────────
 
 export default function ConversationSidebar({
   serverConversations,
@@ -25,6 +64,9 @@ export default function ConversationSidebar({
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
+
+  // Guest users get conversations from localStorage; authenticated users get
+  // them from the server (passed in as a prop, already fetched server-side).
   const [localConversations, setLocalConversations] = useState<
     ConversationSummary[]
   >([]);
@@ -32,40 +74,81 @@ export default function ConversationSidebar({
     ? serverConversations
     : localConversations;
 
-  const currentChatId = pathname.startsWith("/chat/")
-    ? pathname.slice(6)
-    : null;
+  const activeChatId = pathname.startsWith("/chat/") ? pathname.slice(6) : null;
 
+  // Keep local conversations in sync with localStorage across tabs.
   useEffect(() => {
     if (isAuthenticated) return;
 
-    function sync() {
+    function syncFromStorage() {
       const stored = loadConversations();
       setLocalConversations(
-        stored.map((c) => ({
-          id: c.id,
-          title: c.title,
-          updated_at: c.updatedAt,
+        stored.map((conversation) => ({
+          id: conversation.id,
+          title: conversation.title,
+          updated_at: conversation.updatedAt,
         })),
       );
     }
 
-    sync();
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
+    syncFromStorage();
+    window.addEventListener("storage", syncFromStorage);
+    return () => window.removeEventListener("storage", syncFromStorage);
   }, [isAuthenticated]);
+
+  // ── Handlers ────────────────────────────────────────────────────────────
+
+  async function handleNewChat() {
+    onClose?.();
+
+    if (isAuthenticated) {
+      await createAuthenticatedConversation();
+    } else {
+      createGuestConversation();
+    }
+  }
+
+  async function createAuthenticatedConversation() {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    const { data } = await supabase
+      .from("conversations")
+      .insert({ title: "New conversation", user_id: user.id })
+      .select("id")
+      .single();
+
+    if (data) {
+      router.push(`/chat/${data.id}`);
+      router.refresh();
+    }
+  }
+
+  function createGuestConversation() {
+    const id = crypto.randomUUID();
+    createConversation(id, "New conversation");
+    window.dispatchEvent(new StorageEvent("storage"));
+    router.push(`/chat/${id}`);
+  }
 
   async function handleDeleteConversation(id: string) {
     if (isAuthenticated) {
       const supabase = createClient();
       await supabase.from("conversations").delete().eq("id", id);
-      if (id === currentChatId) router.push("/");
       router.refresh();
     } else {
       deleteConversation(id);
-      setLocalConversations((prev) => prev.filter((c) => c.id !== id));
+      setLocalConversations((prev) => prev.filter((conversation) => conversation.id !== id));
       window.dispatchEvent(new StorageEvent("storage"));
-      if (id === currentChatId) router.push("/");
+    }
+
+    // Navigate away if the deleted conversation is the one currently open.
+    if (id === activeChatId) {
+      router.push("/");
     }
   }
 
@@ -76,74 +159,27 @@ export default function ConversationSidebar({
     router.refresh();
   }
 
-  async function handleNewChat() {
-    onClose?.();
-    if (isAuthenticated) {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
-        .from("conversations")
-        .insert({ title: "New conversation", user_id: user.id })
-        .select("id")
-        .single();
-      if (data) {
-        router.push(`/chat/${data.id}`);
-        router.refresh();
-      }
-    } else {
-      const id = crypto.randomUUID();
-      createConversation(id, "New conversation");
-      window.dispatchEvent(new StorageEvent("storage"));
-      router.push(`/chat/${id}`);
-    }
-  }
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <aside className={styles.sidebar}>
       <div className={styles.header}>
         {onClose ? (
           <button onClick={onClose} className={styles.hideBtn} type="button">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M10.5 3.5 6 8l4.5 4.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <ChevronLeftIcon />
             Hide
           </button>
         ) : (
           <span className={styles.logo}>Surftrip</span>
         )}
+
         <button
           onClick={handleNewChat}
           className={styles.newChatBtn}
           type="button"
           aria-label="New chat"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M8 2.5a.75.75 0 0 1 .75.75v4h4a.75.75 0 0 1 0 1.5h-4v4a.75.75 0 0 1-1.5 0v-4h-4a.75.75 0 0 1 0-1.5h4v-4A.75.75 0 0 1 8 2.5Z"
-              fill="currentColor"
-            />
-          </svg>
+          <PlusIcon />
           New chat
         </button>
       </div>
@@ -151,19 +187,20 @@ export default function ConversationSidebar({
       <div className={styles.sectionLabel}>Your chats</div>
 
       <nav className={styles.nav}>
-        {conversations.map((c) => (
-          <div key={c.id} className={styles.itemRow}>
+        {conversations.map((conversation) => (
+          <div key={conversation.id} className={styles.itemRow}>
             <Link
-              href={`/chat/${c.id}`}
+              href={`/chat/${conversation.id}`}
               onClick={onClose}
               className={`${styles.item} ${
-                pathname === `/chat/${c.id}` ? styles.active : ""
+                pathname === `/chat/${conversation.id}` ? styles.active : ""
               }`}
             >
-              {c.title}
+              {conversation.title}
             </Link>
+
             <button
-              onClick={() => handleDeleteConversation(c.id)}
+              onClick={() => handleDeleteConversation(conversation.id)}
               className={styles.deleteBtn}
               type="button"
               aria-label="Delete conversation"

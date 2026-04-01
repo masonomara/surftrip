@@ -2,9 +2,13 @@ import { createClient } from "@/lib/supabase/server";
 import ChatView from "@/components/ChatView";
 import type { AppMessage } from "@/lib/types";
 
+// ── Types ──────────────────────────────────────────────────────────────────
+
 type Props = {
   params: Promise<{ id: string }>;
 };
+
+// ── Component ──────────────────────────────────────────────────────────────
 
 export default async function ChatPage({ params }: Props) {
   const { id } = await params;
@@ -13,6 +17,8 @@ export default async function ChatPage({ params }: Props) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Guest users get no server-side messages — their history lives in
+  // localStorage and is loaded client-side by ChatView after mount.
   let initialMessages: AppMessage[] = [];
 
   if (user) {
@@ -22,11 +28,14 @@ export default async function ChatPage({ params }: Props) {
       .eq("conversation_id", id)
       .order("created_at", { ascending: true });
 
-    initialMessages = (data ?? []).map((msg) => ({
-      id: msg.id,
-      role: msg.role as "user" | "assistant",
-      parts: [{ type: "text" as const, text: msg.content }],
-      createdAt: new Date(msg.created_at),
+    // Map flat DB rows into the AI SDK's message shape. The SDK expects message
+    // content as an array of typed parts; we only store plain text, so each
+    // message has exactly one text part.
+    initialMessages = (data ?? []).map((row) => ({
+      id: row.id,
+      role: row.role as "user" | "assistant", // DB stores role as string; cast is safe because we only ever insert these two values
+      parts: [{ type: "text" as const, text: row.content }],
+      createdAt: new Date(row.created_at),
     }));
   }
 
