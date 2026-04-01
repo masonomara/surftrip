@@ -21,7 +21,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--backdrop);
   z-index: 40;
   animation: fadeIn 0.2s ease;
 }
