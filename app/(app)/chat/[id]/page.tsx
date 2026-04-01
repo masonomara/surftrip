@@ -2,7 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import ChatView from "@/components/ChatView";
 import type { AppMessage } from "@/lib/types";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+};
 
 export default async function ChatPage({ params }: Props) {
   const { id } = await params;

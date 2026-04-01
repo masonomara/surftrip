@@ -10,11 +10,11 @@ type ProcessLogContextType = {
 
 const ProcessLogContext = createContext<ProcessLogContextType | null>(null);
 
-export function ProcessLogProvider({
-  children,
-}: {
+type Props = {
   children: React.ReactNode;
-}) {
+};
+
+export function ProcessLogProvider({ children }: Props) {
   const [steps, setSteps] = useState<string[]>([]);
 
   function addStep(step: string) {

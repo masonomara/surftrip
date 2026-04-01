@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useEffect, useRef } from "react";
 import styles from "./ChatInput.module.css";
 
 const MAX_LENGTH = 10_000;

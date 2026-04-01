@@ -1,9 +1,9 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, isTextUIPart } from "ai";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport, isTextUIPart } from "ai";
 import { createClient } from "@/lib/supabase/client";
 import { useProcessLog } from "@/lib/process-log-context";
 import {
@@ -14,8 +14,15 @@ import {
 } from "@/lib/local-storage";
 import ChatMessages from "@/components/ChatMessages";
 import ChatInput from "@/components/ChatInput";
-import type { AppMessage } from "@/lib/types";
-import styles from "@/components/ChatView.module.css";
+import type { AppMessage, LocalMessage } from "@/lib/types";
+import styles from "./ChatView.module.css";
+
+function extractText(msg: AppMessage): string {
+  return msg.parts
+    .filter(isTextUIPart)
+    .map((p) => p.text)
+    .join("");
+}
 
 type Props = {
   chatId: string;
@@ -53,14 +60,7 @@ export default function ChatView({
             (m) => m.role === "assistant",
           );
 
-          function extractText(msg: AppMessage): string {
-            return msg.parts
-              .filter(isTextUIPart)
-              .map((p) => p.text)
-              .join("");
-          }
-
-          const toSave = [];
+          const toSave: LocalMessage[] = [];
           if (lastUser)
             toSave.push({
               id: lastUser.id,

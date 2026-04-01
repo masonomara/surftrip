@@ -18,11 +18,11 @@ export const metadata: Metadata = {
   description: "AI-powered surf trip planning assistant",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
+type Props = {
   children: React.ReactNode;
-}>) {
+};
+
+export default function RootLayout({ children }: Props) {
   return (
     <html lang="en" className={`${inter.variable} ${robotoMono.variable}`}>
       <body>{children}</body>

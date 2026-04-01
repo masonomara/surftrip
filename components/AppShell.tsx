@@ -3,13 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import ConversationSidebar from "./ConversationSidebar";
 import ProcessLog from "./ProcessLog";
-import type { Tables } from "@/lib/types";
+import type { ConversationSummary } from "@/lib/types";
 import styles from "./AppShell.module.css";
-
-type ConversationSummary = Pick<
-  Tables<"conversations">,
-  "id" | "title" | "updated_at"
->;
 
 type Props = {
   serverConversations: ConversationSummary[];

@@ -1,17 +1,16 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { loadConversations, deleteConversation } from "@/lib/local-storage";
-import type { Tables } from "@/lib/types";
+import {
+  createConversation,
+  loadConversations,
+  deleteConversation,
+} from "@/lib/local-storage";
+import type { ConversationSummary } from "@/lib/types";
 import styles from "./ConversationSidebar.module.css";
-
-type ConversationSummary = Pick<
-  Tables<"conversations">,
-  "id" | "title" | "updated_at"
->;
 
 type Props = {
   serverConversations: ConversationSummary[];
@@ -96,7 +95,6 @@ export default function ConversationSidebar({
       }
     } else {
       const id = crypto.randomUUID();
-      const { createConversation } = await import("@/lib/local-storage");
       createConversation(id, "New conversation");
       window.dispatchEvent(new StorageEvent("storage"));
       router.push(`/chat/${id}`);

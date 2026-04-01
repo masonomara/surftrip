@@ -212,6 +212,13 @@ export const Constants = {
   },
 } as const;
 
+// ── Shared derived types ───────────────────────────────────────────────────
+
+export type ConversationSummary = Pick<
+  Tables<"conversations">,
+  "id" | "title" | "updated_at"
+>;
+
 // ── localStorage (guest users) ─────────────────────────────────────────────
 
 export type LocalMessage = {

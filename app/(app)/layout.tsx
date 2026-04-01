@@ -1,18 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProcessLogProvider } from "@/lib/process-log-context";
 import AppShell from "@/components/AppShell";
-import type { Tables } from "@/lib/types";
+import type { ConversationSummary } from "@/lib/types";
 
-type ConversationSummary = Pick<
-  Tables<"conversations">,
-  "id" | "title" | "updated_at"
->;
-
-export default async function AppLayout({
-  children,
-}: {
+type Props = {
   children: React.ReactNode;
-}) {
+};
+
+export default async function AppLayout({ children }: Props) {
   const supabase = await createClient();
   const {
     data: { user },
