@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 
-Sitemap: https://www.surftrip.com/sitemap.xml
+Sitemap: https://www.surftrip.fun/sitemap.xml

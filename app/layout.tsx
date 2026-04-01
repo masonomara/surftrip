@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 
-const BASE_URL = "https://www.surftrip.com";
+const BASE_URL = "https://www.surftrip.fun";
 
 const inter = Inter({
   variable: "--font-inter",
