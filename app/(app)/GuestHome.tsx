@@ -16,6 +16,7 @@ export default function GuestHome() {
 
     const id = crypto.randomUUID();
     createConversation(id, "New conversation");
+    window.dispatchEvent(new StorageEvent("storage"));
     router.replace(`/chat/${id}`);
   }, [router]);
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { loadConversations, createConversation } from "@/lib/local-storage";
+import { loadConversations, deleteConversation } from "@/lib/local-storage";
 import type { Tables } from "@/lib/types";
 import styles from "./ConversationSidebar.module.css";
 
@@ -24,15 +24,17 @@ export default function ConversationSidebar({
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
-  const [conversations, setConversations] =
-    useState<ConversationSummary[]>(serverConversations);
+  const [localConversations, setLocalConversations] = useState<ConversationSummary[]>([]);
+  const conversations = isAuthenticated ? serverConversations : localConversations;
+
+  const currentChatId = pathname.startsWith("/chat/") ? pathname.slice(6) : null;
 
   useEffect(() => {
     if (isAuthenticated) return;
 
     function sync() {
       const stored = loadConversations();
-      setConversations(
+      setLocalConversations(
         stored.map((c) => ({
           id: c.id,
           title: c.title,
@@ -46,32 +48,17 @@ export default function ConversationSidebar({
     return () => window.removeEventListener("storage", sync);
   }, [isAuthenticated]);
 
-  async function handleNewChat() {
+  async function handleDeleteConversation(id: string) {
     if (isAuthenticated) {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data } = await supabase
-        .from("conversations")
-        .insert({ user_id: user.id, title: "New conversation" })
-        .select("id")
-        .single();
-
-      if (data) {
-        router.push(`/chat/${data.id}`);
-        router.refresh();
-      }
+      await supabase.from("conversations").delete().eq("id", id);
+      if (id === currentChatId) router.push("/");
+      router.refresh();
     } else {
-      const id = crypto.randomUUID();
-      createConversation(id, "New conversation");
-      setConversations((prev) => [
-        { id, title: "New conversation", updated_at: new Date().toISOString() },
-        ...prev,
-      ]);
-      router.push(`/chat/${id}`);
+      deleteConversation(id);
+      setLocalConversations((prev) => prev.filter((c) => c.id !== id));
+      window.dispatchEvent(new StorageEvent("storage"));
+      if (id === currentChatId) router.push("/");
     }
   }
 
@@ -86,22 +73,28 @@ export default function ConversationSidebar({
     <aside className={styles.sidebar}>
       <div className={styles.header}>
         <span className={styles.logo}>Surftrip</span>
-        <button onClick={handleNewChat} className={styles.newChat}>
-          New chat
-        </button>
       </div>
 
       <nav className={styles.nav}>
         {conversations.map((c) => (
-          <Link
-            key={c.id}
-            href={`/chat/${c.id}`}
-            className={`${styles.item} ${
-              pathname === `/chat/${c.id}` ? styles.active : ""
-            }`}
-          >
-            {c.title}
-          </Link>
+          <div key={c.id} className={styles.itemRow}>
+            <Link
+              href={`/chat/${c.id}`}
+              className={`${styles.item} ${
+                pathname === `/chat/${c.id}` ? styles.active : ""
+              }`}
+            >
+              {c.title}
+            </Link>
+            <button
+              onClick={() => handleDeleteConversation(c.id)}
+              className={styles.deleteBtn}
+              type="button"
+              aria-label="Delete conversation"
+            >
+              ×
+            </button>
+          </div>
         ))}
       </nav>
 

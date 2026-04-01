@@ -1,0 +1,89 @@
+.container {
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid var(--border, #2a2a2a);
+  flex-shrink: 0;
+}
+
+.inputRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.textarea {
+  flex: 1;
+  resize: none;
+  overflow: hidden;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  background: var(--surface, #1a1a1a);
+  color: inherit;
+  outline: none;
+  min-height: 42px;
+}
+
+.textarea:focus {
+  border-color: var(--accent, #3b82f6);
+}
+
+.textarea:disabled {
+  opacity: 0.5;
+}
+
+.sendButton,
+.stopButton {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  height: 42px;
+}
+
+.sendButton {
+  background: var(--accent, #3b82f6);
+  color: #fff;
+}
+
+.sendButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stopButton {
+  background: var(--surface, #1a1a1a);
+  color: var(--text, #e8e8e8);
+  border: 1px solid var(--border, #2a2a2a);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+}
+
+.clearButton {
+  background: transparent;
+  border: none;
+  font-size: 0.78rem;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  padding: 0;
+}
+
+.clearButton:hover {
+  color: var(--text, #e8e8e8);
+}
+
+.clearButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

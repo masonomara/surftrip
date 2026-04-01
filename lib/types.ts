@@ -225,11 +225,9 @@ export type LocalConversation = {
   messages: LocalMessage[]
 }
 
-// ── AI SDK data stream ─────────────────────────────────────────────────────
+// ── AI SDK types ───────────────────────────────────────────────────────────
 
-export type ProcessDataPart = {
-  type: "data-process"
-  data: {
-    step: string
-  }
-}
+import type { UIMessage } from "ai"
+
+export type AppDataTypes = { process: { step: string } }
+export type AppMessage = UIMessage<unknown, AppDataTypes>

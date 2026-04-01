@@ -69,6 +69,14 @@ export function updateTitle(conversationId: string, title: string): void {
   persist(all);
 }
 
+export function clearConversationMessages(id: string): void {
+  const all = loadConversations();
+  const idx = all.findIndex((c) => c.id === id);
+  if (idx === -1) return;
+  all[idx] = { ...all[idx], messages: [], updatedAt: new Date().toISOString() };
+  persist(all);
+}
+
 export function deleteConversation(id: string): void {
   persist(loadConversations().filter((c) => c.id !== id));
 }

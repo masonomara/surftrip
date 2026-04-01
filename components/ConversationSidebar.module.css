@@ -21,24 +21,23 @@
   letter-spacing: -0.01em;
 }
 
-.newChat {
-  font-size: 0.8rem;
-  padding: 0.3rem 0.6rem;
-  border: 1px solid var(--border, #2a2a2a);
-  border-radius: 5px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.newChat:hover {
-  background: var(--surface-hover, #242424);
-}
-
 .nav {
   flex: 1;
   overflow-y: auto;
   padding: 0.5rem 0;
+}
+
+.itemRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0 0.5rem;
+}
+
+.itemRow .item {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
 }
 
 .item {
@@ -50,7 +49,6 @@
   text-overflow: ellipsis;
   color: var(--text-muted, #888);
   border-radius: 4px;
-  margin: 0 0.5rem;
 }
 
 .item:hover {
@@ -61,6 +59,34 @@
 .active {
   background: var(--surface-hover, #242424);
   color: var(--text, #e8e8e8);
+}
+
+.deleteBtn {
+  flex-shrink: 0;
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.deleteBtn:hover {
+  color: #e05252;
+  background: rgba(224, 82, 82, 0.1);
+}
+
+.itemRow:hover .deleteBtn {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .deleteBtn {
+    display: block;
+  }
 }
 
 .footer {
