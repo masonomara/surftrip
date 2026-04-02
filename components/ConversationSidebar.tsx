@@ -98,23 +98,25 @@ export default function ConversationSidebar({
         ))}
       </nav>
 
-      <div className={styles.footer}>
-        {isAuthenticated ? (
-          <button
-            onClick={handleSignOut}
-            className={styles.signOut}
-            type="button"
-          >
-            <CircleUserRound size={18} strokeWidth={1.75} aria-hidden="true" />
-            Sign out
-          </button>
-        ) : (
-          <Link href="/login" className={styles.signIn}>
-            <CircleUserRound size={18} strokeWidth={1.75} aria-hidden="true" />
-            Sign in
-          </Link>
-        )}
-      </div>
+      {process.env.NEXT_PUBLIC_SUPABASE_URL && (
+        <div className={styles.footer}>
+          {isAuthenticated ? (
+            <button
+              onClick={handleSignOut}
+              className={styles.signOut}
+              type="button"
+            >
+              <CircleUserRound size={18} strokeWidth={1.75} aria-hidden="true" />
+              Sign out
+            </button>
+          ) : (
+            <Link href="/login" className={styles.signIn}>
+              <CircleUserRound size={18} strokeWidth={1.75} aria-hidden="true" />
+              Sign in
+            </Link>
+          )}
+        </div>
+      )}
     </aside>
   );
 }

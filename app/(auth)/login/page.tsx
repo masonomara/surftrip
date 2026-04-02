@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "../auth.module.css";
+
+const supabaseEnabled = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -14,6 +16,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!supabaseEnabled) router.replace("/");
+  }, [router]);
+
+  if (!supabaseEnabled) return null;
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();

@@ -12,22 +12,24 @@ type Props = {
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default async function AppLayout({ children }: Props) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // Guest users have no server-side conversations — their history lives in
-  // localStorage and is loaded client-side by ConversationSidebar.
+  // If Supabase is not configured, skip auth and run in guest-only mode.
+  // Conversation history is stored in localStorage instead of the database.
+  let user = null;
   let serverConversations: ConversationSummary[] = [];
 
-  if (user) {
-    const { data } = await supabase
-      .from("conversations")
-      .select("id, title, updated_at")
-      .order("updated_at", { ascending: false });
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
 
-    serverConversations = data ?? [];
+    if (user) {
+      const { data: convos } = await supabase
+        .from("conversations")
+        .select("id, title, updated_at")
+        .order("updated_at", { ascending: false });
+
+      serverConversations = convos ?? [];
+    }
   }
 
   return (

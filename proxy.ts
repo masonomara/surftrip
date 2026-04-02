@@ -2,6 +2,13 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
+  // If Supabase is not configured, skip session handling entirely and run in
+  // guest-only mode. The app still works — conversation history is stored in
+  // localStorage instead of the database.
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return NextResponse.next({ request });
+  }
+
   // supabaseResponse must be returned from this function as-is (or used as the
   // base for any redirect/rewrite). Never create a plain `new NextResponse()`
   // here — it won't carry the session cookies that Supabase sets, which causes
