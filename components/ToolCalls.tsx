@@ -1,8 +1,8 @@
 "use client";
 
-import { useProcessLog } from "@/lib/process-log-context";
+import { useToolCalls } from "@/lib/tool-calls-context";
 import type { ProcessStep } from "@/lib/types";
-import styles from "./ProcessLog.module.css";
+import styles from "./ToolCalls.module.css";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -24,19 +24,19 @@ function dotClass(step: ProcessStep): string {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function ProcessLog({ onClose }: Props) {
-  const { steps } = useProcessLog();
+export default function ToolCalls({ onClose }: Props) {
+  const { steps } = useToolCalls();
 
   return (
     <aside className={styles.panel}>
       <div className={styles.headerRow}>
-        <h2 className={styles.heading}>Process log</h2>
+        <h2 className={styles.heading}>Tool calls</h2>
         {onClose && (
           <button
             onClick={onClose}
             className={styles.closeBtn}
             type="button"
-            aria-label="Close process log"
+            aria-label="Close tool calls"
           >
             ×
           </button>
@@ -45,7 +45,7 @@ export default function ProcessLog({ onClose }: Props) {
 
       <div className={styles.events}>
         {steps.filter((s) => s.kind === "tool").length === 0 ? (
-          <p className={styles.empty}>Steps will appear here as the AI works.</p>
+          <p className={styles.empty}>Tool calls will appear here as the AI works.</p>
         ) : (
           steps.filter((s) => s.kind === "tool").map((step) => (
             <div key={step.id} className={styles.event}>

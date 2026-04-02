@@ -5,7 +5,7 @@ import { isTextUIPart } from "ai";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AppMessage } from "@/lib/types";
-import { useProcessLog } from "@/lib/process-log-context";
+import { useToolCalls } from "@/lib/tool-calls-context";
 import ThinkingIndicator from "./ThinkingIndicator";
 import styles from "./ChatMessages.module.css";
 
@@ -87,7 +87,7 @@ export default function ChatMessages({
   error,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { steps } = useProcessLog();
+  const { steps } = useToolCalls();
 
   const lastActiveStep = isActive
     ? ([...steps].reverse().find((s) => s.status === "active") ?? null)

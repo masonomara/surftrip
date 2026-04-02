@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, isTextUIPart } from "ai";
 import { createClient } from "@/lib/supabase/client";
-import { useProcessLog } from "@/lib/process-log-context";
+import { useToolCalls } from "@/lib/tool-calls-context";
 import {
   loadConversation,
   appendMessages,
@@ -44,7 +44,7 @@ export default function ChatView({
   isAuthenticated,
 }: Props) {
   const router = useRouter();
-  const { addEvent, clearSteps } = useProcessLog();
+  const { addEvent, clearSteps } = useToolCalls();
 
   const { messages, sendMessage, setMessages, status, stop, error } =
     useChat<AppMessage>({
@@ -60,16 +60,16 @@ export default function ChatView({
       messages: initialMessages,
 
       onData: (dataPart) => {
-        // The route handler streams process steps as data-process events so we
-        // can show them in the ProcessLog panel without blocking the text stream.
+        // The route handler streams tool call events as data-process events so we
+        // can show them in the ToolCalls panel without blocking the text stream.
         if (dataPart.type === "data-process") {
           addEvent(dataPart.data);
         }
       },
 
       onFinish: ({ messages: finishedMessages }) => {
-        // "Done" is the label that process-log-context uses to mark a status
-        // step as completed (status: "done") rather than active.
+        // "Done" marks the final status step as completed so the ThinkingIndicator
+        // knows to stop showing.
         addEvent({ id: crypto.randomUUID(), kind: "status", label: "Done" });
 
         if (isAuthenticated) {

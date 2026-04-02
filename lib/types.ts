@@ -235,7 +235,7 @@ export type LocalConversation = {
   messages: LocalMessage[];
 };
 
-// ── Process log types ──────────────────────────────────────────────────────
+// ── Tool calls types ───────────────────────────────────────────────────────
 
 export type ProcessSource = {
   title: string;

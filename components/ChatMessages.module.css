@@ -250,7 +250,6 @@
   margin-bottom: 12px;
   font-size: 13px;
   line-height: 18px;
-  font-family: var(--font-roboto-mono), var(--font-mono);
 }
 
 .mdCode {
@@ -259,7 +258,6 @@
   padding: 1px 5px;
   font-size: 13px;
   line-height: 18px;
-  font-family: var(--font-roboto-mono), var(--font-mono);
 }
 
 /* ── Reduced motion ─────────────────── */

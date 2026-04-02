@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import ConversationSidebar from "./ConversationSidebar";
-import ProcessLog from "./ProcessLog";
+import ToolCalls from "./ToolCalls";
 import type { ConversationSummary } from "@/lib/types";
 import styles from "./AppShell.module.css";
 
@@ -56,8 +56,8 @@ const HamburgerIcon = () => (
   </svg>
 );
 
-// Unequal-width lines — used for the process log toggle (looks like a doc).
-const ProcessLogIcon = () => (
+// Unequal-width lines — used for the tool calls toggle (looks like a doc).
+const ToolCallsIcon = () => (
   <svg
     width="20"
     height="20"
@@ -111,8 +111,8 @@ export default function AppShell({
     () => !getBreakpoint().isMobile,
   );
 
-  // Process log starts open only on desktop (not mobile, not tablet).
-  const [processLogOpen, setProcessLogOpen] = useState(
+  // Tool calls panel starts open only on desktop (not mobile, not tablet).
+  const [toolCallsOpen, setToolCallsOpen] = useState(
     () => !getBreakpoint().isMobile && !getBreakpoint().isTablet,
   );
 
@@ -132,10 +132,10 @@ export default function AppShell({
   }, []);
 
   // On mobile, panels slide in over the content (overlay).
-  // On tablet/desktop, the sidebar is docked. The process log is only docked
-  // on desktop; on tablet it's still an overlay.
-  const sidebarIsOverlay = isMobile;
-  const processLogIsOverlay = isMobile || isTablet;
+  // On tablet/desktop, the sidebar is docked. The tool calls panel is only
+  // docked on desktop; on tablet it's still an overlay.
+  const sidebarIsOverlay   = isMobile;
+  const toolCallsIsOverlay = isMobile || isTablet;
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -172,17 +172,17 @@ export default function AppShell({
 
       {/* Main content area */}
       <main className={styles.main}>
-        {/* Desktop/tablet: fixed button to toggle the process log panel */}
+        {/* Desktop/tablet: fixed button to toggle the tool calls panel */}
         <button
-          className={`${styles.toggleBtn} ${styles.processLogToggle}`}
-          onClick={() => setProcessLogOpen((open) => !open)}
-          aria-label="Toggle process log"
+          className={`${styles.toggleBtn} ${styles.toolCallsToggle}`}
+          onClick={() => setToolCallsOpen((open) => !open)}
+          aria-label="Toggle tool calls"
           type="button"
         >
-          <ProcessLogIcon />
+          <ToolCallsIcon />
         </button>
 
-        {/* Mobile: header bar with sidebar + process log toggles */}
+        {/* Mobile: header bar with sidebar + tool calls toggles */}
         <header className={styles.mobileHeader}>
           <button
             className={styles.mobileIconBtn}
@@ -197,36 +197,36 @@ export default function AppShell({
 
           <button
             className={styles.mobileIconBtn}
-            onClick={() => setProcessLogOpen((open) => !open)}
-            aria-label="Toggle process log"
+            onClick={() => setToolCallsOpen((open) => !open)}
+            aria-label="Toggle tool calls"
             type="button"
           >
-            <ProcessLogIcon />
+            <ToolCallsIcon />
           </button>
         </header>
 
         {children}
       </main>
 
-      {/* Process log — overlay on mobile/tablet, docked on desktop */}
-      {processLogIsOverlay ? (
+      {/* Tool calls panel — overlay on mobile/tablet, docked on desktop */}
+      {toolCallsIsOverlay ? (
         <>
-          {processLogOpen && (
+          {toolCallsOpen && (
             <div
               className={styles.backdrop}
-              onClick={() => setProcessLogOpen(false)}
+              onClick={() => setToolCallsOpen(false)}
               aria-hidden="true"
             />
           )}
           <div
-            className={`${styles.processLogOverlay} ${processLogOpen ? styles.processLogOverlayOpen : ""}`}
+            className={`${styles.toolCallsOverlay} ${toolCallsOpen ? styles.toolCallsOverlayOpen : ""}`}
           >
-            <ProcessLog onClose={() => setProcessLogOpen(false)} />
+            <ToolCalls onClose={() => setToolCallsOpen(false)} />
           </div>
         </>
       ) : (
-        <div className={styles.processLogDocked}>
-          <ProcessLog />
+        <div className={styles.toolCallsDocked}>
+          <ToolCalls />
         </div>
       )}
     </div>

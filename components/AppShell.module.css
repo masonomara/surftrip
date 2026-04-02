@@ -10,9 +10,9 @@
 
 /* Enable transitions only after hydration to prevent flash on load */
 .shell.hydrated .sidebarDocked,
-.shell.hydrated .processLogDocked,
+.shell.hydrated .toolCallsDocked,
 .shell.hydrated .sidebarOverlay,
-.shell.hydrated .processLogOverlay {
+.shell.hydrated .toolCallsOverlay {
   transition:
     width 0.25s ease,
     border-color 0.25s ease,
@@ -71,7 +71,7 @@
 
 /* ── Process log — docked ─────────────────── */
 
-.processLogDocked {
+.toolCallsDocked {
   width: 280px;
   flex-shrink: 0;
   overflow: hidden;
@@ -82,7 +82,7 @@
 
 /* ── Process log — overlay ────────────────── */
 
-.processLogOverlay {
+.toolCallsOverlay {
   position: fixed;
   top: 0;
   right: 0;
@@ -96,7 +96,7 @@
   flex-direction: column;
 }
 
-.processLogOverlayOpen {
+.toolCallsOverlayOpen {
   transform: translateX(0);
 }
 
@@ -137,7 +137,7 @@
   color: var(--text-primary);
 }
 
-.processLogToggle {
+.toolCallsToggle {
   right: 12px;
 }
 
@@ -178,7 +178,7 @@
 }
 
 @media (min-width: 1240px) {
-  .processLogToggle {
+  .toolCallsToggle {
     display: none;
   }
 }
