@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: Props) {
   let serverConversations: ConversationSummary[] = [];
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    const supabase = await createClient();
+    const supabase = (await createClient())!;
     const { data } = await supabase.auth.getUser();
     user = data.user;
 
