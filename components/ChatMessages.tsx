@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isTextUIPart } from "ai";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -69,6 +69,23 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
     },
   };
 
+// ── Constants ──────────────────────────────────────────────────────────────
+
+const EXAMPLE_PROMPTS = [
+  "When's the best time to surf Bocas del Toro?",
+  "What's the swell forecast for Uluwatu, Bali?",
+  "Is Hossegor good for intermediate surfers?",
+  "Best surf spots in Western Australia?",
+  "Planning a trip to the Mentawais - what should I know?",
+  "How are the waves in Popoyo, Nicaragua in July?",
+  "Where should I surf in Portugal in November?",
+  "What boards should I bring to the Gold Coast?",
+  "Is the Maldives doable on a budget?",
+  "How crowded is G-Land?",
+  "Best time to surf Ireland?",
+  "First trip to Bali - where do I start?",
+];
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -81,6 +98,7 @@ type Props = {
 
 export default function ChatMessages({ messages, isActive, error }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [promptIndex, setPromptIndex] = useState(0);
   const { steps, openPanel } = useToolCalls();
 
   // Last active step drives the animated indicator label.
@@ -125,6 +143,15 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
         ? `View ${completedLabels.join(", ")}`
         : `View ${completedLabels.slice(0, 2).join(", ")} +${completedLabels.length - 2} more`;
 
+  // Rotate through example prompts every 5 seconds when the chat is empty.
+  useEffect(() => {
+    if (messages.length > 0) return;
+    const id = setInterval(() => {
+      setPromptIndex((i) => (i + 1) % EXAMPLE_PROMPTS.length);
+    }, 5000);
+    return () => clearInterval(id);
+  }, [messages.length]);
+
   // Scroll to the bottom whenever a new message arrives or content streams in.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -134,9 +161,7 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
     return (
       <div className={styles.empty}>
         <p className={styles.title}>Where are you headed?</p>
-        <p className={styles.hint}>
-          Drop a destination for conditions, breaks, and logistics.
-        </p>
+        <div key={promptIndex} className={styles.hint}>{EXAMPLE_PROMPTS[promptIndex]}</div>
       </div>
     );
   }

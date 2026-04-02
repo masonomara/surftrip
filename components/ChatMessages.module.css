@@ -27,6 +27,17 @@
 
 /* ── Empty state ────────────────────── */
 
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .empty {
   flex: 1;
   display: flex;
@@ -46,6 +57,7 @@
 }
 
 .hint {
+  animation: fadeIn 0.5s ease both;
   font-size: 16px;
   line-height: 1.45;
   font-weight: 400;

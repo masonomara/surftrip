@@ -81,25 +81,29 @@ export default function ChatView({
 
         // Guest: we persist the last exchange (one user + one assistant message)
         // to localStorage ourselves, since there's no server to do it for us.
-        const lastUserMessage      = finishedMessages.findLast((m) => m.role === "user");
-        const lastAssistantMessage = finishedMessages.findLast((m) => m.role === "assistant");
+        const lastUserMessage = finishedMessages.findLast(
+          (m) => m.role === "user",
+        );
+        const lastAssistantMessage = finishedMessages.findLast(
+          (m) => m.role === "assistant",
+        );
 
         const messagesToSave: LocalMessage[] = [];
 
         if (lastUserMessage) {
           messagesToSave.push({
-            id:        lastUserMessage.id,
-            role:      "user",
-            content:   extractText(lastUserMessage),
+            id: lastUserMessage.id,
+            role: "user",
+            content: extractText(lastUserMessage),
             createdAt: new Date().toISOString(),
           });
         }
 
         if (lastAssistantMessage) {
           messagesToSave.push({
-            id:        lastAssistantMessage.id,
-            role:      "assistant",
-            content:   extractText(lastAssistantMessage),
+            id: lastAssistantMessage.id,
+            role: "assistant",
+            content: extractText(lastAssistantMessage),
             createdAt: new Date().toISOString(),
           });
         }
@@ -109,11 +113,13 @@ export default function ChatView({
         // Set the conversation title from the first user message, truncated to
         // 60 chars. We only do this once (when there's exactly one user message)
         // so we don't overwrite a title the user might have set later.
-        const userMessageCount = finishedMessages.filter((m) => m.role === "user").length;
-        const isFirstMessage   = userMessageCount === 1 && lastUserMessage;
+        const userMessageCount = finishedMessages.filter(
+          (m) => m.role === "user",
+        ).length;
+        const isFirstMessage = userMessageCount === 1 && lastUserMessage;
 
         if (isFirstMessage) {
-          const raw   = extractText(lastUserMessage);
+          const raw = extractText(lastUserMessage);
           const title = raw.length > 60 ? raw.slice(0, 60) + "..." : raw;
           updateTitle(chatId, title);
         }
@@ -136,9 +142,9 @@ export default function ChatView({
 
     setMessages(
       stored.messages.map((m) => ({
-        id:        m.id,
-        role:      m.role,
-        parts:     [{ type: "text" as const, text: m.content }],
+        id: m.id,
+        role: m.role,
+        parts: [{ type: "text" as const, text: m.content }],
         createdAt: new Date(m.createdAt),
       })),
     );
