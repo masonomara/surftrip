@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Surftrip
 
-## Getting Started
+AI-powered surf trip planning assistant. Ask about any destination — get real-time swell forecasts, wind conditions, tides, gear recommendations, and travel logistics in one response.
 
-First, run the development server:
+**Live demo:** https://www.surftrip.fun
+
+## Stack
+
+- Next.js 16 (App Router) + React 19
+- OpenAI gpt-4o-mini via Vercel AI SDK
+- Supabase (auth + PostgreSQL) — optional
+- TypeScript (strict)
+
+## Setup
+
+### 1. Clone & install
+
+```bash
+git clone <repo-url>
+cd surftrip
+npm install
+```
+
+### 2. Environment variables
+
+Create `.env.local` using `.env.example` as a template. Fill in your OpenAI key — the Supabase vars are optional, see below.
+
+### 3. Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. The app works immediately — conversation history is stored in localStorage.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Optional: Supabase (auth + persistent history)
 
-## Learn More
+Without Supabase the app runs in guest-only mode. To enable user accounts and cross-device conversation history, add Supabase:
 
-To learn more about Next.js, take a look at the following resources:
+### 1. Add credentials to `.env.local`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 2. Run the schema in your Supabase SQL editor
 
-## Deploy on Vercel
+Copy the contents of [`lib/supabase/schema.sql`](lib/supabase/schema.sql) and run it in the Supabase SQL editor. This creates the tables, indexes, triggers, and RLS policies.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Once both env vars are present, sign-up and login become available at `/signup` and `/login`.
