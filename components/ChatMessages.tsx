@@ -5,6 +5,8 @@ import { isTextUIPart } from "ai";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AppMessage } from "@/lib/types";
+import { useProcessLog } from "@/lib/process-log-context";
+import ThinkingIndicator from "./ThinkingIndicator";
 import styles from "./ChatMessages.module.css";
 
 // ── Markdown renderer overrides ────────────────────────────────────────────
@@ -21,6 +23,7 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
     h1: ({ ...props }) => <h1 className={styles.mdH1} {...props} />,
     h2: ({ ...props }) => <h2 className={styles.mdH2} {...props} />,
     h3: ({ ...props }) => <h3 className={styles.mdH3} {...props} />,
+    h4: ({ ...props }) => <h3 className={styles.mdH4} {...props} />,
     strong: ({ ...props }) => <strong className={styles.mdStrong} {...props} />,
     em: ({ ...props }) => <em className={styles.mdEm} {...props} />,
     hr: ({ ...props }) => <hr className={styles.mdHr} {...props} />,
@@ -71,18 +74,29 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
 type Props = {
   messages: AppMessage[];
   isStreaming: boolean;
+  isActive: boolean;
   error: Error | null;
 };
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function ChatMessages({ messages, isStreaming, error }: Props) {
+export default function ChatMessages({
+  messages,
+  isStreaming,
+  isActive,
+  error,
+}: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const { steps } = useProcessLog();
+
+  const lastActiveStep = isActive
+    ? ([...steps].reverse().find((s) => s.status === "active") ?? null)
+    : null;
 
   // Scroll to the bottom whenever a new message arrives or content streams in.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isStreaming]);
+  }, [messages, isStreaming, isActive]);
 
   if (messages.length === 0) {
     return (
@@ -143,6 +157,12 @@ export default function ChatMessages({ messages, isStreaming, error }: Props) {
           </div>
         );
       })}
+
+      {isActive && lastActiveStep !== null && (
+        <div className={styles.message}>
+          <ThinkingIndicator label={lastActiveStep.label} />
+        </div>
+      )}
 
       {error && (
         <div className={styles.error}>

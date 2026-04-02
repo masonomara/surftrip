@@ -109,11 +109,37 @@
 
 /* ── Tool step detail ───────────────── */
 
+.params {
+  margin: 0 0 2px 15px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 .detail {
-  margin: 0 0 4px 15px;
+  margin: 0 0 2px 15px;
   color: var(--text-tertiary);
   font-size: 12px;
   line-height: 16px;
+}
+
+.apiLinkRow {
+  margin: 0 0 6px 15px;
+}
+
+.apiLink {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 15px;
+  text-decoration: none;
+  opacity: 0.7;
+}
+
+.apiLink:hover {
+  color: var(--brand-primary);
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* ── Source links ───────────────────── */

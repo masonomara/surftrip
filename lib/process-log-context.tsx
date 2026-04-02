@@ -35,9 +35,11 @@ export function ProcessLogProvider({ children }: Props) {
           if (s.id !== event.id || s.kind !== "tool") return s;
           return {
             ...s,
-            label: event.label,
-            status: "done" as const,
-            detail: event.detail,
+            label:   event.label,
+            status:  "done" as const,
+            detail:  event.detail,
+            params:  event.params,
+            apiUrl:  event.apiUrl,
             sources: event.sources,
           };
         });

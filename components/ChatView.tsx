@@ -172,6 +172,7 @@ export default function ChatView({
       <ChatMessages
         messages={messages}
         isStreaming={status === "streaming"}
+        isActive={isActive}
         error={error ?? null}
       />
       <ChatInput

@@ -256,6 +256,8 @@ export type ProcessStep =
       label: string;
       status: "active" | "done" | "error";
       detail?: string;
+      params?: string;
+      apiUrl?: string;
       sources?: ProcessSource[];
     };
 
@@ -268,6 +270,8 @@ export type ProcessDataEvent =
       toolName: string;
       label: string;
       detail?: string;
+      params?: string;
+      apiUrl?: string;
       sources?: ProcessSource[];
     }
   | { id: string; kind: "tool-error"; toolName: string; label: string; error: string };

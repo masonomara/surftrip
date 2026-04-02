@@ -44,19 +44,39 @@ export default function ProcessLog({ onClose }: Props) {
       </div>
 
       <div className={styles.events}>
-        {steps.length === 0 ? (
+        {steps.filter((s) => s.kind === "tool").length === 0 ? (
           <p className={styles.empty}>Steps will appear here as the AI works.</p>
         ) : (
-          steps.map((step) => (
+          steps.filter((s) => s.kind === "tool").map((step) => (
             <div key={step.id} className={styles.event}>
               <div className={styles.eventHeader}>
                 <span className={dotClass(step)} />
                 <span className={styles.label}>{step.label}</span>
               </div>
 
-              {/* Tool steps can have a one-line detail summary below the label */}
+              {/* Input params — what was queried */}
+              {step.kind === "tool" && step.params && (
+                <p className={styles.params}>{step.params}</p>
+              )}
+
+              {/* Result detail — what came back */}
               {step.kind === "tool" && step.detail && (
                 <p className={styles.detail}>{step.detail}</p>
+              )}
+
+              {/* API link — clickable endpoint */}
+              {step.kind === "tool" && step.apiUrl && (
+                <p className={styles.apiLinkRow}>
+                  <a
+                    href={step.apiUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.apiLink}
+                    title={step.apiUrl}
+                  >
+                    {new URL(step.apiUrl).hostname} ↗
+                  </a>
+                </p>
               )}
 
               {/* Web search steps can have citation source links */}

@@ -135,6 +135,21 @@ function toolDoneLabel(toolName: string): string {
   return labels[toolName] ?? toolName;
 }
 
+// Convert a compass bearing in degrees to a short cardinal/intercardinal label.
+function degreesToCompass(deg: number): string {
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+// Return the first non-null number from an array of Json values.
+function firstNum(arr: Json): number | null {
+  if (!Array.isArray(arr)) return null;
+  for (const v of arr) {
+    if (typeof v === "number") return v;
+  }
+  return null;
+}
+
 // Extract a short summary string from a tool's result to display as detail
 // text under the tool step in the process log. Returns undefined if the result
 // doesn't contain anything useful to show.
@@ -150,29 +165,75 @@ function toolDetail(toolName: string, result: Json): string | undefined {
         return `${r.displayName} → ${r.lat}°, ${r.lon}°`;
       }
       break;
-    case "get_swell_forecast":
-      if (r.hourly) return "7-day marine forecast loaded";
+
+    case "get_swell_forecast": {
+      if (!r.daily || typeof r.daily !== "object" || Array.isArray(r.daily)) break;
+      const daily = r.daily as Record<string, Json>;
+      const maxH   = firstNum(daily.wave_height_max);
+      const maxP   = firstNum(daily.swell_wave_period_max);
+      const dir    = firstNum(daily.wave_direction_dominant);
+      const days   = Array.isArray(daily.time) ? daily.time.length : null;
+      const parts: string[] = [];
+      if (maxH != null && maxP != null) parts.push(`${maxH}m @ ${maxP}s`);
+      if (dir  != null)                 parts.push(degreesToCompass(dir));
+      if (days != null)                 parts.push(`${days}-day forecast`);
+      if (parts.length) return parts.join(" · ");
       break;
-    case "get_wind_and_weather":
-      if (r.hourly) return "7-day weather forecast loaded";
+    }
+
+    case "get_wind_and_weather": {
+      if (!r.hourly || typeof r.hourly !== "object" || Array.isArray(r.hourly)) break;
+      const hourly = r.hourly as Record<string, Json>;
+      const speed  = firstNum(hourly.windspeed_10m);
+      const gust   = firstNum(hourly.windgusts_10m);
+      const dirDeg = firstNum(hourly.winddirection_10m);
+      const days   = r.daily && typeof r.daily === "object" && !Array.isArray(r.daily)
+        ? (Array.isArray((r.daily as Record<string, Json>).time)
+            ? ((r.daily as Record<string, Json>).time as Json[]).length
+            : null)
+        : null;
+      const parts: string[] = [];
+      if (speed != null) {
+        const dir = dirDeg != null ? ` ${degreesToCompass(dirDeg)}` : "";
+        parts.push(`${Math.round(speed)} mph${dir}`);
+      }
+      if (gust != null) parts.push(`gusts ${Math.round(gust)} mph`);
+      if (days != null) parts.push(`${days}-day forecast`);
+      if (parts.length) return parts.join(" · ");
       break;
-    case "get_tide_schedule":
+    }
+
+    case "get_tide_schedule": {
       if (Array.isArray(r.predictions)) {
-        return `${r.predictions.length} tide events`;
+        type Prediction = { t: string; v: string; type: string };
+        const preds = r.predictions as Prediction[];
+        const nextHigh = preds.find((p) => p.type === "H");
+        const station  = typeof r.stationName === "string" ? r.stationName : null;
+        const parts: string[] = [];
+        if (station) parts.push(station);
+        if (nextHigh) {
+          const time = nextHigh.t.split(" ")[1]?.slice(0, 5) ?? nextHigh.t;
+          parts.push(`Next high: ${Number(nextHigh.v).toFixed(1)}ft at ${time}`);
+        }
+        return parts.length ? parts.join(" · ") : `${preds.length} tide events`;
       }
       if (typeof r.error === "string") return r.error;
       break;
+    }
+
     case "get_buoy_observations":
       if (r.waveHeight != null && r.dominantPeriod != null) {
         return `${r.waveHeight}m @ ${r.dominantPeriod}s`;
       }
       if (typeof r.error === "string") return r.error;
       break;
+
     case "get_destination_info":
       if (r.currencyCode && r.timezone) {
         return `${r.name} — ${r.currencyCode} — ${r.timezone}`;
       }
       break;
+
     case "get_exchange_rate":
       if (r.rate != null && r.from && r.to) {
         return `1 ${r.from} = ${Number(r.rate).toLocaleString()} ${r.to}`;
@@ -180,6 +241,117 @@ function toolDetail(toolName: string, result: Json): string | undefined {
       break;
   }
   return undefined;
+}
+
+// Build the actual API URL that was (or would be) called for a given tool,
+// using the args captured from onChunk and the result from onStepFinish.
+// Returns a clickable URL the user can open to see the raw API response.
+function toolApiUrl(
+  toolName: string,
+  args: Json,
+  result: Json,
+): string | undefined {
+  const a =
+    args && typeof args === "object" && !Array.isArray(args)
+      ? (args as Record<string, Json>)
+      : {};
+  const r =
+    result && typeof result === "object" && !Array.isArray(result)
+      ? (result as Record<string, Json>)
+      : {};
+
+  switch (toolName) {
+    case "get_coordinates": {
+      if (typeof a.query !== "string") return undefined;
+      const url = new URL("https://nominatim.openstreetmap.org/search");
+      url.searchParams.set("q", a.query);
+      url.searchParams.set("format", "json");
+      url.searchParams.set("limit", "1");
+      return url.toString();
+    }
+    case "get_swell_forecast": {
+      if (a.latitude == null || a.longitude == null) return undefined;
+      const url = new URL("https://marine-api.open-meteo.com/v1/marine");
+      url.searchParams.set("latitude",      String(a.latitude));
+      url.searchParams.set("longitude",     String(a.longitude));
+      url.searchParams.set("forecast_days", String(a.forecast_days ?? 5));
+      url.searchParams.set("timezone",      String(a.timezone ?? "auto"));
+      url.searchParams.set("hourly", "wave_height,swell_wave_height,swell_wave_period,swell_wave_direction,sea_surface_temperature");
+      url.searchParams.set("daily",  "wave_height_max,swell_wave_height_max,swell_wave_period_max,wave_direction_dominant");
+      return url.toString();
+    }
+    case "get_wind_and_weather": {
+      if (a.latitude == null || a.longitude == null) return undefined;
+      const url = new URL("https://api.open-meteo.com/v1/forecast");
+      url.searchParams.set("latitude",      String(a.latitude));
+      url.searchParams.set("longitude",     String(a.longitude));
+      url.searchParams.set("forecast_days", String(a.forecast_days ?? 5));
+      url.searchParams.set("timezone",      String(a.timezone ?? "auto"));
+      url.searchParams.set("wind_speed_unit", "mph");
+      url.searchParams.set("hourly", "windspeed_10m,winddirection_10m,windgusts_10m,temperature_2m,precipitation_probability");
+      url.searchParams.set("daily",  "sunrise,sunset,uv_index_max");
+      return url.toString();
+    }
+    case "get_tide_schedule": {
+      if (typeof r.stationId === "string") {
+        return `https://tidesandcurrents.noaa.gov/stationhome.html?id=${r.stationId}`;
+      }
+      return undefined;
+    }
+    case "get_buoy_observations": {
+      if (typeof a.station_id !== "string") return undefined;
+      return `https://www.ndbc.noaa.gov/station_page.php?station=${a.station_id}`;
+    }
+    case "get_destination_info": {
+      if (typeof a.country !== "string") return undefined;
+      return `https://restcountries.com/v3.1/name/${encodeURIComponent(a.country)}?fields=name,currencies,languages,timezones,capital,region`;
+    }
+    case "get_exchange_rate": {
+      if (typeof a.from !== "string" || typeof a.to !== "string") return undefined;
+      return `https://api.frankfurter.app/latest?from=${a.from.toUpperCase()}&to=${a.to.toUpperCase()}`;
+    }
+    default:
+      return undefined;
+  }
+}
+
+// Build a short human-readable summary of the tool's input arguments.
+function toolInputSummary(toolName: string, args: Json): string | undefined {
+  const a =
+    args && typeof args === "object" && !Array.isArray(args)
+      ? (args as Record<string, Json>)
+      : {};
+
+  switch (toolName) {
+    case "get_coordinates":
+      return typeof a.query === "string" ? `"${a.query}"` : undefined;
+    case "get_swell_forecast":
+    case "get_wind_and_weather": {
+      if (a.latitude == null || a.longitude == null) return undefined;
+      const lat  = Number(a.latitude).toFixed(2);
+      const lon  = Number(a.longitude).toFixed(2);
+      const days = a.forecast_days ?? 5;
+      return `${lat}°, ${lon}° · ${days} days`;
+    }
+    case "get_tide_schedule": {
+      if (a.begin_date && a.end_date) {
+        return `${a.begin_date} → ${a.end_date}`;
+      }
+      return undefined;
+    }
+    case "get_buoy_observations":
+      return typeof a.station_id === "string"
+        ? `Station ${a.station_id}`
+        : undefined;
+    case "get_destination_info":
+      return typeof a.country === "string" ? a.country : undefined;
+    case "get_exchange_rate":
+      return typeof a.from === "string" && typeof a.to === "string"
+        ? `${a.from.toUpperCase()} → ${a.to.toUpperCase()}`
+        : undefined;
+    default:
+      return undefined;
+  }
 }
 
 // Extract web search citation URLs from a web_search_preview response.
@@ -255,6 +427,10 @@ export async function POST(req: Request) {
   return createUIMessageStreamResponse({
     stream: createUIMessageStream({
       execute: async ({ writer }) => {
+        // Keyed by toolCallId — lets us pass args from onChunk into onStepFinish
+        // where the tool result is available but args are not.
+        const toolCallArgsMap = new Map<string, Json>();
+
         const result = streamText({
           model: openai.responses("gpt-4o-mini"),
           system: SYSTEM_PROMPT,
@@ -268,6 +444,7 @@ export async function POST(req: Request) {
             // Stream a "tool-start" process event as soon as the model calls a
             // tool, so the ProcessLog shows activity before the result arrives.
             if (chunk.type === "tool-call") {
+              toolCallArgsMap.set(chunk.toolCallId, chunk.input as Json);
               writer.write({
                 type: "data-process",
                 data: {
@@ -284,10 +461,10 @@ export async function POST(req: Request) {
             // Stream a "tool-done" process event for each completed tool call,
             // including a detail summary and any web search citation sources.
             for (const tr of toolResults as ToolResultItem[]) {
-              const sources =
-                tr.toolName === "web_search_preview"
-                  ? extractSources(response.messages as ResponseMessage[])
-                  : undefined;
+              const args    = toolCallArgsMap.get(tr.toolCallId) ?? null;
+              const sources = tr.toolName === "web_search_preview"
+                ? extractSources(response.messages as ResponseMessage[])
+                : undefined;
 
               writer.write({
                 type: "data-process",
@@ -297,6 +474,8 @@ export async function POST(req: Request) {
                   toolName: tr.toolName,
                   label:    toolDoneLabel(tr.toolName),
                   detail:   toolDetail(tr.toolName, tr.output),
+                  params:   toolInputSummary(tr.toolName, args),
+                  apiUrl:   toolApiUrl(tr.toolName, args, tr.output),
                   sources:  sources?.length ? sources : undefined,
                 },
               });
