@@ -410,10 +410,15 @@ function extractSources(responseMessages: ResponseMessage[]): ProcessSource[] {
 // ── Route handler ──────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // If Supabase is not configured, skip auth and run in guest-only mode.
+  let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
+  let user = null;
+
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  }
 
   const { messages, chatId }: { messages: UIMessage[]; chatId: string } =
     await req.json();
@@ -437,7 +442,7 @@ export async function POST(req: Request) {
   // For authenticated users, verify the conversation belongs to them before
   // proceeding. RLS would block the DB write anyway, but this gives a cleaner
   // 403 response instead of a silent empty result.
-  if (user) {
+  if (user && supabase) {
     const { data: conversation } = await supabase
       .from("conversations")
       .select("id")
@@ -506,7 +511,7 @@ export async function POST(req: Request) {
           },
 
           onFinish: async ({ response }) => {
-            if (!user) return;
+            if (!user || !supabase) return;
 
             // Extract the assistant's reply as a plain string. The model
             // response content can be either an array of parts or a raw string
