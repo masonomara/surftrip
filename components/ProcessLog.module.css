@@ -3,7 +3,6 @@
 .panel {
   border-left: 1px solid var(--border-default);
   overflow-y: auto;
-  background: var(--surface-1);
   display: flex;
   flex-direction: column;
   font-family: var(--font-roboto-mono), var(--font-mono);
