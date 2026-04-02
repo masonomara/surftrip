@@ -16,7 +16,7 @@
   align-items: center;
   justify-content: space-between;
   height: 52px;
-  padding: 0 16px;
+  padding: 0 6px 0px 16px;
   gap: 8px;
 }
 
@@ -30,50 +30,49 @@
 .hideBtn {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  flex-shrink: 0;
   font-size: 14px;
-  line-height: 19px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--text-tertiary);
   background: transparent;
   border: none;
+  border-radius: 8px;
+  padding: 0 10px;
+  height: 36px;
   cursor: pointer;
-  padding: 4px 8px 4px 4px;
-  border-radius: 7px;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
+  transition: background var(--transition-fast);
+  margin: 0px -10px;
 }
 
 .hideBtn:hover {
-  background: var(--surface-3);
-  color: var(--text-primary);
+
+  color: var(--text-secondary);
 }
 
 .newChatBtn {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
   flex-shrink: 0;
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--text-primary);
   background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: 7px;
-  padding: 4px 10px 4px 8px;
+  border: none;
+  border-radius: 8px;
+  padding: 0 10px;
+  height: 36px;
   cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast),
-    border-color var(--transition-fast);
+  transition: background var(--transition-fast);
+  margin: 0px 6px;
+  margin-top: 8px;
 }
 
 .newChatBtn:hover {
-  background: var(--surface-3);
-  color: var(--text-primary);
-  border-color: var(--border-input);
+  background: var(--surface-2);
 }
 
 .sectionLabel {
@@ -132,16 +131,16 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-secondary);
-  font-size: 18px;
+  color: var(--text-tertiary);
   line-height: 1;
   padding: 4px;
   border-radius: 4px;
   margin-right: -4px;
+  margin-top: 2px;
 }
 
 .deleteBtn:hover {
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
 .itemRow:hover .deleteBtn,
@@ -158,30 +157,53 @@
 /* ── Footer ─────────────────────────── */
 
 .footer {
-  padding: 8px;
+  padding: 8px 6px;
   border-top: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 
 .signOut {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  flex-shrink: 0;
   font-size: 14px;
-  line-height: 19px;
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--text-primary);
   background: transparent;
   border: none;
-  color: var(--text-tertiary);
+  border-radius: 8px;
+  padding: 0 10px;
+  height: 36px;
   cursor: pointer;
+  transition: background var(--transition-fast);
 }
 
 .signOut:hover {
-  color: var(--text-primary);
+  background: var(--surface-2);
 }
 
 .signIn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  flex-shrink: 0;
   font-size: 14px;
-  line-height: 19px;
-  color: var(--text-tertiary);
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 0 10px;
+  height: 36px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
 }
 
 .signIn:hover {
-  color: var(--text-primary);
+  background: var(--surface-2);
 }
