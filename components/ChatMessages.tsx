@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { isTextUIPart } from "ai";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -68,6 +68,40 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
       );
     },
   };
+
+// ── Streaming-safe markdown ────────────────────────────────────────────────
+//
+// react-markdown re-parses the full string on every token. Incomplete markdown
+// tokens at the streaming cursor (e.g. a dangling `**` or `##`) cause the AST
+// to differ from the previous render, so React patches the DOM and the text
+// visibly jumps.
+//
+// Fix: split the text on paragraph boundaries and memoize each completed
+// block individually. Only the last block (currently streaming) re-renders
+// on every token; all prior blocks are frozen by React.memo.
+
+const MarkdownBlock = memo(
+  ({ content }: { content: string }) => (
+    <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {content}
+    </Markdown>
+  ),
+  (prev, next) => prev.content === next.content,
+);
+MarkdownBlock.displayName = "MarkdownBlock";
+
+function StreamingMarkdown({ text }: { text: string }) {
+  // Split on double (or more) newlines — the natural paragraph boundary in
+  // markdown. Blocks before the last one are complete and won't change again.
+  const blocks = useMemo(() => text.split(/\n\n+/), [text]);
+  return (
+    <>
+      {blocks.map((block, i) => (
+        <MarkdownBlock key={i} content={block} />
+      ))}
+    </>
+  );
+}
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -158,9 +192,17 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
     return () => clearInterval(id);
   }, [messages.length]);
 
-  // Scroll to the bottom whenever a new message arrives or content streams in.
+  // Scroll to the bottom on new messages or streaming updates.
+  // Use smooth scroll only when a new message is added — during streaming the
+  // content grows on every token, so smooth scroll would fight itself and
+  // appear jaggedy, especially on mobile.
+  const msgCountRef = useRef(messages.length);
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const isNewMessage = messages.length !== msgCountRef.current;
+    msgCountRef.current = messages.length;
+    bottomRef.current?.scrollIntoView({
+      behavior: isNewMessage ? "smooth" : "instant",
+    });
   }, [messages, isActive]);
 
   if (messages.length === 0) {
@@ -192,12 +234,7 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
           >
             <div className={styles.bubble}>
               {message.role === "assistant" ? (
-                <Markdown
-                  remarkPlugins={[remarkGfm]}
-                  components={markdownComponents}
-                >
-                  {text}
-                </Markdown>
+                <StreamingMarkdown text={text} />
               ) : (
                 text
               )}

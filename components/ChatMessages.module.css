@@ -119,6 +119,10 @@
   margin-top: 0.8em;
 }
 
+.mdP:first-child {
+  margin-top: 0;
+}
+
 .mdUl,
 .mdOl {
   margin-left: 0.8em;
