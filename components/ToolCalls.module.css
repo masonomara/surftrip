@@ -108,22 +108,25 @@
 
 /* ── Tool step detail ───────────────── */
 
-.params {
-  margin: 0 0 2px 15px;
-  color: var(--text-secondary);
+.params,
+.detail {
+  margin-bottom: 2px;
+  margin-left: 15px;
   font-size: 12px;
   line-height: 16px;
+}
+
+.params {
+  color: var(--text-secondary);
 }
 
 .detail {
-  margin: 0 0 2px 15px;
   color: var(--text-tertiary);
-  font-size: 12px;
-  line-height: 16px;
 }
 
 .apiLinkRow {
-  margin: 0 0 6px 15px;
+  margin-bottom: 6px;
+  margin-left: 15px;
 }
 
 .apiLink {
@@ -145,8 +148,8 @@
 
 .sources {
   list-style: none;
-  margin: 0 0 6px 15px;
-  padding: 0;
+  margin-bottom: 6px;
+  margin-left: 15px;
   display: flex;
   flex-direction: column;
   gap: 2px;

@@ -65,23 +65,17 @@
   --color-base-900: #2e3440;
   --color-base-950: #232831;
 
-  /* Accents — light mode (600) */
+  /* Accents — light mode */
   --color-red: #963548;
   --color-yellow: #a04f3d;
   --color-green: #4d6a4d;
-  --color-cyan: #3b6b71;
   --color-blue: #2f6b91;
-  --color-purple: #5e409d;
-  --color-magenta: #8c4f7a;
 
-  /* Accents — dark mode (400) */
+  /* Accents — dark mode */
   --color-red-dk: #963548;
   --color-yellow-dk: #a04f3d;
   --color-green-dk: #4d6a4d;
-  --color-cyan-dk: #3b6b71;
   --color-blue-dk: #2f6b91;
-  --color-purple-dk: #8b7ec8;
-  --color-magenta-dk: #8c4f7a;
 
   /* --- Light mode semantic tokens (default) --- */
 
@@ -100,10 +94,8 @@
 
   --brand-primary: var(--color-blue);
   --brand-focus: #1a4a89;
-  --brand-highlight: #eef3fb;
 
   --error-primary: var(--color-red);
-  --error-focus: #8d271f;
   --error-highlight: #ffeeed;
 
   --success-primary: var(--color-green);
@@ -141,10 +133,8 @@
 
     --brand-primary: var(--color-blue-dk);
     --brand-focus: #5a9ed1;
-    --brand-highlight: rgba(67, 133, 190, 0.15);
 
     --error-primary: var(--color-red-dk);
-    --error-focus: #e56960;
     --error-highlight: rgba(209, 77, 65, 0.15);
 
     --success-primary: var(--color-green-dk);

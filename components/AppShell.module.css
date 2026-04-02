@@ -2,8 +2,6 @@
   display: flex;
   flex-direction: row;
   height: 100svh;
-  min-height: 100svh;
-  max-height: 100svh;
   overflow: hidden;
   background: var(--surface-2);
 }
@@ -111,36 +109,6 @@
   position: relative;
 }
 
-/* ── Toggle buttons (desktop/tablet) ─────── */
-
-.toggleBtn {
-  position: fixed;
-  top: 10px;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.toggleBtn:hover {
-  background: var(--surface-3);
-  color: var(--text-primary);
-}
-
-.toolCallsToggle {
-  right: 12px;
-}
-
 /* ── Mobile header ────────────────────────── */
 
 .mobileHeader {
@@ -177,17 +145,7 @@
   color: var(--text-primary);
 }
 
-@media (min-width: 1240px) {
-  .toolCallsToggle {
-    display: none;
-  }
-}
-
 @media (max-width: 768px) {
-  .toggleBtn {
-    display: none;
-  }
-
   .mobileHeader {
     display: flex;
     align-items: center;

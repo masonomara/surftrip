@@ -3,10 +3,8 @@
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   flex-shrink: 0;
   overflow: hidden;
-  padding: 12px;
   background: var(--surface-1);
   height: 100%;
 }
@@ -17,16 +15,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 8px 8px;
+  height: 52px;
+  padding: 0 16px;
   gap: 8px;
 }
 
 .logo {
-  font-size: 15px;
-  line-height: 20px;
+  font-size: 21px;
+  line-height: 1.45;
   font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
 }
 
 .hideBtn {
@@ -79,13 +77,12 @@
 }
 
 .sectionLabel {
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  padding: 0 8px 4px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  margin-top: 12px;
+  padding: 6px 16px;
+  height: 32px;
 }
 
 /* ── Nav / conversation list ────────── */
@@ -98,10 +95,10 @@
 .itemRow {
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 10px;
+  margin: 0 6px;
   border-radius: 8px;
-  height: 32px;
-  margin-bottom: 2px;
+  height: 36px;
   cursor: pointer;
 }
 
@@ -125,7 +122,7 @@
   text-overflow: ellipsis;
 }
 
-.active {
+.itemRow.active {
   background: var(--surface-3);
 }
 
@@ -138,7 +135,7 @@
   color: var(--text-secondary);
   font-size: 18px;
   line-height: 1;
-  padding: 4px 4px;
+  padding: 4px;
   border-radius: 4px;
   margin-right: -4px;
 }
@@ -173,7 +170,6 @@
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  padding: 0;
 }
 
 .signOut:hover {

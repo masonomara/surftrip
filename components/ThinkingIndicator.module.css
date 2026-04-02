@@ -14,44 +14,29 @@
   color: var(--text-primary);
 }
 
-.dots {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.squiggle {
   flex-shrink: 0;
+  overflow: hidden;
 }
 
-/* Animated dot — active/thinking state */
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--warning-primary);
-  animation: dotPulse 1.2s ease-in-out infinite;
+.squigglePath {
+  stroke: var(--warning-primary);
+  animation: squiggleScroll 1.5s linear infinite;
 }
 
-.dot:nth-child(1) { animation-delay: 0s; }
-.dot:nth-child(2) { animation-delay: 0.2s; }
-.dot:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes dotPulse {
-  0%, 80%, 100% {
-    opacity: 0.25;
-    transform: scale(0.85);
+@keyframes squiggleScroll {
+  0% {
+    transform: translateX(0);
   }
-  40% {
-    opacity: 1;
-    transform: scale(1);
+  100% {
+    transform: translateX(-16px);
   }
 }
 
-/* Static dot — complete state */
-.dotStatic {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--success-primary);
-  opacity: 0.8;
+@media (prefers-reduced-motion: reduce) {
+  .squigglePath {
+    animation: none;
+  }
 }
 
 .label {
@@ -63,11 +48,4 @@
 .arrow {
   color: var(--text-tertiary);
   flex-shrink: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dot {
-    animation: none;
-    opacity: 0.6;
-  }
 }

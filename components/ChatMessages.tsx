@@ -79,11 +79,7 @@ type Props = {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function ChatMessages({
-  messages,
-  isActive,
-  error,
-}: Props) {
+export default function ChatMessages({ messages, isActive, error }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { steps, openPanel } = useToolCalls();
 
@@ -96,31 +92,38 @@ export default function ChatMessages({
   const lastMessage = messages.at(-1);
   const lastAssistantHasText =
     lastMessage?.role === "assistant" &&
-    lastMessage.parts.filter(isTextUIPart).map((p) => p.text).join("").length > 0;
+    lastMessage.parts
+      .filter(isTextUIPart)
+      .map((p) => p.text)
+      .join("").length > 0;
 
   // Build "View buoy data, swell forecast" label from completed tool steps.
   const TOOL_LABELS: Record<string, string> = {
-    get_coordinates:       "location",
-    get_swell_forecast:    "swell forecast",
-    get_wind_and_weather:  "wind & weather",
-    get_tide_schedule:     "tides",
+    get_coordinates: "location",
+    get_swell_forecast: "swell forecast",
+    get_wind_and_weather: "wind & weather",
+    get_tide_schedule: "tides",
     get_buoy_observations: "buoy data",
-    get_destination_info:  "destination info",
-    get_exchange_rate:     "exchange rate",
-    web_search_preview:    "web search",
+    get_destination_info: "destination info",
+    get_exchange_rate: "exchange rate",
+    web_search_preview: "web search",
   };
   const completedLabels = [
     ...new Set(
       steps
         .filter((s) => s.kind === "tool" && s.status === "done")
-        .map((s) => (s.kind === "tool" ? (TOOL_LABELS[s.toolName] ?? s.toolName) : ""))
+        .map((s) =>
+          s.kind === "tool" ? (TOOL_LABELS[s.toolName] ?? s.toolName) : "",
+        )
         .filter(Boolean),
     ),
   ];
   const viewLabel =
-    completedLabels.length === 0 ? "" :
-    completedLabels.length <= 3 ? `View ${completedLabels.join(", ")}` :
-    `View ${completedLabels.slice(0, 2).join(", ")} +${completedLabels.length - 2} more`;
+    completedLabels.length === 0
+      ? ""
+      : completedLabels.length <= 3
+        ? `View ${completedLabels.join(", ")}`
+        : `View ${completedLabels.slice(0, 2).join(", ")} +${completedLabels.length - 2} more`;
 
   // Scroll to the bottom whenever a new message arrives or content streams in.
   useEffect(() => {
@@ -175,14 +178,22 @@ export default function ChatMessages({
       {/* Animated indicator — while tools run, before assistant text appears */}
       {isActive && lastActiveStep !== null && !lastAssistantHasText && (
         <div className={styles.message}>
-          <ThinkingIndicator mode="active" label={lastActiveStep.label} onClick={openPanel} />
+          <ThinkingIndicator
+            mode="active"
+            label={lastActiveStep.label}
+            onClick={openPanel}
+          />
         </div>
       )}
 
       {/* Complete indicator — only after response is fully done */}
       {!isActive && viewLabel && (
         <div className={styles.message}>
-          <ThinkingIndicator mode="complete" label={viewLabel} onClick={openPanel} />
+          <ThinkingIndicator
+            mode="complete"
+            label={viewLabel}
+            onClick={openPanel}
+          />
         </div>
       )}
 

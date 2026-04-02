@@ -156,13 +156,16 @@ export default function ConversationSidebar({
 
       <nav className={styles.nav}>
         {conversations.map((conversation) => (
-          <div key={conversation.id} className={styles.itemRow}>
+          <div
+            key={conversation.id}
+            className={`${styles.itemRow} ${
+              pathname === `/chat/${conversation.id}` ? styles.active : ""
+            }`}
+          >
             <Link
               href={`/chat/${conversation.id}`}
               onClick={onClose}
-              className={`${styles.item} ${
-                pathname === `/chat/${conversation.id}` ? styles.active : ""
-              }`}
+              className={styles.item}
             >
               {conversation.title}
             </Link>

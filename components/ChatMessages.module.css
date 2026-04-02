@@ -16,10 +16,6 @@
   width: 5px;
 }
 
-.messages::-webkit-scrollbar-track {
-  background: var(--surface-3);
-}
-
 .messages::-webkit-scrollbar-thumb {
   background: var(--border-input-hover);
   border-radius: 0px;
@@ -94,24 +90,6 @@
   color: var(--text-primary);
 }
 
-/* ── Streaming cursor ───────────────── */
-
-.cursor {
-  display: inline;
-  animation: blink 1s step-end infinite;
-  margin-left: 2px;
-}
-
-@keyframes blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-}
-
 /* ── Error ──────────────────────────── */
 
 .error {
@@ -126,64 +104,54 @@
 /* ── Markdown content ───────────────── */
 
 .mdP {
-  margin-bottom: 12px;
   font-size: 16px;
-  line-height: 21px;
-}
-
-.mdP:last-child {
-  margin-bottom: 0;
+  line-height: 1.45;
+  margin-top: 0.8em;
 }
 
 .mdUl,
 .mdOl {
-  margin: 0 0 12px 20px;
-}
-
-.mdUl:last-child,
-.mdOl:last-child {
-  margin-bottom: 0;
+  margin-left: 0.8em;
 }
 
 .mdLi {
-  margin-bottom: 4px;
   font-size: 16px;
-  line-height: 21px;
+  line-height: 1.45;
+  margin-left: 1.25em;
+  margin-top: 0.4em;
 }
 
 .mdH1,
 .mdH2,
-.mdH3 {
+.mdH3,
+.mdH4 {
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 8px;
-  margin-top: 16px;
+  margin-top: 0.8em;
 }
 
-.mdH1:first-child,
-.mdH2:first-child,
-.mdH3:first-child {
+:is(.mdH1, .mdH2, .mdH3, .mdH4):first-child {
   margin-top: 0;
 }
 
 .mdH1 {
-  font-size: 20px;
-  line-height: 26px;
+  font-size: 27px;
+  line-height: 1.45;
 }
 
 .mdH2 {
-  font-size: 18px;
-  line-height: 24px;
+  font-size: 21px;
+  line-height: 1.45;
 }
 
 .mdH3 {
-  font-size: 16px;
-  line-height: 21px;
+  font-size: 19px;
+  line-height: 1.45;
 }
 
 .mdH4 {
   font-size: 16px;
-  line-height: 21px;
+  line-height: 1.45;
 }
 
 .mdStrong {
@@ -197,14 +165,12 @@
 .mdHr {
   border: none;
   border-top: 1px solid var(--border-default);
-  margin: 16px 0;
 }
 
 .mdBlockquote {
   border-left: 3px solid var(--border-input-hover);
   padding-left: 12px;
   color: var(--text-secondary);
-  margin: 0 0 12px;
 }
 
 .mdA {
@@ -219,14 +185,13 @@
 
 .mdTableWrap {
   overflow-x: auto;
-  margin-bottom: 12px;
 }
 
 .mdTable {
   border-collapse: collapse;
   width: 100%;
   font-size: 14px;
-  line-height: 19px;
+  line-height: 1.45;
 }
 
 .mdTh,
@@ -247,9 +212,8 @@
   border-radius: 8px;
   padding: 12px 16px;
   overflow-x: auto;
-  margin-bottom: 12px;
   font-size: 13px;
-  line-height: 18px;
+  line-height: 1.45;
 }
 
 .mdCode {
@@ -257,13 +221,5 @@
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 13px;
-  line-height: 18px;
-}
-
-/* ── Reduced motion ─────────────────── */
-
-@media (prefers-reduced-motion: reduce) {
-  .cursor {
-    animation: none;
-  }
+  line-height: 1.45;
 }
