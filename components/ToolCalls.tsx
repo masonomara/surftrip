@@ -56,6 +56,19 @@ export default function ToolCalls() {
                 </p>
               )}
 
+              {step.kind === "tool" && step.apiUrl && step.status === "done" && (
+                <div className={styles.apiLinkRow}>
+                  <a
+                    href={step.apiUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.apiLink}
+                  >
+                    {new URL(step.apiUrl).hostname.replace(/^www\./, "")}
+                  </a>
+                </div>
+              )}
+
               {/* Web search steps can have citation source links */}
               {step.kind === "tool" && step.sources && step.sources.length > 0 && (
                 <ul className={styles.sources}>

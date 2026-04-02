@@ -294,63 +294,25 @@ function toolApiUrl(
   switch (toolName) {
     case "get_coordinates": {
       if (typeof a.query !== "string") return undefined;
-      const url = new URL("https://nominatim.openstreetmap.org/search");
-      url.searchParams.set("q", a.query);
-      url.searchParams.set("format", "json");
-      url.searchParams.set("limit", "1");
-      return url.toString();
+      return `https://www.openstreetmap.org/search?query=${encodeURIComponent(a.query)}`;
     }
-    case "get_swell_forecast": {
-      if (a.latitude == null || a.longitude == null) return undefined;
-      const url = new URL("https://marine-api.open-meteo.com/v1/marine");
-      url.searchParams.set("latitude", String(a.latitude));
-      url.searchParams.set("longitude", String(a.longitude));
-      url.searchParams.set("forecast_days", String(a.forecast_days ?? 5));
-      url.searchParams.set("timezone", String(a.timezone ?? "auto"));
-      url.searchParams.set(
-        "hourly",
-        "wave_height,swell_wave_height,swell_wave_period,swell_wave_direction,sea_surface_temperature",
-      );
-      url.searchParams.set(
-        "daily",
-        "wave_height_max,swell_wave_height_max,swell_wave_period_max,wave_direction_dominant",
-      );
-      return url.toString();
-    }
-    case "get_wind_and_weather": {
-      if (a.latitude == null || a.longitude == null) return undefined;
-      const url = new URL("https://api.open-meteo.com/v1/forecast");
-      url.searchParams.set("latitude", String(a.latitude));
-      url.searchParams.set("longitude", String(a.longitude));
-      url.searchParams.set("forecast_days", String(a.forecast_days ?? 5));
-      url.searchParams.set("timezone", String(a.timezone ?? "auto"));
-      url.searchParams.set("wind_speed_unit", "mph");
-      url.searchParams.set(
-        "hourly",
-        "windspeed_10m,winddirection_10m,windgusts_10m,temperature_2m,precipitation_probability",
-      );
-      url.searchParams.set("daily", "sunrise,sunset,uv_index_max");
-      return url.toString();
-    }
+    case "get_swell_forecast":
+    case "get_wind_and_weather":
+      return "https://open-meteo.com";
     case "get_tide_schedule": {
       if (typeof r.stationId === "string") {
         return `https://tidesandcurrents.noaa.gov/stationhome.html?id=${r.stationId}`;
       }
-      return undefined;
+      return "https://tidesandcurrents.noaa.gov";
     }
     case "get_buoy_observations": {
       if (typeof a.station_id !== "string") return undefined;
       return `https://www.ndbc.noaa.gov/station_page.php?station=${a.station_id}`;
     }
-    case "get_destination_info": {
-      if (typeof a.country !== "string") return undefined;
-      return `https://restcountries.com/v3.1/name/${encodeURIComponent(a.country)}?fields=name,currencies,languages,timezones,capital,region`;
-    }
-    case "get_exchange_rate": {
-      if (typeof a.from !== "string" || typeof a.to !== "string")
-        return undefined;
-      return `https://api.frankfurter.app/latest?from=${a.from.toUpperCase()}&to=${a.to.toUpperCase()}`;
-    }
+    case "get_destination_info":
+      return "https://restcountries.com";
+    case "get_exchange_rate":
+      return "https://www.frankfurter.app";
     default:
       return undefined;
   }
