@@ -6,8 +6,8 @@ import type { ProcessStep, ProcessDataEvent } from "@/lib/types";
 // ── Overview ───────────────────────────────────────────────────────────────
 //
 // The ToolCalls panel displays each AI tool call as it streams in.
-// This context lets ChatView (deep in the tree) push steps to ToolCalls
-// (a sibling, not a descendant) without prop-drilling through AppShell.
+// This context lets ChatView and ChatMessages (deep in the tree) push steps
+// and open/close the panel without prop-drilling through AppShell.
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -15,6 +15,9 @@ type ToolCallsContextType = {
   steps: ProcessStep[];
   addEvent: (event: ProcessDataEvent) => void;
   clearSteps: () => void;
+  isPanelOpen: boolean;
+  openPanel: () => void;
+  closePanel: () => void;
 };
 
 const ToolCallsContext = createContext<ToolCallsContextType | null>(null);
@@ -27,6 +30,7 @@ type Props = {
 
 export function ToolCallsProvider({ children }: Props) {
   const [steps, setSteps] = useState<ProcessStep[]>([]);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   function addEvent(event: ProcessDataEvent) {
     setSteps((prev) => {
@@ -76,10 +80,18 @@ export function ToolCallsProvider({ children }: Props) {
 
   function clearSteps() {
     setSteps([]);
+    setIsPanelOpen(false);
   }
 
   return (
-    <ToolCallsContext.Provider value={{ steps, addEvent, clearSteps }}>
+    <ToolCallsContext.Provider value={{
+      steps,
+      addEvent,
+      clearSteps,
+      isPanelOpen,
+      openPanel:  () => setIsPanelOpen(true),
+      closePanel: () => setIsPanelOpen(false),
+    }}>
       {children}
     </ToolCallsContext.Provider>
   );

@@ -73,7 +73,6 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
 
 type Props = {
   messages: AppMessage[];
-  isStreaming: boolean;
   isActive: boolean;
   error: Error | null;
 };
@@ -82,21 +81,51 @@ type Props = {
 
 export default function ChatMessages({
   messages,
-  isStreaming,
   isActive,
   error,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { steps } = useToolCalls();
+  const { steps, openPanel } = useToolCalls();
 
+  // Last active step drives the animated indicator label.
   const lastActiveStep = isActive
     ? ([...steps].reverse().find((s) => s.status === "active") ?? null)
     : null;
 
+  // Hide the animated indicator once the assistant starts outputting text.
+  const lastMessage = messages.at(-1);
+  const lastAssistantHasText =
+    lastMessage?.role === "assistant" &&
+    lastMessage.parts.filter(isTextUIPart).map((p) => p.text).join("").length > 0;
+
+  // Build "View buoy data, swell forecast" label from completed tool steps.
+  const TOOL_LABELS: Record<string, string> = {
+    get_coordinates:       "location",
+    get_swell_forecast:    "swell forecast",
+    get_wind_and_weather:  "wind & weather",
+    get_tide_schedule:     "tides",
+    get_buoy_observations: "buoy data",
+    get_destination_info:  "destination info",
+    get_exchange_rate:     "exchange rate",
+    web_search_preview:    "web search",
+  };
+  const completedLabels = [
+    ...new Set(
+      steps
+        .filter((s) => s.kind === "tool" && s.status === "done")
+        .map((s) => (s.kind === "tool" ? (TOOL_LABELS[s.toolName] ?? s.toolName) : ""))
+        .filter(Boolean),
+    ),
+  ];
+  const viewLabel =
+    completedLabels.length === 0 ? "" :
+    completedLabels.length <= 3 ? `View ${completedLabels.join(", ")}` :
+    `View ${completedLabels.slice(0, 2).join(", ")} +${completedLabels.length - 2} more`;
+
   // Scroll to the bottom whenever a new message arrives or content streams in.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isStreaming, isActive]);
+  }, [messages, isActive]);
 
   if (messages.length === 0) {
     return (
@@ -109,23 +138,18 @@ export default function ChatMessages({
     );
   }
 
-  const lastMessage = messages.at(-1);
-
   return (
     <div className={styles.messages}>
       {messages.map((message) => {
         // A message can contain multiple parts (text, tool calls, etc.).
-        // We only render text parts here; everything else is shown in the
-        // ProcessLog panel.
+        // We only render text parts here; tool call details are shown in the
+        // ToolCalls panel.
         const text = message.parts
           .filter(isTextUIPart)
           .map((part) => part.text)
           .join("");
 
         if (!text) return null;
-
-        // Show the blinking cursor on the last message while it's streaming.
-        const showStreamingCursor = isStreaming && message === lastMessage;
 
         return (
           <div
@@ -134,33 +158,31 @@ export default function ChatMessages({
           >
             <div className={styles.bubble}>
               {message.role === "assistant" ? (
-                <>
-                  <Markdown
-                    remarkPlugins={[remarkGfm]}
-                    components={markdownComponents}
-                  >
-                    {text}
-                  </Markdown>
-                  {showStreamingCursor && (
-                    <span className={styles.cursor}>▊</span>
-                  )}
-                </>
-              ) : (
-                <>
+                <Markdown
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents}
+                >
                   {text}
-                  {showStreamingCursor && (
-                    <span className={styles.cursor}>▊</span>
-                  )}
-                </>
+                </Markdown>
+              ) : (
+                text
               )}
             </div>
           </div>
         );
       })}
 
-      {isActive && lastActiveStep !== null && (
+      {/* Animated indicator — while tools run, before assistant text appears */}
+      {isActive && lastActiveStep !== null && !lastAssistantHasText && (
         <div className={styles.message}>
-          <ThinkingIndicator label={lastActiveStep.label} />
+          <ThinkingIndicator mode="active" label={lastActiveStep.label} onClick={openPanel} />
+        </div>
+      )}
+
+      {/* Complete indicator — only after response is fully done */}
+      {!isActive && viewLabel && (
+        <div className={styles.message}>
+          <ThinkingIndicator mode="complete" label={viewLabel} onClick={openPanel} />
         </div>
       )}
 

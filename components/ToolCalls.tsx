@@ -4,18 +4,8 @@ import { useToolCalls } from "@/lib/tool-calls-context";
 import type { ProcessStep } from "@/lib/types";
 import styles from "./ToolCalls.module.css";
 
-// ── Types ──────────────────────────────────────────────────────────────────
-
-type Props = {
-  onClose?: () => void;
-};
-
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-// Returns the CSS class string for a step's status dot:
-//   active → pulsing yellow dot (in progress)
-//   error  → red dot
-//   done   → green dot (default)
 function dotClass(step: ProcessStep): string {
   if (step.status === "active") return `${styles.dot} ${styles.dotActive}`;
   if (step.status === "error")  return `${styles.dot} ${styles.dotError}`;
@@ -24,23 +14,21 @@ function dotClass(step: ProcessStep): string {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function ToolCalls({ onClose }: Props) {
-  const { steps } = useToolCalls();
+export default function ToolCalls() {
+  const { steps, closePanel } = useToolCalls();
 
   return (
     <aside className={styles.panel}>
       <div className={styles.headerRow}>
         <h2 className={styles.heading}>Tool calls</h2>
-        {onClose && (
-          <button
-            onClick={onClose}
-            className={styles.closeBtn}
-            type="button"
-            aria-label="Close tool calls"
-          >
-            ×
-          </button>
-        )}
+        <button
+          onClick={closePanel}
+          className={styles.closeBtn}
+          type="button"
+          aria-label="Close tool calls"
+        >
+          ×
+        </button>
       </div>
 
       <div className={styles.events}>
@@ -54,17 +42,14 @@ export default function ToolCalls({ onClose }: Props) {
                 <span className={styles.label}>{step.label}</span>
               </div>
 
-              {/* Input params — what was queried */}
               {step.kind === "tool" && step.params && (
                 <p className={styles.params}>{step.params}</p>
               )}
 
-              {/* Result detail — what came back */}
               {step.kind === "tool" && step.detail && (
                 <p className={styles.detail}>{step.detail}</p>
               )}
 
-              {/* API link — clickable endpoint */}
               {step.kind === "tool" && step.apiUrl && (
                 <p className={styles.apiLinkRow}>
                   <a
@@ -79,7 +64,6 @@ export default function ToolCalls({ onClose }: Props) {
                 </p>
               )}
 
-              {/* Web search steps can have citation source links */}
               {step.kind === "tool" && step.sources && step.sources.length > 0 && (
                 <ul className={styles.sources}>
                   {step.sources.map((source) => (

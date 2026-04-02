@@ -171,7 +171,6 @@ export default function ChatView({
     <div className={styles.chat}>
       <ChatMessages
         messages={messages}
-        isStreaming={status === "streaming"}
         isActive={isActive}
         error={error ?? null}
       />

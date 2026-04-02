@@ -1,8 +1,17 @@
-.container {
+.btn {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 0;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+}
+
+.btn:hover .label {
+  color: var(--text-primary);
 }
 
 .dots {
@@ -12,6 +21,7 @@
   flex-shrink: 0;
 }
 
+/* Animated dot — active/thinking state */
 .dot {
   width: 6px;
   height: 6px;
@@ -35,11 +45,24 @@
   }
 }
 
+/* Static dot — complete state */
+.dotStatic {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success-primary);
+  opacity: 0.8;
+}
+
 .label {
   font-size: 14px;
   line-height: 19px;
   color: var(--text-secondary);
-  font-style: italic;
+}
+
+.arrow {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -106,7 +106,7 @@
 }
 
 .itemRow:hover {
-  background: var(--surface-3);
+  background: var(--surface-2);
 }
 
 .itemRow .item {
@@ -135,7 +135,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 18px;
   line-height: 1;
   padding: 4px 4px;
