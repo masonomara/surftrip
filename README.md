@@ -23,7 +23,7 @@ npm install
 
 ### 2. Environment variables
 
-Create `.env.local` using `.env.example` as a template. Fill in your OpenAI key — the Supabase vars are optional, see below.
+Create `.env.local` using `.env.example` as a template. Fill in your OpenAI key ([get one at platform.openai.com/api-keys](https://platform.openai.com/api-keys)) — the Supabase vars are optional, see below.
 
 ### 3. Run
 
