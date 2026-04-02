@@ -16,7 +16,7 @@ AI-powered surf trip planning assistant. Ask about any destination — get real-
 ### 1. Clone & install
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/masonomara/surftrip.git
 cd surftrip
 npm install
 ```
