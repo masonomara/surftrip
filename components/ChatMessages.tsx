@@ -23,7 +23,7 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
     h1: ({ ...props }) => <h1 className={styles.mdH1} {...props} />,
     h2: ({ ...props }) => <h2 className={styles.mdH2} {...props} />,
     h3: ({ ...props }) => <h3 className={styles.mdH3} {...props} />,
-    h4: ({ ...props }) => <h3 className={styles.mdH4} {...props} />,
+    h4: ({ ...props }) => <h4 className={styles.mdH4} {...props} />,
     strong: ({ ...props }) => <strong className={styles.mdStrong} {...props} />,
     em: ({ ...props }) => <em className={styles.mdEm} {...props} />,
     hr: ({ ...props }) => <hr className={styles.mdHr} {...props} />,
@@ -70,6 +70,17 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
   };
 
 // ── Constants ──────────────────────────────────────────────────────────────
+
+const TOOL_LABELS: Record<string, string> = {
+  get_coordinates: "location",
+  get_swell_forecast: "swell forecast",
+  get_wind_and_weather: "wind & weather",
+  get_tide_schedule: "tides",
+  get_buoy_observations: "buoy data",
+  get_destination_info: "destination info",
+  get_exchange_rate: "exchange rate",
+  web_search_preview: "web search",
+};
 
 const EXAMPLE_PROMPTS = [
   "When's the best time to surf Bocas del Toro?",
@@ -121,16 +132,6 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
       .join("").length > 0;
 
   // Build "View buoy data, swell forecast" label from completed tool steps.
-  const TOOL_LABELS: Record<string, string> = {
-    get_coordinates: "location",
-    get_swell_forecast: "swell forecast",
-    get_wind_and_weather: "wind & weather",
-    get_tide_schedule: "tides",
-    get_buoy_observations: "buoy data",
-    get_destination_info: "destination info",
-    get_exchange_rate: "exchange rate",
-    web_search_preview: "web search",
-  };
   const completedLabels = [
     ...new Set(
       steps

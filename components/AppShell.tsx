@@ -46,14 +46,12 @@ export default function AppShell({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const sidebarIsOverlay = isMobile;
-
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div ref={shellRef} className={styles.shell}>
       {/* Sidebar — overlay on mobile, docked on tablet/desktop */}
-      {sidebarIsOverlay ? (
+      {isMobile ? (
         <>
           {sidebarOpen && (
             <div

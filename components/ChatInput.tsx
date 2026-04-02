@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import styles from "./ChatInput.module.css";
-import { ArrowUp, Pause, Send } from "lucide-react";
+import { ArrowUp, Pause } from "lucide-react";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -124,7 +124,7 @@ export default function ChatInput({
               <>
                 <button
                   onClick={onClear}
-                  disabled={isActive || isEmpty}
+                  disabled={isEmpty}
                   className={`${styles.clearButton}${isEmpty ? ` ${styles.clearButtonHidden}` : ""}`}
                   type="button"
                 >

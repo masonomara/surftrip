@@ -16,6 +16,7 @@ function dotClass(step: ProcessStep): string {
 
 export default function ToolCalls() {
   const { steps, closePanel } = useToolCalls();
+  const toolSteps = steps.filter((s) => s.kind === "tool");
 
   return (
     <aside className={styles.panel}>
@@ -32,31 +33,27 @@ export default function ToolCalls() {
       </div>
 
       <div className={styles.events}>
-        {steps.filter((s) => s.kind === "tool").length === 0 ? (
+        {toolSteps.length === 0 ? (
           <p className={styles.empty}>Tool calls will appear here as the AI works.</p>
         ) : (
-          steps.filter((s) => s.kind === "tool").map((step) => (
+          toolSteps.map((step) => (
             <div key={step.id} className={styles.event}>
               <div className={styles.eventHeader}>
                 <span className={dotClass(step)} />
                 <span className={styles.label}>{step.label}</span>
               </div>
 
-              {step.kind === "tool" && step.params && (
+              {step.params && (
                 <p className={styles.params}>{step.params}</p>
               )}
 
-              {step.kind === "tool" && step.detail && (
-                <p
-                  className={
-                    step.status === "error" ? styles.detailError : styles.detail
-                  }
-                >
+              {step.detail && (
+                <p className={step.status === "error" ? styles.detailError : styles.detail}>
                   {step.detail}
                 </p>
               )}
 
-              {step.kind === "tool" && step.apiUrl && step.status === "done" && (
+              {step.apiUrl && step.status === "done" && (
                 <div className={styles.apiLinkRow}>
                   <a
                     href={step.apiUrl}
@@ -69,8 +66,7 @@ export default function ToolCalls() {
                 </div>
               )}
 
-              {/* Web search steps can have citation source links */}
-              {step.kind === "tool" && step.sources && step.sources.length > 0 && (
+              {step.sources && step.sources.length > 0 && (
                 <ul className={styles.sources}>
                   {step.sources.map((source) => (
                     <li key={source.url} className={styles.sourceItem}>

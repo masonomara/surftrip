@@ -3,9 +3,11 @@
 import styles from "./ThinkingIndicator.module.css";
 import { ChevronRight } from "lucide-react";
 
-type Props =
-  | { mode: "active";   label: string; onClick: () => void }
-  | { mode: "complete"; label: string; onClick: () => void };
+type Props = {
+  mode: "active" | "complete";
+  label: string;
+  onClick: () => void;
+};
 
 export default function ThinkingIndicator({ mode, label, onClick }: Props) {
   return (

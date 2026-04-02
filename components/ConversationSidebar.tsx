@@ -74,9 +74,7 @@ export default function ConversationSidebar({
         {conversations.map((conversation) => (
           <div
             key={conversation.id}
-            className={`${styles.itemRow} ${
-              pathname === `/chat/${conversation.id}` ? styles.active : ""
-            }`}
+            className={`${styles.itemRow} ${activeChatId === conversation.id ? styles.active : ""}`}
           >
             <Link
               href={`/chat/${conversation.id}`}
