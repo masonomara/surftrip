@@ -1,6 +1,7 @@
 "use client";
 
 import styles from "./ThinkingIndicator.module.css";
+import { ChevronRight } from "lucide-react";
 
 type Props =
   | { mode: "active";   label: string; onClick: () => void }
@@ -23,9 +24,7 @@ export default function ThinkingIndicator({ mode, label, onClick }: Props) {
         </div>
       )}
       <span className={styles.label}>{label}</span>
-      <svg className={styles.arrow} width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+      <ChevronRight size={12} className={styles.arrow} aria-hidden="true" />
     </button>
   );
 }

@@ -6,6 +6,7 @@ import ToolCalls from "./ToolCalls";
 import { useToolCalls } from "@/lib/tool-calls-context";
 import type { ConversationSummary } from "@/lib/types";
 import styles from "./AppShell.module.css";
+import { Menu } from "lucide-react";
 
 // ── Breakpoints ────────────────────────────────────────────────────────────
 
@@ -15,16 +16,6 @@ function getIsMobile(): boolean {
   if (typeof window === "undefined") return false;
   return window.innerWidth <= MOBILE_BREAKPOINT;
 }
-
-// ── Icons ──────────────────────────────────────────────────────────────────
-
-const HamburgerIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-    <rect x="2" y="5"    width="16" height="1.5" rx="0.75" fill="currentColor" />
-    <rect x="2" y="9.25" width="16" height="1.5" rx="0.75" fill="currentColor" />
-    <rect x="2" y="13.5" width="16" height="1.5" rx="0.75" fill="currentColor" />
-  </svg>
-);
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -98,7 +89,7 @@ export default function AppShell({
             aria-label="Toggle sidebar"
             type="button"
           >
-            <HamburgerIcon />
+            <Menu size={20} aria-hidden="true" />
           </button>
           <span className={styles.mobileWordmark}>Surftrip</span>
           {/* Spacer keeps wordmark centered */}

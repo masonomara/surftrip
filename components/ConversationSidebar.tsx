@@ -11,41 +11,7 @@ import {
 } from "@/lib/local-storage";
 import type { ConversationSummary } from "@/lib/types";
 import styles from "./ConversationSidebar.module.css";
-
-// ── Icons ──────────────────────────────────────────────────────────────────
-
-const ChevronLeftIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    aria-hidden="true"
-  >
-    <path
-      d="M10.5 3.5 6 8l4.5 4.5"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const PlusIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    aria-hidden="true"
-  >
-    <path
-      d="M8 2.5a.75.75 0 0 1 .75.75v4h4a.75.75 0 0 1 0 1.5h-4v4a.75.75 0 0 1-1.5 0v-4h-4a.75.75 0 0 1 0-1.5h4v-4A.75.75 0 0 1 8 2.5Z"
-      fill="currentColor"
-    />
-  </svg>
-);
+import { ChevronLeft, Plus } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -168,7 +134,7 @@ export default function ConversationSidebar({
       <div className={styles.header}>
         {onClose ? (
           <button onClick={onClose} className={styles.hideBtn} type="button">
-            <ChevronLeftIcon />
+            <ChevronLeft size={16} aria-hidden="true" />
             Hide
           </button>
         ) : (
@@ -181,7 +147,7 @@ export default function ConversationSidebar({
           type="button"
           aria-label="New chat"
         >
-          <PlusIcon />
+          <Plus size={16} aria-hidden="true" />
           New chat
         </button>
       </div>
