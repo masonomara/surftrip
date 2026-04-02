@@ -32,7 +32,7 @@ cp .env.example .env.local
 ```
 
 Add your OpenAI key to `.env.local` — get one at platform.openai.com/api-keys.
-The Supabase vars are optional (see below).
+No database needed. The app works immediately out of the box.
 
 ### 3. Run
 
@@ -40,7 +40,7 @@ The Supabase vars are optional (see below).
 npm run dev
 ```
 
-Open http://localhost:3000. Works immediately — no database required.
+Open http://localhost:3000.
 
 ---
 
