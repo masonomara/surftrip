@@ -21,9 +21,6 @@
   border-radius: 0px;
 }
 
-.messages::-webkit-scrollbar-thumb:hover {
-  background: var(--border-input-hover);
-}
 
 /* ── Empty state ────────────────────── */
 

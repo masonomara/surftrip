@@ -65,17 +65,11 @@
   --color-base-900: #2e3440;
   --color-base-950: #232831;
 
-  /* Accents — light mode */
+  /* Accents */
   --color-red: #963548;
   --color-yellow: #a04f3d;
   --color-green: #4d6a4d;
   --color-blue: #2f6b91;
-
-  /* Accents — dark mode */
-  --color-red-dk: #963548;
-  --color-yellow-dk: #a04f3d;
-  --color-green-dk: #4d6a4d;
-  --color-blue-dk: #2f6b91;
 
   /* --- Light mode semantic tokens (default) --- */
 
@@ -131,14 +125,14 @@
     --border-input: var(--color-base-700);
     --border-input-hover: var(--color-base-600);
 
-    --brand-primary: var(--color-blue-dk);
+    --brand-primary: var(--color-blue);
     --brand-focus: #5a9ed1;
 
-    --error-primary: var(--color-red-dk);
+    --error-primary: var(--color-red);
     --error-highlight: rgba(209, 77, 65, 0.15);
 
-    --success-primary: var(--color-green-dk);
-    --warning-primary: var(--color-yellow-dk);
+    --success-primary: var(--color-green);
+    --warning-primary: var(--color-yellow);
 
     /* Distinct from --text-primary (base-150) so hover is visible */
     --btn-primary-hover: var(--color-base-0);
