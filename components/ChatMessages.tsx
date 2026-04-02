@@ -106,6 +106,11 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
     ? ([...steps].reverse().find((s) => s.status === "active") ?? null)
     : null;
 
+  // Keep the label of the most recently seen step so the indicator doesn't
+  // flash back to "Thinking..." between tool calls.
+  const indicatorLabel =
+    lastActiveStep?.label ?? steps.at(-1)?.label ?? "Thinking...";
+
   // Hide the animated indicator once the assistant starts outputting text.
   const lastMessage = messages.at(-1);
   const lastAssistantHasText =
@@ -201,11 +206,11 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
       })}
 
       {/* Animated indicator — while tools run, before assistant text appears */}
-      {isActive && lastActiveStep !== null && !lastAssistantHasText && (
+      {isActive && !lastAssistantHasText && (
         <div className={styles.message}>
           <ThinkingIndicator
             mode="active"
-            label={lastActiveStep.label}
+            label={indicatorLabel}
             onClick={openPanel}
           />
         </div>
