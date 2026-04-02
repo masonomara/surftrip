@@ -5,7 +5,7 @@ import { isTextUIPart } from "ai";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AppMessage } from "@/lib/types";
-import { useToolCalls } from "@/lib/tool-calls-context";
+import { useToolCall } from "@/lib/tool-call-context";
 import ThinkingIndicator from "./ThinkingIndicator";
 import styles from "./ChatMessages.module.css";
 
@@ -144,7 +144,7 @@ type Props = {
 export default function ChatMessages({ messages, isActive, error }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [promptIndex, setPromptIndex] = useState(0);
-  const { steps, openPanel } = useToolCalls();
+  const { steps, openPanel } = useToolCall();
 
   // Last active step drives the animated indicator label.
   const lastActiveStep = isActive

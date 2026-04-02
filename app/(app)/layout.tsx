@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { ToolCallsProvider } from "@/lib/tool-calls-context";
+import { ToolCallProvider } from "@/lib/tool-call-context";
 import AppShell from "@/components/AppShell";
 import type { ConversationSummary } from "@/lib/types";
 
@@ -33,13 +33,13 @@ export default async function AppLayout({ children }: Props) {
   }
 
   return (
-    <ToolCallsProvider>
+    <ToolCallProvider>
       <AppShell
         serverConversations={serverConversations}
         isAuthenticated={!!user}
       >
         {children}
       </AppShell>
-    </ToolCallsProvider>
+    </ToolCallProvider>
   );
 }

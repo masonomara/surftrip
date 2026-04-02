@@ -6,12 +6,12 @@ import type { ProcessStep, ProcessDataEvent } from "@/lib/types";
 // ── Overview ───────────────────────────────────────────────────────────────
 //
 // The ToolCalls panel displays each AI tool call as it streams in.
-// This context lets ChatView and ChatMessages (deep in the tree) push steps
+// This context lets Chat and MessageList (deep in the tree) push steps
 // and open/close the panel without prop-drilling through AppShell.
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type ToolCallsContextType = {
+type ToolCallContextType = {
   steps: ProcessStep[];
   addEvent: (event: ProcessDataEvent) => void;
   clearSteps: () => void;
@@ -20,7 +20,7 @@ type ToolCallsContextType = {
   closePanel: () => void;
 };
 
-const ToolCallsContext = createContext<ToolCallsContextType | null>(null);
+const ToolCallContext = createContext<ToolCallContextType | null>(null);
 
 // ── Provider ───────────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ type Props = {
   children: React.ReactNode;
 };
 
-export function ToolCallsProvider({ children }: Props) {
+export function ToolCallProvider({ children }: Props) {
   const [steps, setSteps] = useState<ProcessStep[]>([]);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
@@ -89,7 +89,7 @@ export function ToolCallsProvider({ children }: Props) {
   }
 
   return (
-    <ToolCallsContext.Provider value={{
+    <ToolCallContext.Provider value={{
       steps,
       addEvent,
       clearSteps,
@@ -98,16 +98,16 @@ export function ToolCallsProvider({ children }: Props) {
       closePanel: () => setIsPanelOpen(false),
     }}>
       {children}
-    </ToolCallsContext.Provider>
+    </ToolCallContext.Provider>
   );
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-export function useToolCalls(): ToolCallsContextType {
-  const context = useContext(ToolCallsContext);
+export function useToolCall(): ToolCallContextType {
+  const context = useContext(ToolCallContext);
   if (!context) {
-    throw new Error("useToolCalls must be used within a <ToolCallsProvider>");
+    throw new Error("useToolCall must be used within a <ToolCallProvider>");
   }
   return context;
 }

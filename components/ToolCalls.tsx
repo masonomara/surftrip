@@ -1,6 +1,6 @@
 "use client";
 
-import { useToolCalls } from "@/lib/tool-calls-context";
+import { useToolCall } from "@/lib/tool-call-context";
 import type { ProcessStep } from "@/lib/types";
 import { ExternalLink, LogOut } from "lucide-react";
 import styles from "./ToolCalls.module.css";
@@ -16,7 +16,7 @@ function dotClass(step: ProcessStep): string {
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function ToolCalls() {
-  const { steps, closePanel } = useToolCalls();
+  const { steps, closePanel } = useToolCall();
   const toolSteps = steps.filter((s) => s.kind === "tool");
 
   return (
