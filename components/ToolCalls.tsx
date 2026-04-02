@@ -2,6 +2,7 @@
 
 import { useToolCalls } from "@/lib/tool-calls-context";
 import type { ProcessStep } from "@/lib/types";
+import { ExternalLink, LogOut } from "lucide-react";
 import styles from "./ToolCalls.module.css";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -21,20 +22,23 @@ export default function ToolCalls() {
   return (
     <aside className={styles.panel}>
       <div className={styles.headerRow}>
-        <h2 className={styles.heading}>Tool calls</h2>
+        <h2 className={styles.heading}>Tool Calls</h2>
         <button
           onClick={closePanel}
           className={styles.closeBtn}
           type="button"
           aria-label="Close tool calls"
         >
-          ×
+          Close
+          <LogOut size={18} strokeWidth={1.75} aria-hidden="true" />
         </button>
       </div>
 
       <div className={styles.events}>
         {toolSteps.length === 0 ? (
-          <p className={styles.empty}>Tool calls will appear here as the AI works.</p>
+          <p className={styles.empty}>
+            Tool calls will appear here as the AI works.
+          </p>
         ) : (
           toolSteps.map((step) => (
             <div key={step.id} className={styles.event}>
@@ -43,12 +47,14 @@ export default function ToolCalls() {
                 <span className={styles.label}>{step.label}</span>
               </div>
 
-              {step.params && (
-                <p className={styles.params}>{step.params}</p>
-              )}
+              {step.params && <p className={styles.params}>{step.params}</p>}
 
               {step.detail && (
-                <p className={step.status === "error" ? styles.detailError : styles.detail}>
+                <p
+                  className={
+                    step.status === "error" ? styles.detailError : styles.detail
+                  }
+                >
                   {step.detail}
                 </p>
               )}
@@ -62,6 +68,7 @@ export default function ToolCalls() {
                     className={styles.apiLink}
                   >
                     {new URL(step.apiUrl).hostname.replace(/^www\./, "")}
+                    <ExternalLink size={10} strokeWidth={1.75} aria-hidden="true" />
                   </a>
                 </div>
               )}
@@ -78,6 +85,7 @@ export default function ToolCalls() {
                         title={source.url}
                       >
                         {source.title}
+                        <ExternalLink size={10} strokeWidth={1.75} aria-hidden="true" />
                       </a>
                     </li>
                   ))}

@@ -21,14 +21,14 @@ export default function ThinkingIndicator({ mode, label, onClick }: Props) {
       {mode === "active" && (
         <svg
           className={styles.squiggle}
-          width="40"
-          height="8"
-          viewBox="0 0 40 8"
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
           aria-hidden="true"
         >
           <path
             className={styles.squigglePath}
-            d="M-16,4 C-12,1 -12,1 -8,4 C-4,7 -4,7 0,4 C4,1 4,1 8,4 C12,7 12,7 16,4 C20,1 20,1 24,4 C28,7 28,7 32,4 C36,1 36,1 40,4 C44,7 44,7 48,4 C52,1 52,1 56,4"
+            d="M-16,10 C-12,3 -12,3 -8,10 C-4,17 -4,17 0,10 C4,3 4,3 8,10 C12,17 12,17 16,10 C20,3 20,3 24,10 C28,17 28,17 32,10 C36,3 36,3 40,10 C44,17 44,17 48,10 C52,3 52,3 56,10"
             fill="none"
             strokeWidth="1.5"
             strokeLinecap="round"
@@ -36,7 +36,7 @@ export default function ThinkingIndicator({ mode, label, onClick }: Props) {
         </svg>
       )}
       <span className={styles.label}>{label}</span>
-      <ChevronRight size={12} className={styles.arrow} aria-hidden="true" />
+      <ChevronRight size={16} strokeWidth={1.75} className={styles.arrow} aria-hidden="true" />
     </button>
   );
 }
