@@ -13,16 +13,14 @@ type Props = {
 export default async function ChatPage({ params }: Props) {
   const { id } = await params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = supabase ? (await supabase.auth.getUser()).data.user : null;
 
   // Guest users get no server-side messages — their history lives in
   // localStorage and is loaded client-side by ChatView after mount.
   let initialMessages: AppMessage[] = [];
 
   if (user) {
-    const { data } = await supabase
+    const { data } = await supabase!
       .from("messages")
       .select("id, role, content, created_at")
       .eq("conversation_id", id)
