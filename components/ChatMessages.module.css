@@ -3,6 +3,7 @@
 .messages {
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 22px;
   display: flex;
   flex-direction: column;
@@ -21,9 +22,6 @@
   border-radius: 0px;
 }
 
-.messages::-webkit-scrollbar-thumb:hover {
-  background: var(--border-input-hover);
-}
 
 /* ── Empty state ────────────────────── */
 
@@ -119,6 +117,10 @@
   font-size: 16px;
   line-height: 1.45;
   margin-top: 0.8em;
+}
+
+.mdP:first-child {
+  margin-top: 0;
 }
 
 .mdUl,

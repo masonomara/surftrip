@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./ChatInput.module.css";
-import { Send } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 // Must match the `maxLength` attribute on the textarea below.
-const MAX_LENGTH = 10_000;
+export const MAX_LENGTH = 10_000;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +33,9 @@ export default function ChatInput({
   // uncontrolled; we only read the value at submit time.
   const valueRef = useRef("");
 
+  // Track length separately so we can derive isEmpty / isTooLong for UI.
+  const [inputLength, setInputLength] = useState(0);
+
   // Shrink/grow the textarea to fit its content, up to 200px tall.
   function autoResize() {
     const el = textareaRef.current;
@@ -43,6 +46,7 @@ export default function ChatInput({
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     valueRef.current = e.target.value;
+    setInputLength(e.target.value.length);
     autoResize();
   }
 
@@ -51,6 +55,17 @@ export default function ChatInput({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
+    }
+  }
+
+  function handleClearInput() {
+    onClear();
+    if (textareaRef.current) {
+      textareaRef.current.value = "";
+      valueRef.current = "";
+      setInputLength(0);
+      autoResize();
+      textareaRef.current.focus();
     }
   }
 
@@ -67,6 +82,7 @@ export default function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.value = "";
       valueRef.current = "";
+      setInputLength(0);
       autoResize();
     }
   }
@@ -81,6 +97,10 @@ export default function ChatInput({
 
   // ── Render ───────────────────────────────────────────────────────────────
 
+  const isEmpty = inputLength === 0;
+  const isTooLong = inputLength > MAX_LENGTH;
+  const sendDisabled = isEmpty || isTooLong || isActive;
+
   return (
     <div className={styles.wrapper}>
       <div className={styles.inputArea}>
@@ -92,37 +112,44 @@ export default function ChatInput({
             placeholder="Ask about a surf destination..."
             disabled={isActive}
             rows={1}
-            maxLength={MAX_LENGTH}
             className={styles.textarea}
           />
 
           <div className={styles.bottomRow}>
-            <button
-              onClick={onClear}
-              disabled={isActive}
-              className={styles.clearButton}
-              type="button"
-            >
-              Clear
-            </button>
+            <span className={styles.leftStatus}>
+              {isTooLong && <span className={styles.tooLong}>Too long</span>}
+            </span>
 
             {isActive ? (
               <button
                 onClick={onStop}
                 className={styles.stopButton}
                 type="button"
+                aria-label="Stop"
               >
-                Stop
+                <Square size={16} fill="currentColor" strokeWidth={0} aria-hidden="true" />
               </button>
             ) : (
-              <button
-                onClick={handleSubmit}
-                className={styles.sendButton}
-                type="button"
-                aria-label="Send"
-              >
-                <Send size={14} aria-hidden="true" />
-              </button>
+              <>
+                <button
+                  onClick={handleClearInput}
+                  disabled={isEmpty}
+                  className={`${styles.clearButton}${isEmpty ? ` ${styles.clearButtonHidden}` : ""}`}
+                  type="button"
+                >
+                  Clear
+                </button>
+
+                <button
+                  onClick={handleSubmit}
+                  disabled={sendDisabled}
+                  className={`${styles.sendButton}${sendDisabled ? ` ${styles.sendButtonDisabled}` : ""}`}
+                  type="button"
+                  aria-label="Send"
+                >
+                  <ArrowUp size={20} aria-hidden="true" />
+                </button>
+              </>
             )}
           </div>
         </div>

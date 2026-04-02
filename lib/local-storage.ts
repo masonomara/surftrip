@@ -32,6 +32,19 @@ function persist(conversations: LocalConversation[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
 }
 
+// Find a conversation by id, apply fn to produce an updated version, and
+// persist. Silently does nothing when the id doesn't exist.
+function mutateConversation(
+  id: string,
+  fn: (c: LocalConversation) => LocalConversation,
+): void {
+  const all = loadConversations();
+  const index = all.findIndex((c) => c.id === id);
+  if (index === -1) return;
+  all[index] = fn(all[index]);
+  persist(all);
+}
+
 export function createConversation(
   id: string,
   title: string,
@@ -53,9 +66,7 @@ export function appendMessages(
   messages: LocalMessage[],
 ): void {
   const all = loadConversations();
-  const index = all.findIndex(
-    (conversation) => conversation.id === conversationId,
-  );
+  const index = all.findIndex((c) => c.id === conversationId);
   if (index === -1) return;
 
   all[index] = {
@@ -73,27 +84,17 @@ export function appendMessages(
 }
 
 export function updateTitle(conversationId: string, title: string): void {
-  const all = loadConversations();
-  const index = all.findIndex(
-    (conversation) => conversation.id === conversationId,
-  );
-  if (index === -1) return;
-  all[index] = { ...all[index], title };
-  persist(all);
+  mutateConversation(conversationId, (c) => ({ ...c, title }));
 }
 
 export function clearConversationMessages(id: string): void {
-  const all = loadConversations();
-  const index = all.findIndex((conversation) => conversation.id === id);
-  if (index === -1) return;
-  all[index] = {
-    ...all[index],
+  mutateConversation(id, (c) => ({
+    ...c,
     messages: [],
     updatedAt: new Date().toISOString(),
-  };
-  persist(all);
+  }));
 }
 
 export function deleteConversation(id: string): void {
-  persist(loadConversations().filter((conversation) => conversation.id !== id));
+  persist(loadConversations().filter((c) => c.id !== id));
 }

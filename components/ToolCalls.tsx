@@ -1,7 +1,8 @@
 "use client";
 
-import { useToolCalls } from "@/lib/tool-calls-context";
+import { useToolCall } from "@/lib/tool-call-context";
 import type { ProcessStep } from "@/lib/types";
+import { ExternalLink, LogOut } from "lucide-react";
 import styles from "./ToolCalls.module.css";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -15,38 +16,40 @@ function dotClass(step: ProcessStep): string {
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function ToolCalls() {
-  const { steps, closePanel } = useToolCalls();
+  const { steps, closePanel } = useToolCall();
+  const toolSteps = steps.filter((s) => s.kind === "tool");
 
   return (
     <aside className={styles.panel}>
       <div className={styles.headerRow}>
-        <h2 className={styles.heading}>Tool calls</h2>
+        <h2 className={styles.heading}>Tool Calls</h2>
         <button
           onClick={closePanel}
           className={styles.closeBtn}
           type="button"
           aria-label="Close tool calls"
         >
-          ×
+          Close
+          <LogOut size={18} strokeWidth={1.75} aria-hidden="true" />
         </button>
       </div>
 
       <div className={styles.events}>
-        {steps.filter((s) => s.kind === "tool").length === 0 ? (
-          <p className={styles.empty}>Tool calls will appear here as the AI works.</p>
+        {toolSteps.length === 0 ? (
+          <p className={styles.empty}>
+            Tool calls will appear here as the AI works.
+          </p>
         ) : (
-          steps.filter((s) => s.kind === "tool").map((step) => (
+          toolSteps.map((step) => (
             <div key={step.id} className={styles.event}>
               <div className={styles.eventHeader}>
                 <span className={dotClass(step)} />
                 <span className={styles.label}>{step.label}</span>
               </div>
 
-              {step.kind === "tool" && step.params && (
-                <p className={styles.params}>{step.params}</p>
-              )}
+              {step.params && <p className={styles.params}>{step.params}</p>}
 
-              {step.kind === "tool" && step.detail && (
+              {step.detail && (
                 <p
                   className={
                     step.status === "error" ? styles.detailError : styles.detail
@@ -56,8 +59,21 @@ export default function ToolCalls() {
                 </p>
               )}
 
-              {/* Web search steps can have citation source links */}
-              {step.kind === "tool" && step.sources && step.sources.length > 0 && (
+              {step.apiUrl && step.status === "done" && (
+                <div className={styles.apiLinkRow}>
+                  <a
+                    href={step.apiUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.apiLink}
+                  >
+                    {new URL(step.apiUrl).hostname.replace(/^www\./, "")}
+                    <ExternalLink size={10} strokeWidth={1.75} aria-hidden="true" />
+                  </a>
+                </div>
+              )}
+
+              {step.sources && step.sources.length > 0 && (
                 <ul className={styles.sources}>
                   {step.sources.map((source) => (
                     <li key={source.url} className={styles.sourceItem}>
@@ -69,6 +85,7 @@ export default function ToolCalls() {
                         title={source.url}
                       >
                         {source.title}
+                        <ExternalLink size={10} strokeWidth={1.75} aria-hidden="true" />
                       </a>
                     </li>
                   ))}

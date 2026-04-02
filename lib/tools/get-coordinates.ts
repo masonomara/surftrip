@@ -26,7 +26,7 @@ export const get_coordinates = tool({
     url.searchParams.set("format", "json");
     url.searchParams.set("limit", "1");
 
-    const res = await fetch(url.toString(), {
+    const res = await fetch(url, {
       headers: { "User-Agent": "Surftrip/1.0 (contact@surftrip.fun)" },
     });
 

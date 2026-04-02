@@ -7,6 +7,13 @@ import type { Database } from "@/lib/types";
 // Returns a Supabase client for use in Server Components, route handlers, and
 // middleware. For Client Components and browser contexts, use client.ts instead.
 export async function createClient() {
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  ) {
+    return null;
+  }
+
   const cookieStore = await cookies();
 
   return createServerClient<Database>(

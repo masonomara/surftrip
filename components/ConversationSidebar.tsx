@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocalConversations } from "@/hooks/useLocalConversations";
-import { useConversationActions } from "@/hooks/useConversationActions";
+import { useConversations } from "@/hooks/useConversations";
 import type { ConversationSummary } from "@/lib/types";
 import styles from "./ConversationSidebar.module.css";
 import {
@@ -38,7 +38,7 @@ export default function ConversationSidebar({
   const activeChatId = pathname.startsWith("/chat/") ? pathname.slice(6) : null;
 
   const { handleNewChat, handleDeleteConversation, handleSignOut } =
-    useConversationActions({ isAuthenticated, activeChatId, onClose });
+    useConversations({ isAuthenticated, activeChatId, onClose });
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -74,9 +74,7 @@ export default function ConversationSidebar({
         {conversations.map((conversation) => (
           <div
             key={conversation.id}
-            className={`${styles.itemRow} ${
-              pathname === `/chat/${conversation.id}` ? styles.active : ""
-            }`}
+            className={`${styles.itemRow} ${activeChatId === conversation.id ? styles.active : ""}`}
           >
             <Link
               href={`/chat/${conversation.id}`}

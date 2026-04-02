@@ -11,6 +11,11 @@ import GuestHome from "@/components/GuestHome";
 
 export default async function HomePage() {
   const supabase = await createClient();
+
+  if (!supabase) {
+    return <GuestHome />;
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();

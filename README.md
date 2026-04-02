@@ -1,29 +1,38 @@
-# Surftrip
+# Surftrip — Frontend Engineer Technical Assessment
 
-AI-powered surf trip planning assistant. Ask about any destination — get real-time swell forecasts, wind conditions, tides, gear recommendations, and travel logistics in one response.
+AI-powered surf trip planning assistant. Users input a destination prompt,
+the app calls OpenAI, and streams a real-time response with swell forecasts,
+wind, tides, and travel logistics.
 
 **Live demo:** https://www.surftrip.fun
+
+---
 
 ## Stack
 
 - Next.js 16 (App Router) + React 19
 - OpenAI gpt-4o-mini via Vercel AI SDK
-- Supabase (auth + PostgreSQL) — optional
 - TypeScript (strict)
+- Supabase auth + PostgreSQL — optional, app works without it
 
 ## Setup
 
 ### 1. Clone & install
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/masonomara/surftrip.git
 cd surftrip
 npm install
 ```
 
-### 2. Environment variables
+### 2. Environment
 
-Create `.env.local` using `.env.example` as a template. Fill in your OpenAI key — the Supabase vars are optional, see below.
+```bash
+cp .env.example .env.local
+```
+
+Add your OpenAI key to `.env.local` — get one at platform.openai.com/api-keys.
+No database needed. The app works immediately out of the box.
 
 ### 3. Run
 
@@ -31,23 +40,28 @@ Create `.env.local` using `.env.example` as a template. Fill in your OpenAI key 
 npm run dev
 ```
 
-Open http://localhost:3000. The app works immediately — conversation history is stored in localStorage.
+Open http://localhost:3000.
 
 ---
 
-## Optional: Supabase (auth + persistent history)
+## Optional: persistent auth (Supabase)
 
-Without Supabase the app runs in guest-only mode. To enable user accounts and cross-device conversation history, add Supabase:
+Without Supabase, conversation history lives in localStorage. To enable user
+accounts and cross-device history:
 
-### 1. Add credentials to `.env.local`
+1. Add to `.env.local`:
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
+NEXT_PUBLIC_SUPABASE_URL=your_project_url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_anon_key
 ```
 
-### 2. Run the schema in your Supabase SQL editor
+2. Run `lib/supabase/schema.sql` in the Supabase SQL editor.
 
-Copy the contents of [`lib/supabase/schema.sql`](lib/supabase/schema.sql) and run it in the Supabase SQL editor. This creates the tables, indexes, triggers, and RLS policies.
+---
 
-Once both env vars are present, sign-up and login become available at `/signup` and `/login`.
+## Tests
+
+```bash
+npm run test
+```

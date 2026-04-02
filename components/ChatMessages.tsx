@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { isTextUIPart } from "ai";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AppMessage } from "@/lib/types";
-import { useToolCalls } from "@/lib/tool-calls-context";
+import { useToolCall } from "@/lib/tool-call-context";
 import ThinkingIndicator from "./ThinkingIndicator";
 import styles from "./ChatMessages.module.css";
 
@@ -23,7 +23,7 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
     h1: ({ ...props }) => <h1 className={styles.mdH1} {...props} />,
     h2: ({ ...props }) => <h2 className={styles.mdH2} {...props} />,
     h3: ({ ...props }) => <h3 className={styles.mdH3} {...props} />,
-    h4: ({ ...props }) => <h3 className={styles.mdH4} {...props} />,
+    h4: ({ ...props }) => <h4 className={styles.mdH4} {...props} />,
     strong: ({ ...props }) => <strong className={styles.mdStrong} {...props} />,
     em: ({ ...props }) => <em className={styles.mdEm} {...props} />,
     hr: ({ ...props }) => <hr className={styles.mdHr} {...props} />,
@@ -69,7 +69,52 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
     },
   };
 
+// ── Streaming-safe markdown ────────────────────────────────────────────────
+//
+// react-markdown re-parses the full string on every token. Incomplete markdown
+// tokens at the streaming cursor (e.g. a dangling `**` or `##`) cause the AST
+// to differ from the previous render, so React patches the DOM and the text
+// visibly jumps.
+//
+// Fix: split the text on paragraph boundaries and memoize each completed
+// block individually. Only the last block (currently streaming) re-renders
+// on every token; all prior blocks are frozen by React.memo.
+
+const MarkdownBlock = memo(
+  ({ content }: { content: string }) => (
+    <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {content}
+    </Markdown>
+  ),
+  (prev, next) => prev.content === next.content,
+);
+MarkdownBlock.displayName = "MarkdownBlock";
+
+function StreamingMarkdown({ text }: { text: string }) {
+  // Split on double (or more) newlines — the natural paragraph boundary in
+  // markdown. Blocks before the last one are complete and won't change again.
+  const blocks = useMemo(() => text.split(/\n\n+/), [text]);
+  return (
+    <>
+      {blocks.map((block, i) => (
+        <MarkdownBlock key={i} content={block} />
+      ))}
+    </>
+  );
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────
+
+const TOOL_LABELS: Record<string, string> = {
+  get_coordinates: "location",
+  get_swell_forecast: "swell forecast",
+  get_wind_and_weather: "wind & weather",
+  get_tide_schedule: "tides",
+  get_buoy_observations: "buoy data",
+  get_destination_info: "destination info",
+  get_exchange_rate: "exchange rate",
+  web_search_preview: "web search",
+};
 
 const EXAMPLE_PROMPTS = [
   "When's the best time to surf Bocas del Toro?",
@@ -99,12 +144,17 @@ type Props = {
 export default function ChatMessages({ messages, isActive, error }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [promptIndex, setPromptIndex] = useState(0);
-  const { steps, openPanel } = useToolCalls();
+  const { steps, openPanel } = useToolCall();
 
   // Last active step drives the animated indicator label.
   const lastActiveStep = isActive
     ? ([...steps].reverse().find((s) => s.status === "active") ?? null)
     : null;
+
+  // Keep the label of the most recently seen step so the indicator doesn't
+  // flash back to "Thinking..." between tool calls.
+  const indicatorLabel =
+    lastActiveStep?.label ?? steps.at(-1)?.label ?? "Thinking...";
 
   // Hide the animated indicator once the assistant starts outputting text.
   const lastMessage = messages.at(-1);
@@ -116,16 +166,6 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
       .join("").length > 0;
 
   // Build "View buoy data, swell forecast" label from completed tool steps.
-  const TOOL_LABELS: Record<string, string> = {
-    get_coordinates: "location",
-    get_swell_forecast: "swell forecast",
-    get_wind_and_weather: "wind & weather",
-    get_tide_schedule: "tides",
-    get_buoy_observations: "buoy data",
-    get_destination_info: "destination info",
-    get_exchange_rate: "exchange rate",
-    web_search_preview: "web search",
-  };
   const completedLabels = [
     ...new Set(
       steps
@@ -152,9 +192,17 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
     return () => clearInterval(id);
   }, [messages.length]);
 
-  // Scroll to the bottom whenever a new message arrives or content streams in.
+  // Scroll to the bottom on new messages or streaming updates.
+  // Use smooth scroll only when a new message is added — during streaming the
+  // content grows on every token, so smooth scroll would fight itself and
+  // appear jaggedy, especially on mobile.
+  const msgCountRef = useRef(messages.length);
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const isNewMessage = messages.length !== msgCountRef.current;
+    msgCountRef.current = messages.length;
+    bottomRef.current?.scrollIntoView({
+      behavior: isNewMessage ? "smooth" : "instant",
+    });
   }, [messages, isActive]);
 
   if (messages.length === 0) {
@@ -186,12 +234,7 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
           >
             <div className={styles.bubble}>
               {message.role === "assistant" ? (
-                <Markdown
-                  remarkPlugins={[remarkGfm]}
-                  components={markdownComponents}
-                >
-                  {text}
-                </Markdown>
+                <StreamingMarkdown text={text} />
               ) : (
                 text
               )}
@@ -201,11 +244,11 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
       })}
 
       {/* Animated indicator — while tools run, before assistant text appears */}
-      {isActive && lastActiveStep !== null && !lastAssistantHasText && (
+      {isActive && !lastAssistantHasText && (
         <div className={styles.message}>
           <ThinkingIndicator
             mode="active"
-            label={lastActiveStep.label}
+            label={indicatorLabel}
             onClick={openPanel}
           />
         </div>

@@ -3,9 +3,9 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { createClient } from "@/lib/supabase/client";
-import { useToolCalls } from "@/lib/tool-calls-context";
+import { useToolCall } from "@/lib/tool-call-context";
 import { clearConversationMessages } from "@/lib/local-storage";
-import { useGuestMessagePersistence } from "@/hooks/useGuestMessagePersistence";
+import { useLocalMessages } from "@/hooks/useLocalMessages";
 import { useOnFinishHandler } from "@/hooks/useOnFinishHandler";
 import ChatMessages from "@/components/ChatMessages";
 import ChatInput from "@/components/ChatInput";
@@ -27,7 +27,7 @@ export default function ChatView({
   initialMessages,
   isAuthenticated,
 }: Props) {
-  const { addEvent, clearSteps } = useToolCalls();
+  const { addEvent, clearSteps } = useToolCall();
 
   const onFinish = useOnFinishHandler({ chatId, isAuthenticated, addEvent });
 
@@ -55,7 +55,7 @@ export default function ChatView({
       onFinish,
     });
 
-  useGuestMessagePersistence(chatId, isAuthenticated, setMessages);
+  useLocalMessages(chatId, isAuthenticated, setMessages);
 
   // ── Handlers ────────────────────────────────────────────────────────────
 

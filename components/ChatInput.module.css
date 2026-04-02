@@ -1,10 +1,10 @@
 /* ── Wrapper / layout ───────────────── */
 
 .wrapper {
-  padding: 0 22px 16px;
+  padding: 0 22px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
   max-width: 694px;
   width: 100%;
@@ -28,15 +28,15 @@
 
 .textarea {
   border: none;
-  padding: 16px 15px 52px;
+  padding: 15px;
   background: var(--container);
   color: var(--text-primary);
   border-radius: 12px;
   outline: 1px solid var(--border-default);
   width: 100%;
-
   font-size: 16px;
-  line-height: 21px;
+  line-height: 1.45;
+  padding-bottom: 62px;
   overflow: hidden;
   box-shadow: var(--shadow-input);
 }
@@ -61,34 +61,54 @@
   flex-direction: row;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px 12px;
+  gap: 16px;
+  padding: 0 15px 15px;
   position: absolute;
-  bottom: 1px;
-  left: 1px;
-  right: 1px;
-  border-radius: 0 0 12px 12px;
+  bottom: 0px;
+  left: 0px;
+  right: 0px;
+  pointer-events: none;
 }
 
 /* ── Buttons ────────────────────────── */
 
-.clearButton {
+.leftStatus {
   margin-right: auto;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.tooLong {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--error-primary);
+}
+
+.clearButton {
   background: none;
   border: none;
   cursor: pointer;
+  pointer-events: auto;
   font-size: 13px;
-  line-height: 18px;
-  color: var(--text-tertiary);
+  line-height: 1.45;
+  color: var(--text-secondary);
+  opacity: 1;
+  transition: opacity 0.1s ease;
+}
+
+.clearButtonHidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .clearButton:hover:not(:disabled) {
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .clearButton:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .sendButton {
@@ -103,25 +123,32 @@
   color: var(--container);
   cursor: pointer;
   flex-shrink: 0;
+  pointer-events: auto;
 }
 
-.sendButton:hover {
+.sendButton:hover:not(:disabled) {
   background: var(--btn-primary-hover);
+}
+
+.sendButtonDisabled {
+  background: transparent;
+  color: var(--surface-3);
+  cursor: default;
 }
 
 .stopButton {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 32px;
   height: 32px;
-  padding: 0 12px;
   border-radius: 8px;
   border: 1px solid var(--border-default);
   background: var(--container);
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 13px;
-  line-height: 18px;
+  flex-shrink: 0;
+  pointer-events: auto;
 }
 
 .stopButton:hover {

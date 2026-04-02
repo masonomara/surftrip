@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import ConversationSidebar from "./ConversationSidebar";
 import ToolCalls from "./ToolCalls";
-import { useToolCalls } from "@/lib/tool-calls-context";
+import { useToolCall } from "@/lib/tool-call-context";
 import type { ConversationSummary } from "@/lib/types";
 import styles from "./AppShell.module.css";
 import { Menu } from "lucide-react";
@@ -35,7 +35,7 @@ export default function AppShell({
   const shellRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(() => getIsMobile());
   const [sidebarOpen, setSidebarOpen] = useState(() => !getIsMobile());
-  const { isPanelOpen, closePanel } = useToolCalls();
+  const { isPanelOpen, closePanel } = useToolCall();
 
   useEffect(() => {
     shellRef.current?.classList.add(styles.hydrated);
@@ -46,14 +46,12 @@ export default function AppShell({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const sidebarIsOverlay = isMobile;
-
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div ref={shellRef} className={styles.shell}>
       {/* Sidebar — overlay on mobile, docked on tablet/desktop */}
-      {sidebarIsOverlay ? (
+      {isMobile ? (
         <>
           {sidebarOpen && (
             <div

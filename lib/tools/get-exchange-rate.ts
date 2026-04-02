@@ -60,14 +60,15 @@ export const get_exchange_rate = tool({
 
     // Fallback: fawazahmed0 CDN (150+ currencies, keys are lowercase).
     try {
+      const fromLower = from.toLowerCase();
       const res = await fetch(
-        `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${fromUpper.toLowerCase()}.min.json`,
+        `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${fromLower}.min.json`,
       );
       if (res.ok) {
         const data = (await res.json()) as FawazResponse;
-        const ratesMap = data[fromUpper.toLowerCase()];
+        const ratesMap = data[fromLower];
         if (ratesMap && typeof ratesMap === "object") {
-          const rate = ratesMap[toUpper.toLowerCase()];
+          const rate = ratesMap[to.toLowerCase()];
           if (rate != null) {
             return {
               rate,
