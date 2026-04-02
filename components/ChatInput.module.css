@@ -72,14 +72,32 @@
 
 /* ── Buttons ────────────────────────── */
 
-.clearButton {
+.leftStatus {
   margin-right: auto;
+  display: flex;
+  align-items: center;
+}
+
+.tooLong {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-tertiary);
+}
+
+.clearButton {
   background: none;
   border: none;
   cursor: pointer;
   font-size: 13px;
   line-height: 18px;
   color: var(--text-tertiary);
+  opacity: 1;
+  transition: opacity 0.1s ease;
+}
+
+.clearButtonHidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .clearButton:hover:not(:disabled) {
@@ -105,23 +123,28 @@
   flex-shrink: 0;
 }
 
-.sendButton:hover {
+.sendButton:hover:not(:disabled) {
   background: var(--btn-primary-hover);
+}
+
+.sendButtonDisabled {
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: default;
 }
 
 .stopButton {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 32px;
   height: 32px;
-  padding: 0 12px;
   border-radius: 8px;
   border: 1px solid var(--border-default);
   background: var(--container);
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 13px;
-  line-height: 18px;
+  flex-shrink: 0;
 }
 
 .stopButton:hover {
