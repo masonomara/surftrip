@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s | Surftrip - Surf Trip Planner",
   },
   description:
-    "Plan your perfect surf trip with AI. Get personalized recommendations for surf spots, conditions, and travel logistics.",
+    "Drop a destination for conditions, breaks, and logistics.",
   alternates: {
     canonical: "/",
   },
@@ -32,13 +32,13 @@ export const metadata: Metadata = {
     siteName: "Surftrip",
     title: "Surftrip - Surf Trip Planner",
     description:
-      "Plan your perfect surf trip with AI. Get personalized recommendations for surf spots, conditions, and travel logistics.",
+      "Drop a destination for conditions, breaks, and logistics.",
   },
   twitter: {
     card: "summary_large_image",
     title: "Surftrip - Surf Trip Planner",
     description:
-      "Plan your perfect surf trip with AI. Get personalized recommendations for surf spots, conditions, and travel logistics.",
+      "Drop a destination for conditions, breaks, and logistics.",
   },
   robots: {
     index: true,
