@@ -108,29 +108,54 @@ type ResponseMessage = {
 // Human-readable labels for the process log shown while a tool is running.
 function toolStartLabel(toolName: string): string {
   const labels: Record<string, string> = {
-    get_coordinates:      "Looking up location...",
-    get_swell_forecast:   "Fetching swell forecast...",
+    get_coordinates: "Looking up location...",
+    get_swell_forecast: "Fetching swell forecast...",
     get_wind_and_weather: "Checking wind & weather...",
-    get_tide_schedule:    "Getting tide schedule...",
+    get_tide_schedule: "Getting tide schedule...",
     get_buoy_observations: "Reading buoy data...",
     get_destination_info: "Loading destination info...",
-    get_exchange_rate:    "Checking exchange rates...",
-    web_search_preview:   "Searching the web...",
+    get_exchange_rate: "Checking exchange rates...",
+    web_search_preview: "Searching the web...",
   };
   return labels[toolName] ?? `Running ${toolName}...`;
+}
+
+// Human-readable labels for the process log shown after a tool fails.
+function toolErrorLabel(toolName: string): string {
+  const labels: Record<string, string> = {
+    get_coordinates: "Location lookup failed",
+    get_swell_forecast: "Swell forecast unavailable",
+    get_wind_and_weather: "Weather data unavailable",
+    get_tide_schedule: "Tide schedule unavailable",
+    get_buoy_observations: "Buoy data unavailable",
+    get_destination_info: "Destination info unavailable",
+    get_exchange_rate: "Exchange rate unavailable",
+    web_search_preview: "Web search failed",
+  };
+  return labels[toolName] ?? `${toolName} failed`;
+}
+
+// Returns true when a tool result is an error object ({ error: string }).
+function isToolError(output: Json): boolean {
+  return (
+    output !== null &&
+    typeof output === "object" &&
+    !Array.isArray(output) &&
+    typeof (output as Record<string, Json>).error === "string"
+  );
 }
 
 // Human-readable labels for the process log shown after a tool completes.
 function toolDoneLabel(toolName: string): string {
   const labels: Record<string, string> = {
-    get_coordinates:      "Location resolved",
-    get_swell_forecast:   "Swell forecast loaded",
+    get_coordinates: "Location resolved",
+    get_swell_forecast: "Swell forecast loaded",
     get_wind_and_weather: "Weather data loaded",
-    get_tide_schedule:    "Tide schedule loaded",
+    get_tide_schedule: "Tide schedule loaded",
     get_buoy_observations: "Buoy data loaded",
     get_destination_info: "Destination info loaded",
-    get_exchange_rate:    "Exchange rate loaded",
-    web_search_preview:   "Web search complete",
+    get_exchange_rate: "Exchange rate loaded",
+    web_search_preview: "Web search complete",
   };
   return labels[toolName] ?? toolName;
 }
@@ -271,19 +296,33 @@ export async function POST(req: Request) {
               writer.write({
                 type: "data-process",
                 data: {
-                  id:       chunk.toolCallId,
-                  kind:     "tool-start",
+                  id: chunk.toolCallId,
+                  kind: "tool-start",
                   toolName: chunk.toolName,
-                  label:    toolStartLabel(chunk.toolName),
+                  label: toolStartLabel(chunk.toolName),
                 },
               });
             }
           },
 
           onStepFinish: ({ toolResults, response }) => {
-            // Stream a "tool-done" process event for each completed tool call,
-            // including a detail summary and any web search citation sources.
+            // Stream a process event for each completed tool call. Error results
+            // get a "tool-error" event (red dot); successes get "tool-done" (green).
             for (const tr of toolResults as ToolResultItem[]) {
+              if (isToolError(tr.output)) {
+                writer.write({
+                  type: "data-process",
+                  data: {
+                    id: tr.toolCallId,
+                    kind: "tool-error",
+                    toolName: tr.toolName,
+                    label: toolErrorLabel(tr.toolName),
+                    error: (tr.output as Record<string, string>).error,
+                  },
+                });
+                continue;
+              }
+
               const sources =
                 tr.toolName === "web_search_preview"
                   ? extractSources(response.messages as ResponseMessage[])
@@ -292,12 +331,12 @@ export async function POST(req: Request) {
               writer.write({
                 type: "data-process",
                 data: {
-                  id:       tr.toolCallId,
-                  kind:     "tool-done",
+                  id: tr.toolCallId,
+                  kind: "tool-done",
                   toolName: tr.toolName,
-                  label:    toolDoneLabel(tr.toolName),
-                  detail:   toolDetail(tr.toolName, tr.output),
-                  sources:  sources?.length ? sources : undefined,
+                  label: toolDoneLabel(tr.toolName),
+                  detail: toolDetail(tr.toolName, tr.output),
+                  sources: sources?.length ? sources : undefined,
                 },
               });
             }
@@ -330,8 +369,12 @@ export async function POST(req: Request) {
               // Persist both the user message and the assistant reply together
               // so they're always saved as a matched pair.
               await supabase.from("messages").insert([
-                { conversation_id: chatId, role: "user",      content: userContent      },
-                { conversation_id: chatId, role: "assistant", content: assistantContent },
+                { conversation_id: chatId, role: "user", content: userContent },
+                {
+                  conversation_id: chatId,
+                  role: "assistant",
+                  content: assistantContent,
+                },
               ]);
 
               // Set the conversation title from the first user message, but
@@ -367,8 +410,8 @@ export async function POST(req: Request) {
         writer.write({
           type: "data-process",
           data: {
-            id:    crypto.randomUUID(),
-            kind:  "status",
+            id: crypto.randomUUID(),
+            kind: "status",
             label: "Thinking...",
           },
         });

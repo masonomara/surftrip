@@ -18,7 +18,7 @@ type Props = {
 //   done   → green dot (default)
 function dotClass(step: ProcessStep): string {
   if (step.status === "active") return `${styles.dot} ${styles.dotActive}`;
-  if (step.status === "error")  return `${styles.dot} ${styles.dotError}`;
+  if (step.status === "error") return `${styles.dot} ${styles.dotError}`;
   return styles.dot;
 }
 
@@ -45,7 +45,9 @@ export default function ProcessLog({ onClose }: Props) {
 
       <div className={styles.events}>
         {steps.length === 0 ? (
-          <p className={styles.empty}>Steps will appear here as the AI works.</p>
+          <p className={styles.empty}>
+            Steps will appear here as the AI works.
+          </p>
         ) : (
           steps.map((step) => (
             <div key={step.id} className={styles.event}>
@@ -56,27 +58,35 @@ export default function ProcessLog({ onClose }: Props) {
 
               {/* Tool steps can have a one-line detail summary below the label */}
               {step.kind === "tool" && step.detail && (
-                <p className={styles.detail}>{step.detail}</p>
+                <p
+                  className={
+                    step.status === "error" ? styles.detailError : styles.detail
+                  }
+                >
+                  {step.detail}
+                </p>
               )}
 
               {/* Web search steps can have citation source links */}
-              {step.kind === "tool" && step.sources && step.sources.length > 0 && (
-                <ul className={styles.sources}>
-                  {step.sources.map((source) => (
-                    <li key={source.url} className={styles.sourceItem}>
-                      <a
-                        href={source.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={styles.sourceLink}
-                        title={source.url}
-                      >
-                        {source.title}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {step.kind === "tool" &&
+                step.sources &&
+                step.sources.length > 0 && (
+                  <ul className={styles.sources}>
+                    {step.sources.map((source) => (
+                      <li key={source.url} className={styles.sourceItem}>
+                        <a
+                          href={source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.sourceLink}
+                          title={source.url}
+                        >
+                          {source.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
             </div>
           ))
         )}
