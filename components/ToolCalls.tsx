@@ -8,7 +8,7 @@ import styles from "./ToolCalls.module.css";
 
 function dotClass(step: ProcessStep): string {
   if (step.status === "active") return `${styles.dot} ${styles.dotActive}`;
-  if (step.status === "error")  return `${styles.dot} ${styles.dotError}`;
+  if (step.status === "error") return `${styles.dot} ${styles.dotError}`;
   return styles.dot;
 }
 
@@ -47,23 +47,16 @@ export default function ToolCalls() {
               )}
 
               {step.kind === "tool" && step.detail && (
-                <p className={styles.detail}>{step.detail}</p>
-              )}
-
-              {step.kind === "tool" && step.apiUrl && (
-                <p className={styles.apiLinkRow}>
-                  <a
-                    href={step.apiUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.apiLink}
-                    title={step.apiUrl}
-                  >
-                    {new URL(step.apiUrl).hostname} ↗
-                  </a>
+                <p
+                  className={
+                    step.status === "error" ? styles.detailError : styles.detail
+                  }
+                >
+                  {step.detail}
                 </p>
               )}
 
+              {/* Web search steps can have citation source links */}
               {step.kind === "tool" && step.sources && step.sources.length > 0 && (
                 <ul className={styles.sources}>
                   {step.sources.map((source) => (

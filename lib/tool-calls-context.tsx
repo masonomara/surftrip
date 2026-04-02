@@ -52,7 +52,12 @@ export function ToolCallsProvider({ children }: Props) {
       if (event.kind === "tool-error") {
         return prev.map((s) => {
           if (s.id !== event.id || s.kind !== "tool") return s;
-          return { ...s, label: event.label, status: "error" as const };
+          return {
+            ...s,
+            label: event.label,
+            status: "error" as const,
+            detail: event.error,
+          };
         });
       }
 
