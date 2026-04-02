@@ -7,7 +7,7 @@ import { ArrowUp, Square } from "lucide-react";
 // ── Constants ──────────────────────────────────────────────────────────────
 
 // Must match the `maxLength` attribute on the textarea below.
-const MAX_LENGTH = 10_000;
+export const MAX_LENGTH = 10_000;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 

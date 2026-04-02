@@ -19,7 +19,7 @@ type Actions = {
   handleSignOut: () => Promise<void>;
 };
 
-export function useConversationActions({
+export function useConversations({
   isAuthenticated,
   activeChatId,
   onClose,

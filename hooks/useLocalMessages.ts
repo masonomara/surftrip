@@ -8,7 +8,7 @@ import type { AppMessage } from "@/lib/types";
 // `initialMessages` arrives as an empty array. This hook loads the real
 // history from localStorage on the client after mount and hydrates the
 // chat state via `setMessages`.
-export function useGuestMessagePersistence(
+export function useLocalMessages(
   chatId: string,
   isAuthenticated: boolean,
   setMessages: (messages: AppMessage[]) => void,
