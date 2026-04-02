@@ -7,6 +7,8 @@
   overflow: hidden;
   background: var(--surface-1);
   height: 100%;
+    box-shadow: var(--shadow-input);
+
 }
 
 /* ── Header ─────────────────────────── */
@@ -44,7 +46,6 @@
   cursor: pointer;
   transition: background var(--transition-fast);
   margin: 0px -10px;
-  box-shadow: var(--shadow-input);
 }
 
 .hideBtn:hover {
