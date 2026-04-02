@@ -125,9 +125,8 @@ export default function ChatView({
         }
 
         // Notify the ConversationSidebar (which listens to the storage event)
-        // to re-render with the new message/title, then revalidate server data.
+        // to re-render with the updated title/messages.
         window.dispatchEvent(new StorageEvent("storage"));
-        router.refresh();
       },
     });
 
