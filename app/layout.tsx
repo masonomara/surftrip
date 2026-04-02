@@ -17,8 +17,8 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
-    default: "Surftrip — AI Surf Trip Planner",
-    template: "%s | Surftrip",
+    default: "Surftrip - Surf Trip Planner",
+    template: "%s | Surftrip - Surf Trip Planner",
   },
   description:
     "Plan your perfect surf trip with AI. Get personalized recommendations for surf spots, conditions, and travel logistics.",
@@ -30,13 +30,13 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: BASE_URL,
     siteName: "Surftrip",
-    title: "Surftrip — AI Surf Trip Planner",
+    title: "Surftrip - Surf Trip Planner",
     description:
       "Plan your perfect surf trip with AI. Get personalized recommendations for surf spots, conditions, and travel logistics.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Surftrip — AI Surf Trip Planner",
+    title: "Surftrip - Surf Trip Planner",
     description:
       "Plan your perfect surf trip with AI. Get personalized recommendations for surf spots, conditions, and travel logistics.",
   },
@@ -58,7 +58,7 @@ const webAppSchema = {
   name: "Surftrip",
   url: BASE_URL,
   description:
-    "Plan your perfect surf trip with AI. Get personalized recommendations for surf spots, conditions, and travel logistics.",
+    "Drop a destination for conditions, breaks, and logistics.",
   applicationCategory: "TravelApplication",
   operatingSystem: "Web",
   offers: {
