@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import styles from "./login.module.css";
+import styles from "../auth.module.css";
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -80,7 +80,7 @@ export default function LoginPage() {
         </form>
 
         <p className={styles.footer}>
-          No account? <Link href="/signup">Sign up</Link>
+          No account yet? <Link href="/signup">Sign up</Link>
         </p>
       </div>
     </div>

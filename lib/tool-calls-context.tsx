@@ -5,19 +5,22 @@ import type { ProcessStep, ProcessDataEvent } from "@/lib/types";
 
 // ── Overview ───────────────────────────────────────────────────────────────
 //
-// The ProcessLog panel displays the AI's reasoning steps as they stream in.
-// This context lets ChatView (deep in the tree) push steps to ProcessLog
-// (a sibling, not a descendant) without prop-drilling through AppShell.
+// The ToolCalls panel displays each AI tool call as it streams in.
+// This context lets ChatView and ChatMessages (deep in the tree) push steps
+// and open/close the panel without prop-drilling through AppShell.
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type ProcessLogContextType = {
+type ToolCallsContextType = {
   steps: ProcessStep[];
   addEvent: (event: ProcessDataEvent) => void;
   clearSteps: () => void;
+  isPanelOpen: boolean;
+  openPanel: () => void;
+  closePanel: () => void;
 };
 
-const ProcessLogContext = createContext<ProcessLogContextType | null>(null);
+const ToolCallsContext = createContext<ToolCallsContextType | null>(null);
 
 // ── Provider ───────────────────────────────────────────────────────────────
 
@@ -25,8 +28,9 @@ type Props = {
   children: React.ReactNode;
 };
 
-export function ProcessLogProvider({ children }: Props) {
+export function ToolCallsProvider({ children }: Props) {
   const [steps, setSteps] = useState<ProcessStep[]>([]);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   function addEvent(event: ProcessDataEvent) {
     setSteps((prev) => {
@@ -35,9 +39,11 @@ export function ProcessLogProvider({ children }: Props) {
           if (s.id !== event.id || s.kind !== "tool") return s;
           return {
             ...s,
-            label: event.label,
-            status: "done" as const,
-            detail: event.detail,
+            label:   event.label,
+            status:  "done" as const,
+            detail:  event.detail,
+            params:  event.params,
+            apiUrl:  event.apiUrl,
             sources: event.sources,
           };
         });
@@ -79,21 +85,29 @@ export function ProcessLogProvider({ children }: Props) {
 
   function clearSteps() {
     setSteps([]);
+    setIsPanelOpen(false);
   }
 
   return (
-    <ProcessLogContext.Provider value={{ steps, addEvent, clearSteps }}>
+    <ToolCallsContext.Provider value={{
+      steps,
+      addEvent,
+      clearSteps,
+      isPanelOpen,
+      openPanel:  () => setIsPanelOpen(true),
+      closePanel: () => setIsPanelOpen(false),
+    }}>
       {children}
-    </ProcessLogContext.Provider>
+    </ToolCallsContext.Provider>
   );
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-export function useProcessLog(): ProcessLogContextType {
-  const context = useContext(ProcessLogContext);
+export function useToolCalls(): ToolCallsContextType {
+  const context = useContext(ToolCallsContext);
   if (!context) {
-    throw new Error("useProcessLog must be used within a <ProcessLogProvider>");
+    throw new Error("useToolCalls must be used within a <ToolCallsProvider>");
   }
   return context;
 }

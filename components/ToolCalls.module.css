@@ -3,10 +3,8 @@
 .panel {
   border-left: 1px solid var(--border-default);
   overflow-y: auto;
-  background: var(--surface-1);
   display: flex;
   flex-direction: column;
-  font-family: var(--font-roboto-mono), var(--font-mono);
 }
 
 .headerRow {
@@ -110,26 +108,48 @@
 
 /* ── Tool step detail ───────────────── */
 
+.params,
 .detail {
-  margin: 0 0 4px 15px;
-  color: var(--text-tertiary);
+  margin-bottom: 2px;
+  margin-left: 15px;
   font-size: 12px;
   line-height: 16px;
 }
 
-.detailError {
-  margin: 0 0 4px 15px;
-  color: var(--error-primary, #e53935);
-  font-size: 12px;
-  line-height: 16px;
+.params {
+  color: var(--text-secondary);
+}
+
+.detail {
+  color: var(--text-tertiary);
+}
+
+.apiLinkRow {
+  margin-bottom: 6px;
+  margin-left: 15px;
+}
+
+.apiLink {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 15px;
+  text-decoration: none;
+  opacity: 0.7;
+}
+
+.apiLink:hover {
+  color: var(--brand-primary);
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* ── Source links ───────────────────── */
 
 .sources {
   list-style: none;
-  margin: 0 0 6px 15px;
-  padding: 0;
+  margin-bottom: 6px;
+  margin-left: 15px;
   display: flex;
   flex-direction: column;
   gap: 2px;

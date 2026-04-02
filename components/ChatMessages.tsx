@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isTextUIPart } from "ai";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AppMessage } from "@/lib/types";
+import { useToolCalls } from "@/lib/tool-calls-context";
+import ThinkingIndicator from "./ThinkingIndicator";
 import styles from "./ChatMessages.module.css";
 
 // ── Markdown renderer overrides ────────────────────────────────────────────
@@ -21,6 +23,7 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
     h1: ({ ...props }) => <h1 className={styles.mdH1} {...props} />,
     h2: ({ ...props }) => <h2 className={styles.mdH2} {...props} />,
     h3: ({ ...props }) => <h3 className={styles.mdH3} {...props} />,
+    h4: ({ ...props }) => <h3 className={styles.mdH4} {...props} />,
     strong: ({ ...props }) => <strong className={styles.mdStrong} {...props} />,
     em: ({ ...props }) => <em className={styles.mdEm} {...props} />,
     hr: ({ ...props }) => <hr className={styles.mdHr} {...props} />,
@@ -66,52 +69,115 @@ const markdownComponents: React.ComponentProps<typeof Markdown>["components"] =
     },
   };
 
+// ── Constants ──────────────────────────────────────────────────────────────
+
+const EXAMPLE_PROMPTS = [
+  "When's the best time to surf Bocas del Toro?",
+  "What's the swell forecast for Uluwatu, Bali?",
+  "Is Hossegor good for intermediate surfers?",
+  "Best surf spots in Western Australia?",
+  "Planning a trip to the Mentawais - what should I know?",
+  "How are the waves in Popoyo, Nicaragua in July?",
+  "Where should I surf in Portugal in November?",
+  "What boards should I bring to the Gold Coast?",
+  "Is the Maldives doable on a budget?",
+  "How crowded is G-Land?",
+  "Best time to surf Ireland?",
+  "First trip to Bali - where do I start?",
+];
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type Props = {
   messages: AppMessage[];
-  isStreaming: boolean;
+  isActive: boolean;
   error: Error | null;
 };
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function ChatMessages({ messages, isStreaming, error }: Props) {
+export default function ChatMessages({ messages, isActive, error }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [promptIndex, setPromptIndex] = useState(0);
+  const { steps, openPanel } = useToolCalls();
+
+  // Last active step drives the animated indicator label.
+  const lastActiveStep = isActive
+    ? ([...steps].reverse().find((s) => s.status === "active") ?? null)
+    : null;
+
+  // Hide the animated indicator once the assistant starts outputting text.
+  const lastMessage = messages.at(-1);
+  const lastAssistantHasText =
+    lastMessage?.role === "assistant" &&
+    lastMessage.parts
+      .filter(isTextUIPart)
+      .map((p) => p.text)
+      .join("").length > 0;
+
+  // Build "View buoy data, swell forecast" label from completed tool steps.
+  const TOOL_LABELS: Record<string, string> = {
+    get_coordinates: "location",
+    get_swell_forecast: "swell forecast",
+    get_wind_and_weather: "wind & weather",
+    get_tide_schedule: "tides",
+    get_buoy_observations: "buoy data",
+    get_destination_info: "destination info",
+    get_exchange_rate: "exchange rate",
+    web_search_preview: "web search",
+  };
+  const completedLabels = [
+    ...new Set(
+      steps
+        .filter((s) => s.kind === "tool" && s.status === "done")
+        .map((s) =>
+          s.kind === "tool" ? (TOOL_LABELS[s.toolName] ?? s.toolName) : "",
+        )
+        .filter(Boolean),
+    ),
+  ];
+  const viewLabel =
+    completedLabels.length === 0
+      ? ""
+      : completedLabels.length <= 3
+        ? `View ${completedLabels.join(", ")}`
+        : `View ${completedLabels.slice(0, 2).join(", ")} +${completedLabels.length - 2} more`;
+
+  // Rotate through example prompts every 5 seconds when the chat is empty.
+  useEffect(() => {
+    if (messages.length > 0) return;
+    const id = setInterval(() => {
+      setPromptIndex((i) => (i + 1) % EXAMPLE_PROMPTS.length);
+    }, 5000);
+    return () => clearInterval(id);
+  }, [messages.length]);
 
   // Scroll to the bottom whenever a new message arrives or content streams in.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isStreaming]);
+  }, [messages, isActive]);
 
   if (messages.length === 0) {
     return (
       <div className={styles.empty}>
-        <p>Where are you headed?</p>
-        <p className={styles.hint}>
-          Describe a destination and travel dates to get started.
-        </p>
+        <p className={styles.title}>Where are you headed?</p>
+        <div key={promptIndex} className={styles.hint}>{EXAMPLE_PROMPTS[promptIndex]}</div>
       </div>
     );
   }
-
-  const lastMessage = messages.at(-1);
 
   return (
     <div className={styles.messages}>
       {messages.map((message) => {
         // A message can contain multiple parts (text, tool calls, etc.).
-        // We only render text parts here; everything else is shown in the
-        // ProcessLog panel.
+        // We only render text parts here; tool call details are shown in the
+        // ToolCalls panel.
         const text = message.parts
           .filter(isTextUIPart)
           .map((part) => part.text)
           .join("");
 
         if (!text) return null;
-
-        // Show the blinking cursor on the last message while it's streaming.
-        const showStreamingCursor = isStreaming && message === lastMessage;
 
         return (
           <div
@@ -120,29 +186,41 @@ export default function ChatMessages({ messages, isStreaming, error }: Props) {
           >
             <div className={styles.bubble}>
               {message.role === "assistant" ? (
-                <>
-                  <Markdown
-                    remarkPlugins={[remarkGfm]}
-                    components={markdownComponents}
-                  >
-                    {text}
-                  </Markdown>
-                  {showStreamingCursor && (
-                    <span className={styles.cursor}>▊</span>
-                  )}
-                </>
-              ) : (
-                <>
+                <Markdown
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents}
+                >
                   {text}
-                  {showStreamingCursor && (
-                    <span className={styles.cursor}>▊</span>
-                  )}
-                </>
+                </Markdown>
+              ) : (
+                text
               )}
             </div>
           </div>
         );
       })}
+
+      {/* Animated indicator — while tools run, before assistant text appears */}
+      {isActive && lastActiveStep !== null && !lastAssistantHasText && (
+        <div className={styles.message}>
+          <ThinkingIndicator
+            mode="active"
+            label={lastActiveStep.label}
+            onClick={openPanel}
+          />
+        </div>
+      )}
+
+      {/* Complete indicator — only after response is fully done */}
+      {!isActive && viewLabel && (
+        <div className={styles.message}>
+          <ThinkingIndicator
+            mode="complete"
+            label={viewLabel}
+            onClick={openPanel}
+          />
+        </div>
+      )}
 
       {error && (
         <div className={styles.error}>

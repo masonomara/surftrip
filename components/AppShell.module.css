@@ -2,17 +2,15 @@
   display: flex;
   flex-direction: row;
   height: 100svh;
-  min-height: 100svh;
-  max-height: 100svh;
   overflow: hidden;
-  background: var(--surface-1);
+  background: var(--surface-2);
 }
 
 /* Enable transitions only after hydration to prevent flash on load */
 .shell.hydrated .sidebarDocked,
-.shell.hydrated .processLogDocked,
+.shell.hydrated .toolCallsDocked,
 .shell.hydrated .sidebarOverlay,
-.shell.hydrated .processLogOverlay {
+.shell.hydrated .toolCallsOverlay {
   transition:
     width 0.25s ease,
     border-color 0.25s ease,
@@ -44,7 +42,6 @@
   width: 255px;
   flex-shrink: 0;
   overflow: hidden;
-  border-right: 1px solid var(--border-default);
   background: var(--surface-2);
   display: flex;
   flex-direction: column;
@@ -72,19 +69,18 @@
 
 /* ── Process log — docked ─────────────────── */
 
-.processLogDocked {
+.toolCallsDocked {
   width: 280px;
   flex-shrink: 0;
   overflow: hidden;
   border-left: 1px solid var(--border-default);
-  background: var(--surface-1);
   display: flex;
   flex-direction: column;
 }
 
 /* ── Process log — overlay ────────────────── */
 
-.processLogOverlay {
+.toolCallsOverlay {
   position: fixed;
   top: 0;
   right: 0;
@@ -98,7 +94,7 @@
   flex-direction: column;
 }
 
-.processLogOverlayOpen {
+.toolCallsOverlayOpen {
   transform: translateX(0);
 }
 
@@ -111,36 +107,6 @@
   flex-direction: column;
   overflow: hidden;
   position: relative;
-}
-
-/* ── Toggle buttons (desktop/tablet) ─────── */
-
-.toggleBtn {
-  position: fixed;
-  top: 10px;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.toggleBtn:hover {
-  background: var(--surface-3);
-  color: var(--text-primary);
-}
-
-.processLogToggle {
-  right: 12px;
 }
 
 /* ── Mobile header ────────────────────────── */
@@ -179,17 +145,7 @@
   color: var(--text-primary);
 }
 
-@media (min-width: 1240px) {
-  .processLogToggle {
-    display: none;
-  }
-}
-
 @media (max-width: 768px) {
-  .toggleBtn {
-    display: none;
-  }
-
   .mobileHeader {
     display: flex;
     align-items: center;

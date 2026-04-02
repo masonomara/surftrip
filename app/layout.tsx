@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Roboto_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
 const BASE_URL = "https://www.surftrip.fun";
@@ -7,12 +7,6 @@ const BASE_URL = "https://www.surftrip.fun";
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
-});
-
-const robotoMono = Roboto_Mono({
-  variable: "--font-roboto-mono",
-  subsets: ["latin"],
-  weight: ["400"],
 });
 
 export const viewport: Viewport = {
@@ -23,11 +17,10 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
-    default: "Surftrip — AI Surf Trip Planner",
-    template: "%s | Surftrip",
+    default: "Surftrip - Surf Trip Planner",
+    template: "%s | Surftrip - Surf Trip Planner",
   },
-  description:
-    "Plan your perfect surf trip with AI. Get personalized recommendations for surf spots, conditions, and travel logistics.",
+  description: "Drop a destination for conditions, breaks, and logistics.",
   alternates: {
     canonical: "/",
   },
@@ -36,15 +29,13 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: BASE_URL,
     siteName: "Surftrip",
-    title: "Surftrip — AI Surf Trip Planner",
-    description:
-      "Plan your perfect surf trip with AI. Get personalized recommendations for surf spots, conditions, and travel logistics.",
+    title: "Surftrip - Surf Trip Planner",
+    description: "Drop a destination for conditions, breaks, and logistics.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Surftrip — AI Surf Trip Planner",
-    description:
-      "Plan your perfect surf trip with AI. Get personalized recommendations for surf spots, conditions, and travel logistics.",
+    title: "Surftrip - Surf Trip Planner",
+    description: "Drop a destination for conditions, breaks, and logistics.",
   },
   robots: {
     index: true,
@@ -63,8 +54,7 @@ const webAppSchema = {
   "@type": "WebApplication",
   name: "Surftrip",
   url: BASE_URL,
-  description:
-    "Plan your perfect surf trip with AI. Get personalized recommendations for surf spots, conditions, and travel logistics.",
+  description: "Drop a destination for conditions, breaks, and logistics.",
   applicationCategory: "TravelApplication",
   operatingSystem: "Web",
   offers: {
@@ -84,7 +74,7 @@ type Props = {
 
 export default function RootLayout({ children }: Props) {
   return (
-    <html lang="en" className={`${inter.variable} ${robotoMono.variable}`}>
+    <html lang="en" className={`${inter.variable}`}>
       <head>
         <script
           type="application/ld+json"
