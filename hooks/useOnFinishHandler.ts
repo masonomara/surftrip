@@ -43,40 +43,29 @@ export function useOnFinishHandler({
         (m) => m.role === "assistant",
       );
 
-      const messagesToSave: LocalMessage[] = [];
-
-      if (lastUserMessage) {
-        messagesToSave.push({
-          id: lastUserMessage.id,
-          role: "user",
-          content: extractText(lastUserMessage),
+      const messagesToSave: LocalMessage[] = [
+        lastUserMessage,
+        lastAssistantMessage,
+      ]
+        .filter((m): m is AppMessage => m !== undefined)
+        .map((m) => ({
+          id: m.id,
+          role: m.role as LocalMessage["role"],
+          content: extractText(m),
           createdAt: new Date().toISOString(),
-        });
-      }
-
-      if (lastAssistantMessage) {
-        messagesToSave.push({
-          id: lastAssistantMessage.id,
-          role: "assistant",
-          content: extractText(lastAssistantMessage),
-          createdAt: new Date().toISOString(),
-        });
-      }
+        }));
 
       appendMessages(chatId, messagesToSave);
 
-      // Set the conversation title from the first user message, truncated to
-      // 60 chars. We only do this once (when there's exactly one user message)
-      // so we don't overwrite a title the user might have set later.
+      // Set the title from the first user message, truncated to 60 chars.
+      // Only done once so subsequent exchanges don't overwrite it.
       const userMessageCount = finishedMessages.filter(
         (m) => m.role === "user",
       ).length;
-      const isFirstMessage = userMessageCount === 1 && lastUserMessage;
 
-      if (isFirstMessage) {
+      if (userMessageCount === 1 && lastUserMessage) {
         const raw = extractText(lastUserMessage);
-        const title = raw.length > 60 ? raw.slice(0, 60) + "..." : raw;
-        updateTitle(chatId, title);
+        updateTitle(chatId, raw.length > 60 ? raw.slice(0, 60) + "..." : raw);
       }
 
       // Notify the ConversationSidebar (which listens to the storage event)
