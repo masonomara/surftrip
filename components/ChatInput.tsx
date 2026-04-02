@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import styles from "./ChatInput.module.css";
-import { ArrowUp, Pause } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -58,6 +58,17 @@ export default function ChatInput({
     }
   }
 
+  function handleClearInput() {
+    onClear();
+    if (textareaRef.current) {
+      textareaRef.current.value = "";
+      valueRef.current = "";
+      setInputLength(0);
+      autoResize();
+      textareaRef.current.focus();
+    }
+  }
+
   function handleSubmit() {
     const text = valueRef.current.trim();
 
@@ -106,9 +117,7 @@ export default function ChatInput({
 
           <div className={styles.bottomRow}>
             <span className={styles.leftStatus}>
-              {isTooLong && (
-                <span className={styles.tooLong}>Too long</span>
-              )}
+              {isTooLong && <span className={styles.tooLong}>Too long</span>}
             </span>
 
             {isActive ? (
@@ -118,12 +127,12 @@ export default function ChatInput({
                 type="button"
                 aria-label="Stop"
               >
-                <Pause size={14} aria-hidden="true" />
+                <Square size={16} fill="currentColor" strokeWidth={0} aria-hidden="true" />
               </button>
             ) : (
               <>
                 <button
-                  onClick={onClear}
+                  onClick={handleClearInput}
                   disabled={isEmpty}
                   className={`${styles.clearButton}${isEmpty ? ` ${styles.clearButtonHidden}` : ""}`}
                   type="button"
