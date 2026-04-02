@@ -17,7 +17,7 @@
 
 .title {
   font-size: 27px;
-  line-height: 33px;
+  line-height: 1.45;
   font-weight: 600;
   color: var(--text-primary);
   text-align: center;
@@ -28,9 +28,9 @@
   color: var(--text-secondary);
   text-align: center;
   font-size: 16px;
-  line-height: 21px;
+  line-height: 1.45;
   font-weight: 400;
-  margin: 8px 0 28px;
+  margin: 4px 0 28px;
   width: 100%;
 }
 

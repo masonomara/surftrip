@@ -133,9 +133,9 @@ export default function ChatMessages({ messages, isActive, error }: Props) {
   if (messages.length === 0) {
     return (
       <div className={styles.empty}>
-        <p>Where are you headed?</p>
+        <p className={styles.title}>Where are you headed?</p>
         <p className={styles.hint}>
-          Describe a destination and travel dates to get started.
+          Drop a destination for conditions, breaks, and logistics.
         </p>
       </div>
     );
