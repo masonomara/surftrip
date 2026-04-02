@@ -1,32 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, isTextUIPart } from "ai";
+import { DefaultChatTransport } from "ai";
 import { createClient } from "@/lib/supabase/client";
 import { useToolCalls } from "@/lib/tool-calls-context";
-import {
-  loadConversation,
-  appendMessages,
-  updateTitle,
-  clearConversationMessages,
-} from "@/lib/local-storage";
+import { clearConversationMessages } from "@/lib/local-storage";
+import { useGuestMessagePersistence } from "@/hooks/useGuestMessagePersistence";
+import { useOnFinishHandler } from "@/hooks/useOnFinishHandler";
 import ChatMessages from "@/components/ChatMessages";
 import ChatInput from "@/components/ChatInput";
-import type { AppMessage, LocalMessage } from "@/lib/types";
+import type { AppMessage } from "@/lib/types";
 import styles from "./ChatView.module.css";
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-// Extract the plain text content from a message. A message can have multiple
-// parts (text, tool calls, etc.); we only care about the text ones here.
-function extractText(message: AppMessage): string {
-  return message.parts
-    .filter(isTextUIPart)
-    .map((part) => part.text)
-    .join("");
-}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -43,8 +27,9 @@ export default function ChatView({
   initialMessages,
   isAuthenticated,
 }: Props) {
-  const router = useRouter();
   const { addEvent, clearSteps } = useToolCalls();
+
+  const onFinish = useOnFinishHandler({ chatId, isAuthenticated, addEvent });
 
   const { messages, sendMessage, setMessages, status, stop, error } =
     useChat<AppMessage>({
@@ -67,87 +52,10 @@ export default function ChatView({
         }
       },
 
-      onFinish: ({ messages: finishedMessages }) => {
-        // "Done" marks the final status step as completed so the ThinkingIndicator
-        // knows to stop showing.
-        addEvent({ id: crypto.randomUUID(), kind: "status", label: "Done" });
-
-        if (isAuthenticated) {
-          // Authenticated: Supabase has already persisted messages server-side
-          // via the route handler. We only need to revalidate the sidebar.
-          router.refresh();
-          return;
-        }
-
-        // Guest: we persist the last exchange (one user + one assistant message)
-        // to localStorage ourselves, since there's no server to do it for us.
-        const lastUserMessage = finishedMessages.findLast(
-          (m) => m.role === "user",
-        );
-        const lastAssistantMessage = finishedMessages.findLast(
-          (m) => m.role === "assistant",
-        );
-
-        const messagesToSave: LocalMessage[] = [];
-
-        if (lastUserMessage) {
-          messagesToSave.push({
-            id: lastUserMessage.id,
-            role: "user",
-            content: extractText(lastUserMessage),
-            createdAt: new Date().toISOString(),
-          });
-        }
-
-        if (lastAssistantMessage) {
-          messagesToSave.push({
-            id: lastAssistantMessage.id,
-            role: "assistant",
-            content: extractText(lastAssistantMessage),
-            createdAt: new Date().toISOString(),
-          });
-        }
-
-        appendMessages(chatId, messagesToSave);
-
-        // Set the conversation title from the first user message, truncated to
-        // 60 chars. We only do this once (when there's exactly one user message)
-        // so we don't overwrite a title the user might have set later.
-        const userMessageCount = finishedMessages.filter(
-          (m) => m.role === "user",
-        ).length;
-        const isFirstMessage = userMessageCount === 1 && lastUserMessage;
-
-        if (isFirstMessage) {
-          const raw = extractText(lastUserMessage);
-          const title = raw.length > 60 ? raw.slice(0, 60) + "..." : raw;
-          updateTitle(chatId, title);
-        }
-
-        // Notify the ConversationSidebar (which listens to the storage event)
-        // to re-render with the updated title/messages.
-        window.dispatchEvent(new StorageEvent("storage"));
-      },
+      onFinish,
     });
 
-  // For guest users, initialMessages comes from the server as an empty array
-  // (the server has no knowledge of localStorage). We load the real history
-  // from localStorage on the client after mount.
-  useEffect(() => {
-    if (isAuthenticated) return;
-
-    const stored = loadConversation(chatId);
-    if (!stored || stored.messages.length === 0) return;
-
-    setMessages(
-      stored.messages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        parts: [{ type: "text" as const, text: m.content }],
-        createdAt: new Date(m.createdAt),
-      })),
-    );
-  }, [chatId, isAuthenticated, setMessages]);
+  useGuestMessagePersistence(chatId, isAuthenticated, setMessages);
 
   // ── Handlers ────────────────────────────────────────────────────────────
 

@@ -1,14 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import {
-  createConversation,
-  loadConversations,
-  deleteConversation,
-} from "@/lib/local-storage";
+import { usePathname } from "next/navigation";
+import { useLocalConversations } from "@/hooks/useLocalConversations";
+import { useConversationActions } from "@/hooks/useConversationActions";
 import type { ConversationSummary } from "@/lib/types";
 import styles from "./ConversationSidebar.module.css";
 import {
@@ -34,103 +29,16 @@ export default function ConversationSidebar({
   onClose,
 }: Props) {
   const pathname = usePathname();
-  const router = useRouter();
 
   // Guest users get conversations from localStorage; authenticated users get
   // them from the server (passed in as a prop, already fetched server-side).
-  const [localConversations, setLocalConversations] = useState<
-    ConversationSummary[]
-  >([]);
-  const conversations = isAuthenticated
-    ? serverConversations
-    : localConversations;
+  const localConversations = useLocalConversations(isAuthenticated);
+  const conversations = isAuthenticated ? serverConversations : localConversations;
 
   const activeChatId = pathname.startsWith("/chat/") ? pathname.slice(6) : null;
 
-  // Keep local conversations in sync with localStorage across tabs.
-  useEffect(() => {
-    if (isAuthenticated) return;
-
-    function syncFromStorage() {
-      const stored = loadConversations();
-      setLocalConversations(
-        stored.map((conversation) => ({
-          id: conversation.id,
-          title: conversation.title,
-          updated_at: conversation.updatedAt,
-        })),
-      );
-    }
-
-    syncFromStorage();
-    window.addEventListener("storage", syncFromStorage);
-    return () => window.removeEventListener("storage", syncFromStorage);
-  }, [isAuthenticated]);
-
-  // ── Handlers ────────────────────────────────────────────────────────────
-
-  async function handleNewChat() {
-    onClose?.();
-
-    if (isAuthenticated) {
-      await createAuthenticatedConversation();
-    } else {
-      createGuestConversation();
-    }
-  }
-
-  async function createAuthenticatedConversation() {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) return;
-
-    const { data } = await supabase
-      .from("conversations")
-      .insert({ title: "New conversation", user_id: user.id })
-      .select("id")
-      .single();
-
-    if (data) {
-      router.push(`/chat/${data.id}`);
-      router.refresh();
-    }
-  }
-
-  function createGuestConversation() {
-    const id = crypto.randomUUID();
-    createConversation(id, "New conversation");
-    window.dispatchEvent(new StorageEvent("storage"));
-    router.push(`/chat/${id}`);
-  }
-
-  async function handleDeleteConversation(id: string) {
-    if (isAuthenticated) {
-      const supabase = createClient();
-      await supabase.from("conversations").delete().eq("id", id);
-      router.refresh();
-    } else {
-      deleteConversation(id);
-      setLocalConversations((prev) =>
-        prev.filter((conversation) => conversation.id !== id),
-      );
-      window.dispatchEvent(new StorageEvent("storage"));
-    }
-
-    // Navigate away if the deleted conversation is the one currently open.
-    if (id === activeChatId) {
-      router.push("/");
-    }
-  }
-
-  async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
-  }
+  const { handleNewChat, handleDeleteConversation, handleSignOut } =
+    useConversationActions({ isAuthenticated, activeChatId, onClose });
 
   // ── Render ───────────────────────────────────────────────────────────────
 
