@@ -192,31 +192,34 @@ function toolDetail(toolName: string, result: Json): string | undefined {
       break;
 
     case "get_swell_forecast": {
-      if (!r.daily || typeof r.daily !== "object" || Array.isArray(r.daily)) break;
+      if (!r.daily || typeof r.daily !== "object" || Array.isArray(r.daily))
+        break;
       const daily = r.daily as Record<string, Json>;
-      const maxH   = firstNum(daily.wave_height_max);
-      const maxP   = firstNum(daily.swell_wave_period_max);
-      const dir    = firstNum(daily.wave_direction_dominant);
-      const days   = Array.isArray(daily.time) ? daily.time.length : null;
+      const maxH = firstNum(daily.wave_height_max);
+      const maxP = firstNum(daily.swell_wave_period_max);
+      const dir = firstNum(daily.wave_direction_dominant);
+      const days = Array.isArray(daily.time) ? daily.time.length : null;
       const parts: string[] = [];
       if (maxH != null && maxP != null) parts.push(`${maxH}m @ ${maxP}s`);
-      if (dir  != null)                 parts.push(degreesToCompass(dir));
-      if (days != null)                 parts.push(`${days}-day forecast`);
+      if (dir != null) parts.push(degreesToCompass(dir));
+      if (days != null) parts.push(`${days}-day forecast`);
       if (parts.length) return parts.join(" · ");
       break;
     }
 
     case "get_wind_and_weather": {
-      if (!r.hourly || typeof r.hourly !== "object" || Array.isArray(r.hourly)) break;
+      if (!r.hourly || typeof r.hourly !== "object" || Array.isArray(r.hourly))
+        break;
       const hourly = r.hourly as Record<string, Json>;
-      const speed  = firstNum(hourly.windspeed_10m);
-      const gust   = firstNum(hourly.windgusts_10m);
+      const speed = firstNum(hourly.windspeed_10m);
+      const gust = firstNum(hourly.windgusts_10m);
       const dirDeg = firstNum(hourly.winddirection_10m);
-      const days   = r.daily && typeof r.daily === "object" && !Array.isArray(r.daily)
-        ? (Array.isArray((r.daily as Record<string, Json>).time)
+      const days =
+        r.daily && typeof r.daily === "object" && !Array.isArray(r.daily)
+          ? Array.isArray((r.daily as Record<string, Json>).time)
             ? ((r.daily as Record<string, Json>).time as Json[]).length
-            : null)
-        : null;
+            : null
+          : null;
       const parts: string[] = [];
       if (speed != null) {
         const dir = dirDeg != null ? ` ${degreesToCompass(dirDeg)}` : "";
@@ -233,12 +236,15 @@ function toolDetail(toolName: string, result: Json): string | undefined {
         type Prediction = { t: string; v: string; type: string };
         const preds = r.predictions as Prediction[];
         const nextHigh = preds.find((p) => p.type === "H");
-        const station  = typeof r.stationName === "string" ? r.stationName : null;
+        const station =
+          typeof r.stationName === "string" ? r.stationName : null;
         const parts: string[] = [];
         if (station) parts.push(station);
         if (nextHigh) {
           const time = nextHigh.t.split(" ")[1]?.slice(0, 5) ?? nextHigh.t;
-          parts.push(`Next high: ${Number(nextHigh.v).toFixed(1)}ft at ${time}`);
+          parts.push(
+            `Next high: ${Number(nextHigh.v).toFixed(1)}ft at ${time}`,
+          );
         }
         return parts.length ? parts.join(" · ") : `${preds.length} tide events`;
       }
@@ -297,24 +303,33 @@ function toolApiUrl(
     case "get_swell_forecast": {
       if (a.latitude == null || a.longitude == null) return undefined;
       const url = new URL("https://marine-api.open-meteo.com/v1/marine");
-      url.searchParams.set("latitude",      String(a.latitude));
-      url.searchParams.set("longitude",     String(a.longitude));
+      url.searchParams.set("latitude", String(a.latitude));
+      url.searchParams.set("longitude", String(a.longitude));
       url.searchParams.set("forecast_days", String(a.forecast_days ?? 5));
-      url.searchParams.set("timezone",      String(a.timezone ?? "auto"));
-      url.searchParams.set("hourly", "wave_height,swell_wave_height,swell_wave_period,swell_wave_direction,sea_surface_temperature");
-      url.searchParams.set("daily",  "wave_height_max,swell_wave_height_max,swell_wave_period_max,wave_direction_dominant");
+      url.searchParams.set("timezone", String(a.timezone ?? "auto"));
+      url.searchParams.set(
+        "hourly",
+        "wave_height,swell_wave_height,swell_wave_period,swell_wave_direction,sea_surface_temperature",
+      );
+      url.searchParams.set(
+        "daily",
+        "wave_height_max,swell_wave_height_max,swell_wave_period_max,wave_direction_dominant",
+      );
       return url.toString();
     }
     case "get_wind_and_weather": {
       if (a.latitude == null || a.longitude == null) return undefined;
       const url = new URL("https://api.open-meteo.com/v1/forecast");
-      url.searchParams.set("latitude",      String(a.latitude));
-      url.searchParams.set("longitude",     String(a.longitude));
+      url.searchParams.set("latitude", String(a.latitude));
+      url.searchParams.set("longitude", String(a.longitude));
       url.searchParams.set("forecast_days", String(a.forecast_days ?? 5));
-      url.searchParams.set("timezone",      String(a.timezone ?? "auto"));
+      url.searchParams.set("timezone", String(a.timezone ?? "auto"));
       url.searchParams.set("wind_speed_unit", "mph");
-      url.searchParams.set("hourly", "windspeed_10m,winddirection_10m,windgusts_10m,temperature_2m,precipitation_probability");
-      url.searchParams.set("daily",  "sunrise,sunset,uv_index_max");
+      url.searchParams.set(
+        "hourly",
+        "windspeed_10m,winddirection_10m,windgusts_10m,temperature_2m,precipitation_probability",
+      );
+      url.searchParams.set("daily", "sunrise,sunset,uv_index_max");
       return url.toString();
     }
     case "get_tide_schedule": {
@@ -332,7 +347,8 @@ function toolApiUrl(
       return `https://restcountries.com/v3.1/name/${encodeURIComponent(a.country)}?fields=name,currencies,languages,timezones,capital,region`;
     }
     case "get_exchange_rate": {
-      if (typeof a.from !== "string" || typeof a.to !== "string") return undefined;
+      if (typeof a.from !== "string" || typeof a.to !== "string")
+        return undefined;
       return `https://api.frankfurter.app/latest?from=${a.from.toUpperCase()}&to=${a.to.toUpperCase()}`;
     }
     default:
@@ -353,8 +369,8 @@ function toolInputSummary(toolName: string, args: Json): string | undefined {
     case "get_swell_forecast":
     case "get_wind_and_weather": {
       if (a.latitude == null || a.longitude == null) return undefined;
-      const lat  = Number(a.latitude).toFixed(2);
-      const lon  = Number(a.longitude).toFixed(2);
+      const lat = Number(a.latitude).toFixed(2);
+      const lon = Number(a.longitude).toFixed(2);
       const days = a.forecast_days ?? 5;
       return `${lat}°, ${lon}° · ${days} days`;
     }
@@ -416,7 +432,7 @@ export async function POST(req: Request) {
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
     supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
+    const { data } = await supabase!.auth.getUser();
     user = data.user;
   }
 
@@ -491,10 +507,25 @@ export async function POST(req: Request) {
             // Stream a process event for each completed tool call. Error results
             // get a "tool-error" event (red dot); successes get "tool-done" (green).
             for (const tr of toolResults as ToolResultItem[]) {
-              const args    = toolCallArgsMap.get(tr.toolCallId) ?? null;
-              const sources = tr.toolName === "web_search_preview"
-                ? extractSources(response.messages as ResponseMessage[])
-                : undefined;
+              if (isToolError(tr.output)) {
+                writer.write({
+                  type: "data-process",
+                  data: {
+                    id: tr.toolCallId,
+                    kind: "tool-error",
+                    toolName: tr.toolName,
+                    label: toolErrorLabel(tr.toolName),
+                    error: (tr.output as Record<string, string>).error,
+                  },
+                });
+                continue;
+              }
+
+              const args = toolCallArgsMap.get(tr.toolCallId) ?? null;
+              const sources =
+                tr.toolName === "web_search_preview"
+                  ? extractSources(response.messages as ResponseMessage[])
+                  : undefined;
 
               writer.write({
                 type: "data-process",
@@ -502,9 +533,11 @@ export async function POST(req: Request) {
                   id: tr.toolCallId,
                   kind: "tool-done",
                   toolName: tr.toolName,
-                  label:    toolDoneLabel(tr.toolName),
-                  detail:   toolDetail(tr.toolName, tr.output),
-                  sources:  sources?.length ? sources : undefined,
+                  label: toolDoneLabel(tr.toolName),
+                  detail: toolDetail(tr.toolName, tr.output),
+                  params: toolInputSummary(tr.toolName, args),
+                  apiUrl: toolApiUrl(tr.toolName, args, tr.output),
+                  sources: sources?.length ? sources : undefined,
                 },
               });
             }
