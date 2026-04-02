@@ -44,10 +44,10 @@
   cursor: pointer;
   transition: background var(--transition-fast);
   margin: 0px -10px;
+  box-shadow: var(--shadow-input);
 }
 
 .hideBtn:hover {
-
   color: var(--text-secondary);
 }
 

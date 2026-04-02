@@ -173,7 +173,11 @@ body {
   min-height: 100svh;
   background: var(--surface-3);
   color: var(--text-primary);
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+button {
+  font-family: var(--font-inter), system-ui, sans-serif;
 }
 
 a {
@@ -183,7 +187,7 @@ a {
 
 textarea {
   resize: none;
-  font-family: inherit;
+  font-family: var(--font-inter), system-ui, sans-serif;
 }
 
 :focus-visible {

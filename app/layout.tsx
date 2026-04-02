@@ -20,8 +20,7 @@ export const metadata: Metadata = {
     default: "Surftrip - Surf Trip Planner",
     template: "%s | Surftrip - Surf Trip Planner",
   },
-  description:
-    "Drop a destination for conditions, breaks, and logistics.",
+  description: "Drop a destination for conditions, breaks, and logistics.",
   alternates: {
     canonical: "/",
   },
@@ -31,14 +30,12 @@ export const metadata: Metadata = {
     url: BASE_URL,
     siteName: "Surftrip",
     title: "Surftrip - Surf Trip Planner",
-    description:
-      "Drop a destination for conditions, breaks, and logistics.",
+    description: "Drop a destination for conditions, breaks, and logistics.",
   },
   twitter: {
     card: "summary_large_image",
     title: "Surftrip - Surf Trip Planner",
-    description:
-      "Drop a destination for conditions, breaks, and logistics.",
+    description: "Drop a destination for conditions, breaks, and logistics.",
   },
   robots: {
     index: true,
@@ -57,8 +54,7 @@ const webAppSchema = {
   "@type": "WebApplication",
   name: "Surftrip",
   url: BASE_URL,
-  description:
-    "Drop a destination for conditions, breaks, and logistics.",
+  description: "Drop a destination for conditions, breaks, and logistics.",
   applicationCategory: "TravelApplication",
   operatingSystem: "Web",
   offers: {
