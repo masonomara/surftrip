@@ -84,7 +84,7 @@ The whole point is to give them the real talk so they know if it's worth getting
 // ── Constants ──────────────────────────────────────────────────────────────
 
 // Must match MAX_LENGTH in ChatInput.tsx.
-const MAX_INPUT_LENGTH = 10_000;
+export const MAX_INPUT_LENGTH = 10_000;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
