@@ -34,6 +34,17 @@ export function ToolCallsProvider({ children }: Props) {
 
   function addEvent(event: ProcessDataEvent) {
     setSteps((prev) => {
+      if (event.kind === "tool-start") {
+        const newStep: ProcessStep = {
+          id: event.id,
+          kind: "tool",
+          toolName: event.toolName,
+          label: event.label,
+          status: "active",
+        };
+        return [...prev, newStep];
+      }
+
       if (event.kind === "tool-done") {
         return prev.map((s) => {
           if (s.id !== event.id || s.kind !== "tool") return s;
@@ -54,22 +65,11 @@ export function ToolCallsProvider({ children }: Props) {
           if (s.id !== event.id || s.kind !== "tool") return s;
           return {
             ...s,
-            label: event.label,
+            label:  event.label,
             status: "error" as const,
             detail: event.error,
           };
         });
-      }
-
-      if (event.kind === "tool-start") {
-        const newStep: ProcessStep = {
-          id: event.id,
-          kind: "tool",
-          toolName: event.toolName,
-          label: event.label,
-          status: "active",
-        };
-        return [...prev, newStep];
       }
 
       // kind === "status"

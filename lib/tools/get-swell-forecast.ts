@@ -72,7 +72,7 @@ export const get_swell_forecast = tool({
       ].join(","),
     );
 
-    const res = await fetch(url.toString());
+    const res = await fetch(url);
 
     if (!res.ok) {
       return { error: `Marine API request failed: ${res.status}` };

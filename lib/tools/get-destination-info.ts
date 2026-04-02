@@ -46,7 +46,7 @@ export const get_destination_info = tool({
       "name,currencies,languages,timezones,capital,region",
     );
 
-    const res = await fetch(url.toString());
+    const res = await fetch(url);
 
     if (!res.ok) {
       return { error: `Country not found: ${country}` };

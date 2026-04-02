@@ -71,19 +71,21 @@ export const get_buoy_observations = tool({
       return { error: `Unexpected data format from buoy ${station_id}` };
     }
 
+    const [yr, mo, dy, hr, mn, wdir, wspd, gst, wvht, dpd, apd, mwd, pres, atmp, wtmp] = cols;
+
     return {
       stationId: station_id,
-      timestamp: `${cols[0]}-${cols[1]}-${cols[2]}T${cols[3]}:${cols[4]}:00Z`,
-      windDirection:    parseCol(cols[5]),
-      windSpeed:        parseCol(cols[6]),
-      windGust:         parseCol(cols[7]),
-      waveHeight:       parseCol(cols[8]),
-      dominantPeriod:   parseCol(cols[9]),
-      averagePeriod:    parseCol(cols[10]),
-      meanWaveDirection: parseCol(cols[11]),
-      pressure:         parseCol(cols[12]),
-      airTemp:          parseCol(cols[13]),
-      waterTemp:        parseCol(cols[14]),
+      timestamp: `${yr}-${mo}-${dy}T${hr}:${mn}:00Z`,
+      windDirection:     parseCol(wdir),
+      windSpeed:         parseCol(wspd),
+      windGust:          parseCol(gst),
+      waveHeight:        parseCol(wvht),
+      dominantPeriod:    parseCol(dpd),
+      averagePeriod:     parseCol(apd),
+      meanWaveDirection: parseCol(mwd),
+      pressure:          parseCol(pres),
+      airTemp:           parseCol(atmp),
+      waterTemp:         parseCol(wtmp),
     };
   },
 });

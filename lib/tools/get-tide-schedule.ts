@@ -50,7 +50,7 @@ export const get_tide_schedule = tool({
     stationUrl.searchParams.set("lon",    String(longitude));
     stationUrl.searchParams.set("radius", "50");
 
-    const stationRes = await fetch(stationUrl.toString());
+    const stationRes = await fetch(stationUrl);
 
     if (!stationRes.ok) {
       return { error: "Could not reach NOAA tide station API" };
@@ -68,16 +68,13 @@ export const get_tide_schedule = tool({
     const station = stationData.stationList[0];
 
     // Step 2 — fetch tide predictions. NOAA requires YYYYMMDD (no dashes).
-    const beginDateFormatted = begin_date.replace(/-/g, "");
-    const endDateFormatted   = end_date.replace(/-/g, "");
-
     const predUrl = new URL(
       "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
     );
     predUrl.searchParams.set("station",     station.stationId);
     predUrl.searchParams.set("product",     "predictions");
-    predUrl.searchParams.set("begin_date",  beginDateFormatted);
-    predUrl.searchParams.set("end_date",    endDateFormatted);
+    predUrl.searchParams.set("begin_date",  begin_date.replaceAll("-", ""));
+    predUrl.searchParams.set("end_date",    end_date.replaceAll("-", ""));
     predUrl.searchParams.set("datum",       "MLLW");
     predUrl.searchParams.set("time_zone",   "lst_ldt");
     predUrl.searchParams.set("interval",    "hilo");
@@ -85,7 +82,7 @@ export const get_tide_schedule = tool({
     predUrl.searchParams.set("application", "surftrip");
     predUrl.searchParams.set("format",      "json");
 
-    const predRes = await fetch(predUrl.toString());
+    const predRes = await fetch(predUrl);
 
     if (!predRes.ok) {
       return { error: `NOAA predictions request failed: ${predRes.status}` };

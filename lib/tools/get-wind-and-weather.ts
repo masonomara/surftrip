@@ -66,7 +66,7 @@ export const get_wind_and_weather = tool({
       ["sunrise", "sunset", "uv_index_max"].join(","),
     );
 
-    const res = await fetch(url.toString());
+    const res = await fetch(url);
 
     if (!res.ok) {
       return { error: `Weather API request failed: ${res.status}` };
